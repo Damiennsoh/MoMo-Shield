@@ -1,0 +1,43 @@
+{
+  "scenario_name": "GH01 — Fabricated Credit → Fake Refund",
+  "steps": [
+    {
+      "delay_seconds": 0,
+      "event": {
+        "event_id": "gh01-comm-1",
+        "msisdn": "+233240000001",
+        "event_type": "communication",
+        "channel": "VOICE",
+        "text_or_transcript": "Mepa wo kyɛw, wo MoMo account no anya problem. Fa wo PIN kɔ ma na yɛnsiesie.",
+        "counterparty_msisdn": "+233500000099",
+        "timestamp": "2026-11-28T10:00:00"
+      }
+    },
+    {
+      "delay_seconds": 2,
+      "event": {
+        "event_id": "gh01-tx-1",
+        "msisdn": "+233240000001",
+        "event_type": "transaction",
+        "transaction_type": "CREDIT",
+        "amount": 500.0,
+        "ledger_verified": false,
+        "timestamp": "2026-11-28T10:00:30"
+      }
+    },
+    {
+      "delay_seconds": 4,
+      "event": {
+        "event_id": "gh01-tx-2",
+        "msisdn": "+233240000001",
+        "event_type": "transaction",
+        "transaction_type": "P2P_SEND",
+        "amount": 500.0,
+        "counterparty_msisdn": "+233500000099",
+        "ledger_verified": true,
+        "ussd_session_active": true,
+        "timestamp": "2026-11-28T10:01:30"
+      }
+    }
+  ]
+}

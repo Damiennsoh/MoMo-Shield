@@ -1,0 +1,106 @@
+/* ===================== base ===================== */
+.stApp { background: #0b1120; }
+section[data-testid="stSidebar"] { background: #0f172a; }
+
+.app-header { padding: 6px 4px 14px 4px; border-bottom: 1px solid #1e293b; margin-bottom: 14px; }
+.app-title { font-size: 26px; font-weight: 800; color: #f8fafc; }
+.app-subtitle { font-size: 15px; color: #facc15; font-weight: 700; margin-left: 8px; }
+.app-tagline { color: #94a3b8; font-size: 12.5px; margin-top: 3px; letter-spacing: .3px; }
+
+/* ===================== mock phone ===================== */
+.phone-frame {
+  position: relative; width: 330px; min-height: 640px; margin: 0 auto;
+  background: #020617; border: 11px solid #1e293b; border-radius: 44px;
+  box-shadow: 0 25px 60px rgba(0,0,0,.55); overflow: hidden;
+}
+.phone-notch {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 130px; height: 22px; background: #1e293b; border-radius: 0 0 14px 14px; z-index: 9;
+}
+.phone-statusbar {
+  display: flex; justify-content: space-between; padding: 8px 18px 2px 18px;
+  color: #e2e8f0; font-size: 11px; background: #0f172a;
+}
+.phone-body { padding: 10px 12px 100px 12px; height: 560px; overflow-y: auto; }
+.phone-caption { text-align: center; color: #64748b; font-size: 11.5px; margin-top: 10px; }
+
+/* SMS messenger */
+.sms-list { display: flex; flex-direction: column; gap: 8px; padding: 6px 2px; }
+.bubble { max-width: 84%; padding: 8px 11px; border-radius: 14px; font-size: 12.5px; line-height: 1.45; }
+.bubble.in  { background: #1e293b; color: #e2e8f0; border-bottom-left-radius: 4px;  align-self: flex-start; }
+.bubble.out { background: #14532d; color: #f0fdf4; border-bottom-right-radius: 4px; align-self: flex-end; }
+.bubble-from { font-size: 10px; color: #facc15; margin-bottom: 3px; font-weight: 700; }
+
+/* Call screen */
+.call-screen { text-align: center; padding-top: 26px; color: #e2e8f0; }
+.call-label { font-size: 11px; color: #94a3b8; }
+.call-avatar {
+  width: 76px; height: 76px; border-radius: 50%; background: #334155; margin: 16px auto 10px auto;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 800; color: #facc15; border: 3px solid #475569;
+}
+.call-number { font-size: 16px; font-weight: 700; }
+.call-status { font-size: 12px; color: #4ade80; margin-top: 4px; }
+.call-transcript {
+  background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 10px 12px;
+  font-size: 12px; color: #cbd5e1; text-align: left; margin: 14px 4px 0 4px; line-height: 1.5; font-style: italic;
+}
+.call-actions { display: flex; justify-content: center; gap: 60px; margin-top: 18px; }
+.call-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 20px; color: #fff; }
+.call-btn.accept { background: #16a34a; }
+.call-btn.decline { background: #dc2626; }
+
+/* USSD screen */
+.ussd-screen {
+  background: #000; color: #e5e5e5; font-family: 'Courier New', monospace;
+  font-size: 12.5px; line-height: 1.75; padding: 16px 14px; border-radius: 8px;
+  min-height: 300px; margin-top: 8px; white-space: pre-wrap;
+}
+
+/* Home screen */
+.phone-home { text-align: center; color: #94a3b8; padding-top: 90px; }
+.home-clock { font-size: 44px; font-weight: 800; color: #f1f5f9; }
+.home-date { font-size: 13px; margin-top: 4px; }
+.home-hint { margin-top: 70px; font-size: 12px; color: #475569; }
+
+/* Handset warning banner */
+.phone-warning {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, #7f1d1d, #991b1b);
+  border-top: 3px solid #facc15; padding: 12px 16px 18px 16px; color: #fff; z-index: 8;
+  animation: warnpulse 1.2s infinite;
+}
+.warn-title { font-weight: 800; font-size: 13px; }
+.warn-body { font-size: 12px; margin-top: 4px; line-height: 1.45; }
+@keyframes warnpulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(250,204,21,.5); }
+  50% { box-shadow: 0 0 18px 4px rgba(250,204,21,.45); }
+}
+
+/* ===================== FraudOps panel ===================== */
+.risk-gauge { width: 100%; max-width: 235px; margin: 0 auto; display: block; }
+.gauge-score { font-size: 36px; font-weight: 800; }
+.gauge-tier { font-size: 10px; letter-spacing: 2.5px; font-weight: 700; fill: #94a3b8; }
+
+.action-banner {
+  background: #111827; border: 1px solid #1f2937; border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 12px;
+}
+.action-title { font-weight: 800; font-size: 15px; }
+.action-desc { color: #94a3b8; font-size: 12.5px; margin-top: 4px; }
+
+.rule-chip {
+  background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+  font-size: 12px; padding: 6px 10px; border-radius: 8px; margin: 4px 0;
+}
+.muted { color: #64748b; font-size: 12.5px; }
+
+.event-log { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.log-row {
+  display: flex; gap: 10px; background: #0f172a; border: 1px solid #1e293b;
+  border-radius: 8px; padding: 7px 10px; font-size: 12px;
+}
+.log-time { color: #facc15; font-weight: 700; min-width: 58px; }
+.log-kind { color: #38bdf8; font-weight: 700; min-width: 70px; }
+.log-summary { color: #cbd5e1; }

@@ -1,0 +1,65 @@
+{
+  "title": "Legitimate Baseline — Salary Credit → Family Transfer",
+  "steps": [
+    {
+      "delay": 2.0,
+      "kind": "SMS",
+      "log": "Ledger-verified salary credit (confirmed in core ledger)",
+      "phone_ui": {
+        "screen": "sms",
+        "sms": [
+          {
+            "dir": "in",
+            "from": "MoMo",
+            "text": "MoMo: GHS 1,200.00 received from ABC Ltd (SALARY NOV). Balance: GHS 1,350.75. Ledger-verified."
+          }
+        ]
+      },
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "CREDIT",
+        "amount": 1200.0,
+        "counterparty_msisdn": "233302000111",
+        "ledger_verified": true
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "P2P",
+      "log": "Routine low-value transfer to a saved family contact — normal velocity, no urgency language",
+      "phone_ui": {
+        "screen": "ussd",
+        "ussd_lines": [
+          "*170#",
+          "Transfer Money",
+          "Recipient: Maame Efua (saved contact)",
+          "Amount: GHS 100.00",
+          "Enter MoMo PIN: ____"
+        ]
+      },
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "P2P_SEND",
+        "amount": 100.0,
+        "counterparty_msisdn": "233244440999"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "UI",
+      "log": "Zero friction — transaction completes normally (false-positive control)",
+      "phone_ui": {
+        "screen": "sms",
+        "sms": [
+          {
+            "dir": "in",
+            "from": "MoMo",
+            "text": "MoMo: GHS 100.00 sent to Maame Efua. Balance: GHS 1,250.75. Reference: 991207. Thank you for using MoMo."
+          }
+        ]
+      }
+    }
+  ]
+}

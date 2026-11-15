@@ -1,0 +1,89 @@
+{
+  "title": "GH01 — Fake Credit → Fake Refund",
+  "steps": [
+    {
+      "delay": 2.0,
+      "kind": "SMS",
+      "log": "Fabricated credit SMS delivered (spoofed sender 'MoMo')",
+      "phone_ui": {
+        "screen": "sms",
+        "sms": [
+          {
+            "dir": "in",
+            "from": "MoMo",
+            "text": "MoMo: You have received GHS 500.00 from Ama K. (024XXXXXXX). Balance: GHS 512.40. Ref: 883421. Do not share your PIN."
+          }
+        ]
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "CALL",
+      "log": "Inbound voice call — classic GH01 'wrong transfer' pretext",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "024 555 0134",
+        "call_type": "voice",
+        "call_status": "Incoming call…"
+      }
+    },
+    {
+      "delay": 3.5,
+      "kind": "VOICE",
+      "log": "Scammer applies Authority + Loss Aversion pressure, requests PIN",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "024 555 0134",
+        "call_type": "voice",
+        "call_status": "On call ‚Ä¢ 00:47",
+        "transcript": "“Mepa wo kyɛw, me firi MTN head office. Wo account no anya problem. If you don't send the GHS 500 back now, your account will be blocked. Enter your MoMo PIN for me to verify.”"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "Mepa wo kyew, me firi MTN head office. Wo account no anya problem. If you don't send the money back now, your account will be blocked. Enter your MoMo PIN for me to verify."
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "LEDGER",
+      "log": "Core-ledger check: NO matching GHS 500 credit exists — SMS was fabricated",
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "CREDIT",
+        "amount": 500.0,
+        "counterparty_msisdn": "233200000001",
+        "ledger_verified": false
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "P2P",
+      "log": "Victim coerced into outbound transfer while still on the call",
+      "phone_ui": {
+        "screen": "ussd",
+        "ussd_lines": [
+          "*170#",
+          "Transfer Money",
+          "Recipient: 024 555 0134",
+          "Amount: GHS 480.00",
+          "Enter MoMo PIN: ____"
+        ]
+      },
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "P2P_SEND",
+        "amount": 480.0,
+        "counterparty_msisdn": "2332455550134"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "HOLD",
+      "log": "Accumulated risk ≥75 — engine injects SIMULATED HOLD before PIN authorisation"
+    }
+  ]
+}

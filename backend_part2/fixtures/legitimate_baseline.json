@@ -1,0 +1,18 @@
+{
+  "scenario_name": "Legitimate Baseline — Normal P2P Transfer",
+  "steps": [
+    {
+      "delay_seconds": 0,
+      "event": {
+        "event_id": "legit-tx-1",
+        "msisdn": "+233240000003",
+        "event_type": "transaction",
+        "transaction_type": "P2P_SEND",
+        "amount": 50.0,
+        "counterparty_msisdn": "+233240000099",
+        "ledger_verified": true,
+        "timestamp": "2026-11-28T12:00:00"
+      }
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "title": "GH18 — Cross-Device Wallet Takeover",
+  "steps": [
+    {
+      "delay": 2.0,
+      "kind": "SMS",
+      "log": "OTP delivered for app registration",
+      "phone_ui": {
+        "screen": "sms",
+        "sms": [
+          {
+            "dir": "in",
+            "from": "MoMo",
+            "text": "Your MoMo verification code is 482913. Never share this code with anyone — not even MTN staff."
+          }
+        ]
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "VOICE",
+      "log": "Impersonated 'support' extracts the OTP and PIN over a voice pretext",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "MTN 'Support' ‚Ä¢ 055 555 0100",
+        "call_type": "voice",
+        "call_status": "On call ‚Ä¢ 01:12",
+        "transcript": "“Good afternoon, this is MTN support. We detected unusual login attempts on your wallet. Read me the 6-digit code we just sent so I can secure it — and confirm your MoMo PIN for the security reset.”"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "This is MTN support. We detected unusual login. Read me the 6 digit code we just sent and confirm your MoMo PIN for the security reset."
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "DEVICE",
+      "log": "New device binding attempt seconds after OTP disclosure",
+      "event": {
+        "event_type": "device_binding",
+        "msisdn": "233245550123",
+        "new_imei": "860123045678901",
+        "action": "APP_INSTALL"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "HOLD",
+      "log": "Accumulated risk ≥75 — engine blocks new-device binding (SIMULATED HOLD)"
+    }
+  ]
+}
