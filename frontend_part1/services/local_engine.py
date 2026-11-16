@@ -71,9 +71,16 @@ def assess_local(event: dict, acc: dict):
 
     score = min(score, 100)
     tier = "HIGH" if score >= 75 else "MEDIUM" if score >= 40 else "LOW"
-    action_out = {"LOW": "SEAMLESS_APPROVE",
-                  "MEDIUM": "COOLING_OFF_PROMPT",
-                  "HIGH": "SIMULATED_HOLD"}[tier]
+    # Mirrors backend _action_from_tier: a HIGH communication event has no
+    # in-flight transaction to hold -> FraudOps alert instead of a fake hold.
+    if tier == "LOW":
+        action_out = "SEAMLESS_APPROVE"
+    elif tier == "MEDIUM":
+        action_out = "COOLING_OFF_PROMPT"
+    elif et == "communication":
+        action_out = "FRAUDOPS_ALERT"
+    else:
+        action_out = "SIMULATED_HOLD"
 
     out = {
         "msisdn": msisdn,

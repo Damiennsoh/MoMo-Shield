@@ -63,6 +63,8 @@ def test_gh15_scores_high():
 def test_gh19_scores_high():
     fixture = _load("gh19_nuisance_calls.json")
     result = _assess_all_steps(fixture)
-    print(f"\nGH19: score={result.risk_score} tier={result.risk_tier}")
+    print(f"\nGH19: score={result.risk_score} tier={result.risk_tier} action={result.recommended_action}")
     assert result.risk_score >= 75
     assert result.risk_tier == "HIGH"
+    # Final event is a communication — nothing to hold, so FraudOps alert.
+    assert result.recommended_action == "FRAUDOPS_ALERT"

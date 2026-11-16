@@ -15,14 +15,32 @@ def _tier_from_score(score: int) -> str:
     if score >= settings.risk_threshold_medium: return "MEDIUM"
     return "LOW"
 
-def _action_from_tier(tier: str) -> str:
-    return {"LOW": "SEAMLESS_APPROVE", "MEDIUM": "SOFT_WARNING", "HIGH": "SIMULATED_HOLD"}[tier]
+def _action_from_tier(tier: str, event) -> str:
+    if tier == "LOW":
+        return "SEAMLESS_APPROVE"
+    if tier == "MEDIUM":
+        return "SOFT_WARNING"
+    # HIGH tier: a communication event means no in-flight transaction exists to
+    # hold (e.g. GH19 fake-helper call) -> FraudOps alert + cooling-off instead.
+    if isinstance(event, CommunicationEvent):
+        return "FRAUDOPS_ALERT"
+    return "SIMULATED_HOLD"
 
-def _twi_warning(tier: str, llm_intent: LLMIntent) -> str:
-    if tier != "HIGH": return None
+def _twi_warning(tier: str, llm_intent: LLMIntent, action: str) -> str:
+    if tier != "HIGH":
+        return None
     if llm_intent and llm_intent.requested_secret:
         return "Wɔrehyɛ wo sɛ fa wo PIN kɔ ma! — Do not share your PIN."
+    if action == "FRAUDOPS_ALERT":
+        return "Sɛ wo yɛ den a, frɛ MTN 100. Mma wo PIN biara."
     return "Yɛn hu sɛ obi rehyɛ wo ma ɛyɛ den. Fa ayɛ nkyerɛ."
+
+def _english_warning(tier: str, action: str) -> str:
+    if tier != "HIGH":
+        return None
+    if action == "FRAUDOPS_ALERT":
+        return "⚠️ HIGH RISK: FraudOps alerted. Customer cooling-off prompt shown. No transaction was executed."
+    return "⚠️ HIGH RISK: Transaction placed on simulated hold."
 
 async def assess(raw_event: dict) -> AssessResponse:
     event = parse_event(raw_event)
@@ -45,14 +63,15 @@ async def assess(raw_event: dict) -> AssessResponse:
     rule_results = run_rules_for_event(event, global_window, llm_intent.dict() if llm_intent else {})
     risk_score = global_window.add_risk(event.msisdn, sum(pts for pts, _ in rule_results))
     risk_tier = _tier_from_score(risk_score)
+    action = _action_from_tier(risk_tier, event)
     
     triggered_rules = [TriggeredRule(rule_id=f"R{i+1}", description=desc, points=pts) for i, (pts, desc) in enumerate(rule_results)]
 
     return AssessResponse(
         msisdn=event.msisdn, risk_score=risk_score, risk_tier=risk_tier,
         triggered_rules=triggered_rules, llm_extracted_intent=llm_intent, llm_unavailable=llm_unavailable,
-        recommended_action=_action_from_tier(risk_tier),
-        twi_warning_message=_twi_warning(risk_tier, llm_intent),
-        english_warning_message="⚠️ HIGH RISK: Transaction placed on simulated hold." if risk_tier == "HIGH" else None,
+        recommended_action=action,
+        twi_warning_message=_twi_warning(risk_tier, llm_intent, action),
+        english_warning_message=_english_warning(risk_tier, action),
         event_id=event.event_id, timestamp=datetime.utcnow()
     )

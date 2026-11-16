@@ -57,9 +57,11 @@ def _home_screen() -> str:
 
 
 def _warning_html(warning) -> str:
+    variant = " watch" if warning.get("variant") == "watch" else ""
+    icon = "🛡️" if variant else "⚠️"
     return f"""
-    <div class="phone-warning">
-      <div class="warn-title">⚠️ {_esc(warning.get('title', 'FRAUD ALERT'))}</div>
+    <div class="phone-warning{variant}">
+      <div class="warn-title">{icon} {_esc(warning.get('title', 'FRAUD ALERT'))}</div>
       <div class="warn-body">{_esc(warning.get('body', ''))}</div>
     </div>"""
 

@@ -1,7 +1,12 @@
 from datetime import datetime
 from enum import Enum
 from typing import Optional
+from uuid import uuid4
 from pydantic import BaseModel, Field
+
+
+def _new_event_id() -> str:
+    return f"evt-{uuid4().hex[:12]}"
 
 class EventType(str, Enum):
     TRANSACTION = "transaction"
@@ -25,7 +30,7 @@ class ChannelType(str, Enum):
     VOICE = "VOICE"
 
 class TransactionEvent(BaseModel):
-    event_id: str
+    event_id: str = Field(default_factory=_new_event_id)
     msisdn: str = Field(..., pattern=r"^\+?[0-9]{9,15}$")
     event_type: EventType = EventType.TRANSACTION
     transaction_type: TransactionType
@@ -36,7 +41,7 @@ class TransactionEvent(BaseModel):
     timestamp: datetime
 
 class DeviceBindingEvent(BaseModel):
-    event_id: str
+    event_id: str = Field(default_factory=_new_event_id)
     msisdn: str = Field(..., pattern=r"^\+?[0-9]{9,15}$")
     event_type: EventType = EventType.DEVICE_BINDING
     new_imei: str
@@ -45,7 +50,7 @@ class DeviceBindingEvent(BaseModel):
     timestamp: datetime
 
 class CommunicationEvent(BaseModel):
-    event_id: str
+    event_id: str = Field(default_factory=_new_event_id)
     msisdn: str = Field(..., pattern=r"^\+?[0-9]{9,15}$")
     event_type: EventType = EventType.COMMUNICATION
     channel: ChannelType

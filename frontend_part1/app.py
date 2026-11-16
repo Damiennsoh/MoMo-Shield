@@ -153,7 +153,9 @@ if play:
                 f'→ risk {assessment["risk_score"]}/100 ({source})',
             )
             # ---- engine-driven intervention on the handset -----------------
-            if assessment["risk_tier"] == "HIGH":
+            # The engine's recommended_action picks the screen — not a script.
+            action = assessment.get("recommended_action")
+            if action == "SIMULATED_HOLD":
                 st.session_state.phone["screen"] = "ussd"
                 st.session_state.phone["ussd_lines"] = [
                     "*170#",
@@ -167,9 +169,24 @@ if play:
                     "body": f'{assessment["twi_warning_message"]} '
                             f'Do NOT share your PIN. MTN will never ask for it. Call 100.',
                 }
-                if not st.session_state.alert_played:
-                    st.session_state.alert_played = True
-                    st.audio(alert_tone_bytes(), format="audio/wav", autoplay=True)
+            elif action == "FRAUDOPS_ALERT":
+                # No transaction exists to hold (e.g. GH19) — keep the call
+                # screen and raise an amber watch/cooling-off banner instead.
+                st.session_state.phone["warning"] = {
+                    "variant": "watch",
+                    "title": "ACCOUNT ON WATCH — FA KASA",
+                    "body": "No money was moved — we paused before the code prompt. "
+                            f'{assessment.get("twi_warning_message") or "Call MTN 100 to verify any request."}',
+                }
+            elif action == "COOLING_OFF_PROMPT":
+                st.session_state.phone["warning"] = {
+                    "title": "SUSPECTED SIKA AFONO — VERIFY FIRST",
+                    "body": "Slow down. Verify this request through the official "
+                            "MoMo app or by calling 100 before entering any code.",
+                }
+            if action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT") and not st.session_state.alert_played:
+                st.session_state.alert_played = True
+                st.audio(alert_tone_bytes(), format="audio/wav", autoplay=True)
         else:
             log_event(step.get("kind", "UI").upper(), step.get("log", "phone update"))
         draw()

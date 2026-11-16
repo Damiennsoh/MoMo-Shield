@@ -96,3 +96,4 @@ def test_frontend_gh19_nuisance_calls_reaches_high():
     result = _run_scenario("gh19_nuisance_calls.json")
     assert result.risk_score >= 75
     assert result.risk_tier == "HIGH"
+    assert result.recommended_action == "FRAUDOPS_ALERT"
