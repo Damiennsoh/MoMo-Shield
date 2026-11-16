@@ -35,21 +35,29 @@ rule engine if the backend is unreachable, so the demo survives bad Wi-Fi.
 
 ## Run it
 
-```bat
-start_demo.bat
+One-time setup (standard venv, no Docker):
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
+pip install -r backend_part2/requirements.txt -r frontend_part1/requirements.txt
 ```
 
-or manually:
+Then run the two services in **two separate terminals**:
 
 ```bash
 # terminal 1 — fraud engine
-cd backend_part2 && uvicorn main:app --port 8000
+cd backend_part2
+python main.py                  # FastAPI on http://localhost:8000
 
 # terminal 2 — dashboard
-cd frontend_part1 && streamlit run app.py
+cd frontend_part1
+streamlit run app.py            # dashboard on http://localhost:8501
 ```
 
-Open http://localhost:8501, pick a scenario, press **▶ Play**.
+Or use `start_demo.bat` / `python run_demo.py` from an activated venv to
+launch both at once and open the dashboard automatically.
 
 ## Wire contract
 

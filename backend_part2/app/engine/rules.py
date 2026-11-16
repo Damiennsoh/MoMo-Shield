@@ -20,16 +20,23 @@ def rule_gh01_active_call(event: TransactionEvent, window: EventWindow) -> Tuple
         return 20, "GH01: Outbound transfer during active voice call"
     return 0, None
 
+_SECRET_HINTS = ("pin", "otp", "code", "password", "secret")
+
+def _requests_secret(text: str) -> bool:
+    t = (text or "").lower()
+    return any(hint in t for hint in _SECRET_HINTS)
+
 def rule_gh18_new_device(event: DeviceBindingEvent, window: EventWindow) -> Tuple[int, Optional[str]]:
-    if event.action in (DeviceAction.NEW_DEVICE_LOGIN, DeviceAction.WALLET_ENROLMENT, DeviceAction.SIM_SWAP):
+    if event.action in (DeviceAction.APP_INSTALL, DeviceAction.NEW_DEVICE_LOGIN, DeviceAction.WALLET_ENROLMENT, DeviceAction.SIM_SWAP):
         return 40, f"GH18: New device event — {event.action.value}"
     return 0, None
 
 def rule_gh18_otp_activity(event: DeviceBindingEvent, window: EventWindow) -> Tuple[int, Optional[str]]:
-    if not getattr(event, "preceded_by_otp_activity", False):
-        return 0, None
     recent_comms = window.get_events(msisdn=event.msisdn, event_type="communication", within=timedelta(minutes=10), before=event.timestamp)
-    if recent_comms:
+    if not recent_comms:
+        return 0, None
+    credential_comm = any(_requests_secret(getattr(c, "text_or_transcript", "")) for c in recent_comms)
+    if getattr(event, "preceded_by_otp_activity", False) or credential_comm:
         return 25, "GH18: Device binding preceded by OTP/credential activity"
     return 0, None
 
