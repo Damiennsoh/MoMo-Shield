@@ -79,6 +79,8 @@ def render_fraudops(ops: dict):
     with tab3:
         intent = ops.get("intent")
         if intent:
+            if ops.get("intent_text"):
+                st.caption("Analyzed signal: *" + _esc(str(ops["intent_text"])[:300]) + "*")
             st.json(intent)
             st.caption("Structured JSON from Gemini Flash (code-switched Twi/English intent). "
                        "Keyword fallback shown automatically when the API is unavailable.")

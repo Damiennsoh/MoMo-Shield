@@ -12,6 +12,7 @@ the demo never dies on hackathon Wi-Fi.
 Run:  streamlit run app.py
 """
 
+import io
 import json
 import time
 from datetime import datetime
@@ -60,6 +61,8 @@ def init_state():
     st.session_state.setdefault("accumulator", new_accumulator())
     st.session_state.setdefault("event_log", [])
     st.session_state.setdefault("alert_played", False)
+    st.session_state.setdefault("intent", None)
+    st.session_state.setdefault("intent_text", None)
 
 
 def reset():
@@ -68,6 +71,8 @@ def reset():
     st.session_state.accumulator = new_accumulator()
     st.session_state.event_log = []
     st.session_state.alert_played = False
+    st.session_state.intent = None
+    st.session_state.intent_text = None
 
 
 def log_event(kind, summary):
@@ -146,6 +151,13 @@ if play:
             assessment["latency_ms"] = (time.perf_counter() - t0) * 1000
             assessment["source"] = source
             assessment["event_log"] = list(st.session_state.event_log)
+            # Intent lives on communication events; later transaction events
+            # return intent=None. Keep the latest non-null intent on screen.
+            if assessment.get("intent"):
+                st.session_state.intent = assessment["intent"]
+                st.session_state.intent_text = ev.get("text_or_transcript")
+            assessment["intent"] = assessment.get("intent") or st.session_state.intent
+            assessment["intent_text"] = st.session_state.intent_text
             st.session_state.ops = assessment
             log_event(
                 ev["event_type"].upper(),
@@ -186,7 +198,7 @@ if play:
                 }
             if action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT") and not st.session_state.alert_played:
                 st.session_state.alert_played = True
-                st.audio(alert_tone_bytes(), format="audio/wav", autoplay=True)
+                st.audio(io.BytesIO(alert_tone_bytes()), format="audio/wav", autoplay=True)
         else:
             log_event(step.get("kind", "UI").upper(), step.get("log", "phone update"))
         draw()
