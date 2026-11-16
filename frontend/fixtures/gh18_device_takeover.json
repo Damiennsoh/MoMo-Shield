@@ -22,9 +22,9 @@
       "log": "Impersonated 'support' extracts the OTP and PIN over a voice pretext",
       "phone_ui": {
         "screen": "call",
-        "caller": "MTN 'Support' ‚Ä¢ 055 555 0100",
+        "caller": "MTN 'Support' · 055 555 0100",
         "call_type": "voice",
-        "call_status": "On call ‚Ä¢ 01:12",
+        "call_status": "On call · 01:12",
         "transcript": "“Good afternoon, this is MTN support. We detected unusual login attempts on your wallet. Read me the 6-digit code we just sent so I can secure it — and confirm your MoMo PIN for the security reset.”"
       },
       "event": {

@@ -1,7 +1,7 @@
 """MoMo Shield — one-command demo launcher.
 
-Starts the FastAPI fraud engine (backend_part2) and the Streamlit
-FraudOps dashboard (frontend_part1), waits for the engine to come up,
+Starts the FastAPI fraud engine (backend) and the Streamlit
+FraudOps dashboard (frontend), waits for the engine to come up,
 then opens the dashboard in the browser.
 
 Run:  python run_demo.py        (or double-click start_demo.bat)
@@ -16,8 +16,8 @@ import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-BACKEND_DIR = ROOT / "backend_part2"
-FRONTEND_DIR = ROOT / "frontend_part1"
+BACKEND_DIR = ROOT / "backend"
+FRONTEND_DIR = ROOT / "frontend"
 
 BACKEND_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:8501"

@@ -29,7 +29,7 @@ def _call_screen(state) -> str:
               if transcript else "")
     return f"""
     <div class="call-screen">
-      <div class="call-label">MTN ‚Ä¢ {_esc(state.get('call_type', 'voice'))}</div>
+      <div class="call-label">MTN · {_esc(state.get('call_type', 'voice'))}</div>
       <div class="call-avatar">{_esc(str(caller)[0])}</div>
       <div class="call-number">{_esc(caller)}</div>
       <div class="call-status">{_esc(state.get('call_status', 'Ringing…'))}</div>
@@ -84,7 +84,7 @@ def render_phone(state: dict):
     st.markdown(f"""
     <div class="phone-frame">
       <div class="phone-notch"></div>
-      <div class="phone-statusbar"><span>MTN ‚Ä¢ Ghana</span><span>LTE ▂▄▆█ 🔋</span></div>
+      <div class="phone-statusbar"><span>MTN · Ghana</span><span>LTE ▂▄▆█ 🔋</span></div>
       <div class="phone-body">{body}</div>
       {warning}
     </div>

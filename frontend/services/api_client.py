@@ -1,6 +1,6 @@
 # Backend client with graceful offline fallback.
 #
-# Talks to the FastAPI engine (backend_part2). ANY failure — connection
+# Talks to the FastAPI engine (backend). ANY failure — connection
 # refused, timeout (>2s), 4xx/5xx — falls back to the built-in deterministic
 # rule engine, so the demo never dies on hackathon Wi-Fi.
 #
@@ -15,7 +15,7 @@ import httpx
 
 from services.local_engine import assess_local
 
-TIMEOUT_SECONDS = 2.0
+TIMEOUT_SECONDS = 3.5
 
 # Backend action names -> labels the FraudOps panel knows how to render.
 _ACTION_MAP = {
@@ -56,10 +56,11 @@ def reset_backend(backend_url: str) -> None:
 
 def assess_event(event: dict, backend_url: str, accumulator: dict):
     # Returns (assessment_dict, source) where source is 'backend' or 'local'.
+    prepared_event = _prepare_event(event)
     try:
         resp = httpx.post(
             backend_url.rstrip("/") + "/api/v1/assess",
-            json={"event": _prepare_event(event)},
+            json={"event": prepared_event},
             timeout=TIMEOUT_SECONDS,
         )
         resp.raise_for_status()
@@ -67,4 +68,4 @@ def assess_event(event: dict, backend_url: str, accumulator: dict):
         data["source"] = "backend"
         return data, "backend"
     except Exception:
-        return assess_local(event, accumulator), "local"
+        return assess_local(prepared_event, accumulator), "local"

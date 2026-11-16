@@ -21,6 +21,7 @@ class AssessResponse(BaseModel):
     triggered_rules: List[TriggeredRule]
     llm_extracted_intent: Optional[LLMIntent] = None
     llm_unavailable: bool = False
+    intent_source: str = "none"
     recommended_action: str
     twi_warning_message: Optional[str] = None
     english_warning_message: Optional[str] = None

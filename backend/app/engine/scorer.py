@@ -48,17 +48,22 @@ async def assess(raw_event: dict) -> AssessResponse:
     
     llm_intent = None
     llm_unavailable = False
+    intent_source = "none"
     if isinstance(event, CommunicationEvent):
         raw_intent = None
         if settings.gemini_enabled:
             try:
                 raw_intent = await extract_intent(event.text_or_transcript)
+                if raw_intent is not None:
+                    intent_source = "gemini"
             except Exception as e:
                 log.warning(f"Gemini failed, using fallback: {e}")
                 llm_unavailable = True
         if raw_intent is None:
             raw_intent = keyword_intent(event.text_or_transcript)
-        if raw_intent: llm_intent = LLMIntent(**raw_intent)
+            intent_source = "keyword_fallback"
+        if raw_intent:
+            llm_intent = LLMIntent(**raw_intent)
 
     rule_results = run_rules_for_event(event, global_window, llm_intent.dict() if llm_intent else {})
     risk_score = global_window.add_risk(event.msisdn, sum(pts for pts, _ in rule_results))
@@ -69,7 +74,8 @@ async def assess(raw_event: dict) -> AssessResponse:
 
     return AssessResponse(
         msisdn=event.msisdn, risk_score=risk_score, risk_tier=risk_tier,
-        triggered_rules=triggered_rules, llm_extracted_intent=llm_intent, llm_unavailable=llm_unavailable,
+        triggered_rules=triggered_rules, llm_extracted_intent=llm_intent,
+        llm_unavailable=llm_unavailable, intent_source=intent_source,
         recommended_action=action,
         twi_warning_message=_twi_warning(risk_tier, llm_intent, action),
         english_warning_message=_english_warning(risk_tier, action),

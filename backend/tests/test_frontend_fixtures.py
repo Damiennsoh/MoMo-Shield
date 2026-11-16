@@ -1,6 +1,6 @@
 """Replay the Streamlit dashboard's fixtures through the engine.
 
-The frontend (frontend_part1/fixtures) sends sandbox events that omit
+The frontend (frontend/fixtures) sends sandbox events that omit
 fields the backend requires; services/api_client._prepare_event fills them
 in. These tests apply the same defaults so the demo scenarios are covered
 end-to-end, not just the backend's own fixtures.
@@ -17,10 +17,10 @@ import pytest
 from app.engine.scorer import assess
 from app.engine.state import global_window
 
-FRONTEND_FIXTURES = Path(__file__).parent.parent.parent / "frontend_part1" / "fixtures"
+FRONTEND_FIXTURES = Path(__file__).parent.parent.parent / "frontend" / "fixtures"
 
 pytestmark = pytest.mark.skipif(
-    not FRONTEND_FIXTURES.exists(), reason="frontend_part1 fixtures not present"
+    not FRONTEND_FIXTURES.exists(), reason="frontend fixtures not present"
 )
 
 

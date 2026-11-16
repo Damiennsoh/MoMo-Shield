@@ -12,8 +12,8 @@ async def extract_intent(text: str) -> Optional[Dict[str, Any]]:
     try:
         from google import genai
         from google.genai import types
-    except ImportError:
-        return None
+    except ImportError as exc:
+        raise RuntimeError("Google GenAI SDK is unavailable") from exc
 
     client = genai.Client(api_key=settings.gemini_api_key)
     examples_text = "\n".join([f"Input: {ex['input']}\nOutput: {ex['output']}" for ex in FEW_SHOT_EXAMPLES])
@@ -30,7 +30,7 @@ async def extract_intent(text: str) -> Optional[Dict[str, Any]]:
         return json.loads(response.text)
     except asyncio.TimeoutError:
         log.warning("Gemini call timed out")
-        return None
+        raise
     except Exception as e:
         log.warning(f"Gemini call failed: {e}")
-        return None
+        raise

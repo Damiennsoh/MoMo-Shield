@@ -14,14 +14,13 @@ def _esc(s) -> str:
 def _action_html(action: str) -> str:
     styles = {
         "SEAMLESS_APPROVE": ("✅ TRANSACTION APPROVED", "#22c55e",
-                             "No fraud signals. Zero friction for the customer — funds move normally."),
+                             "No high-risk signals in this scenario. This demo does not execute a payment."),
         "COOLING_OFF_PROMPT": ("⏳ COOLING-OFF PROMPT SENT", "#f59e0b",
-                               "Soft warning in Twi & English shown on handset; 60-second cooling-off delay applied."),
+                               "A simulated verification warning is shown on the handset; no real delay is applied."),
         "SIMULATED_HOLD": ("🚨 SIMULATED TRANSACTION HOLD", "#ef4444",
-                           "Pre-authorisation hold injected BEFORE PIN verification. FraudOps alerted. "
-                           "Twi audio warning dispatched to the handset."),
+                           "Illustrative hold outcome for this demo. No payment is authorized or blocked."),
         "FRAUDOPS_ALERT": ("🚨 FRAUDOPS ALERT DISPATCHED", "#ef4444",
-                           "Case routed to telco FraudOps queue with the full multi-channel signal bundle."),
+                           "Illustrative alert only; no external FraudOps queue is connected."),
     }
     title, color, desc = styles.get(action, (action, "#94a3b8", ""))
     banner = '<div class="action-banner" style="border-left:6px solid ' + color + ';">'
@@ -47,7 +46,7 @@ def render_fraudops(ops: dict):
         st.markdown(gauge_html(ops["risk_score"]), unsafe_allow_html=True)
     with top[1]:
         st.metric("Risk Tier", ops["risk_tier"])
-        st.caption(">=75 HIGH ‚Ä¢ 40-74 MEDIUM ‚Ä¢ <40 LOW")
+        st.caption("≥75 HIGH · 40–74 MEDIUM · <40 LOW")
     with top[2]:
         lat = ops.get("latency_ms")
         st.metric("Decision Latency", f"{lat:.0f} ms" if lat is not None else "—")
@@ -55,7 +54,7 @@ def render_fraudops(ops: dict):
     with top[3]:
         st.metric("Scoring Engine", "FastAPI Backend" if ops.get("source") == "backend"
                   else "Local Rules (offline fallback)")
-        st.caption("Gemini intent layer: " + ("active" if ops.get("intent") else "not required"))
+        st.caption("Communication intent: " + ("available" if ops.get("intent") else "not present"))
 
     tab1, tab2, tab3 = st.tabs(["🚨 Live Assessment", "📡 Event Stream", "🧠 Intent Analysis"])
 
@@ -78,12 +77,33 @@ def render_fraudops(ops: dict):
 
     with tab3:
         intent = ops.get("intent")
+        intent_source = ops.get("intent_source", "none")
+        source_label = {
+            "gemini": "Gemini model",
+            "keyword_fallback": "Deterministic keyword fallback",
+            "none": "No communication intent analysis",
+        }.get(intent_source, intent_source.replace("_", " ").title())
+        st.caption("Analysis source: " + source_label)
+        if ops.get("llm_unavailable"):
+            st.warning("Gemini was unavailable for this assessment; fallback rules were used.")
         if intent:
+            evidence = intent.get("evidence_phrases") or []
+            signal_text = str(ops.get("intent_text") or "")
+            matched = [phrase for phrase in evidence
+                       if str(phrase).casefold() in signal_text.casefold()]
+            unmatched = [phrase for phrase in evidence if phrase not in matched]
             if ops.get("intent_text"):
-                st.caption("Analyzed signal: *" + _esc(str(ops["intent_text"])[:300]) + "*")
+                st.caption("Analyzed signal")
+                st.code(signal_text[:500], language=None)
+            if matched:
+                st.markdown("**Evidence phrases found in the signal (case-insensitive exact-phrase check)**")
+                st.markdown(" · ".join("`" + _esc(phrase) + "`" for phrase in matched))
+            if unmatched:
+                st.warning("Some analyzer evidence phrases did not match the message verbatim and are hidden.")
+            elif not intent.get("pattern") and not intent.get("requested_secret"):
+                st.info("No suspicious intent was returned for this message.")
             st.json(intent)
-            st.caption("Structured JSON from Gemini Flash (code-switched Twi/English intent). "
-                       "Keyword fallback shown automatically when the API is unavailable.")
+            st.caption("Evidence is model/fallback output, not a verified fraud finding. Validate against operator policy before taking action.")
         else:
-            st.markdown('<div class="muted">No text/voice signal in this scenario.</div>',
+            st.markdown('<div class="muted">No text/voice intent was available for this assessment.</div>',
                         unsafe_allow_html=True)

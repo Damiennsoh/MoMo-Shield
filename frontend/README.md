@@ -1,0 +1,59 @@
+# MoMo Shield Frontend
+
+Streamlit FraudOps Command Center for replaying synthetic mobile-money fraud scenarios. The dashboard pairs a simulated customer handset view with risk scores, triggered rules, engine source, latency, event history, and communication-intent details.
+
+## Requirements and start
+
+Use Python 3.10 or newer. From the repository root, activate a virtual environment and install both sets of dependencies to run the complete demonstration:
+
+```bash
+python -m pip install -r backend/requirements.txt -r frontend/requirements.txt
+python run_demo.py
+```
+
+The dashboard is served at `http://localhost:8501`. To run the dashboard alone, install `frontend/requirements.txt`, change to this directory, and run:
+
+```bash
+streamlit run app.py
+```
+
+The API is optional for standalone use. If it is unreachable, assessment requests use the deterministic local rules engine in `services/local_engine.py`. For the full demo, start the API separately with `cd ../backend && python main.py`, or use `python run_demo.py` at the repository root.
+
+## Backend connection
+
+The **Backend API URL** sidebar field defaults to `http://localhost:8000`. For each event, `services/api_client.py` posts `{"event": {...}}` to `/api/v1/assess`. Before a replay, it sends `/api/v1/reset` to clear backend in-memory scenario state. It supplies IDs, timestamps, and a default `ledger_verified` value for transaction fixture events. It then normalizes the backend response for the dashboard panel. Failed assessment requests fall back locally; the dashboard labels the source as backend or local rules.
+
+Because Streamlit runs the Python client on the server side, this is ordinary HTTP service-to-service communication. Browser CORS settings are not required for this integration.
+
+## Scenarios
+
+Scenario files in `fixtures/` contain timed handset UI steps and optional event payloads:
+
+- `gh01_fake_credit.json` — fake credit followed by refund pressure.
+- `gh18_device_takeover.json` — new-device/account takeover signals.
+- `gh17_fake_support.json` — fake support and wallet-drain sequence.
+- `gh02_reversal_syndicate.json` — reversal pressure and forged-receipt signals.
+- `gh15_fake_business_listing.json` — fake listing and credential-harvest signals.
+- `gh19_nuisance_calls.json` — nuisance calls followed by a fake helper.
+- `legit_baseline.json` — legitimate activity used as a false-positive control.
+
+Fixtures are synthetic and intended for local demonstrations only. The UI's “SIMULATED HOLD” and alerts do not execute payment actions.
+
+Use **Play selected** for one scenario or **Run all 7 scenarios** for a quick batch replay. The batch button displays a results table and an **Inspect event stream and intent for** selector; choose any scenario to see its full event history, communication signal, intent output, and analysis source. The intent tab distinguishes Gemini from the deterministic keyword fallback and only displays evidence phrases whose wording appears in the signal, ignoring capitalization. Intent output is advisory, not a verified fraud finding or a model confidence score. Alert sounds appear in a normal player instead of relying on browser autoplay; press play in the audio control to hear the tone.
+
+## Project layout
+
+```text
+frontend/
+├── app.py                    # Streamlit entry point and scenario player
+├── components/               # Mock handset, FraudOps panel, risk gauge
+├── services/
+│   ├── api_client.py         # HTTP API adapter and local fallback selection
+│   ├── local_engine.py       # Deterministic offline demonstration rules
+│   └── audio.py              # Locally generated alert tone
+├── fixtures/                 # Seven scenario sequences
+├── styles/custom.css         # Dashboard styles
+└── .streamlit/config.toml    # Streamlit theme configuration
+```
+
+Backend endpoint and scoring tests are documented in [`../backend/README.md`](../backend/README.md). From the repository root, run all backend and offline fallback tests with `python -m pytest backend/tests frontend/tests -q`.
