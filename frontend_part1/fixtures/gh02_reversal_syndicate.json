@@ -1,0 +1,84 @@
+{
+  "title": "GH02/AF01 — Reversal Syndicate & Forged Receipt",
+  "steps": [
+    {
+      "delay": 2.0,
+      "kind": "CALL",
+      "log": "Inbound call — 'wrong number' reversal pretext",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "055 123 4567",
+        "call_type": "voice",
+        "call_status": "Incoming call…"
+      }
+    },
+    {
+      "delay": 3.5,
+      "kind": "VOICE",
+      "log": "Caller claims a mistaken GHS 800 transfer and pushes for an immediate reversal",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "055 123 4567",
+        "call_type": "voice",
+        "call_status": "On call • 00:58",
+        "transcript": "“Hello, I accidentally sent you 800 cedis. Please reverse it back to my number 055 123 4567. I can send you the transaction receipt.”"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "Hello, I accidentally sent you 800 cedis. Please reverse it back to my number 055 123 4567. I can send you the transaction receipt.",
+        "counterparty_msisdn": "233551234567"
+      }
+    },
+    {
+      "delay": 2.5,
+      "kind": "SMS",
+      "log": "Forged 'transaction receipt' SMS arrives — invalid TXN id",
+      "phone_ui": {
+        "screen": "sms",
+        "sms": [
+          {
+            "dir": "in",
+            "from": "MoMo",
+            "text": "Transaction ID: TXN-99887766. Amount: GHS 800.00. Status: Successful. Please reverse to 0551234567."
+          }
+        ]
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "SMS",
+        "text_or_transcript": "Transaction ID: TXN-99887766. Amount: GHS 800.00. Status: Successful. Please reverse to 0551234567.",
+        "counterparty_msisdn": "233551234567"
+      }
+    },
+    {
+      "delay": 3.5,
+      "kind": "P2P",
+      "log": "Victim initiates the 'reversal' transfer — actually paying the scammer",
+      "phone_ui": {
+        "screen": "ussd",
+        "ussd_lines": [
+          "*170#",
+          "Transfer Money",
+          "Recipient: 055 123 4567",
+          "Amount: GHS 800.00",
+          "Enter MoMo PIN: ____"
+        ]
+      },
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "P2P_SEND",
+        "amount": 800.0,
+        "counterparty_msisdn": "233551234567"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "HOLD",
+      "log": "Accumulated risk ≥75 — engine injects SIMULATED HOLD before PIN authorisation"
+    }
+  ]
+}

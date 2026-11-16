@@ -45,8 +45,12 @@ Set the backend URL in the sidebar (default `http://localhost:8000`).
 | Scenario                      | File                    | Expected result                                  |
 |-------------------------------|-------------------------|--------------------------------------------------|
 | GH01 Fake Credit → Refund     | `gh01_fake_credit.json` | 100/100 HIGH → SIMULATED HOLD + Twi warning      |
-| GH18 Device Takeover          | `gh18_device_takeover.json` | 85/100 HIGH → SIMULATED HOLD on new-device binding |
-| Legitimate Baseline           | `legit_baseline.json`   | 10/100 LOW → SEAMLESS_APPROVE (false-positive control) |
+| GH18 Device Takeover          | `gh18_device_takeover.json` | 95/100 HIGH → SIMULATED HOLD on new-device binding |
+| GH17 Fake Support → Drain     | `gh17_fake_support.json`| 100/100 HIGH → SIMULATED HOLD (loan-after-drain)  |
+| GH02 Reversal Syndicate       | `gh02_reversal_syndicate.json` | 80/100 HIGH → SIMULATED HOLD on forged-receipt reversal |
+| GH15 Fake Business / PIN Form | `gh15_fake_business_listing.json` | 85/100 HIGH → SIMULATED HOLD on link-sourced credential request |
+| GH19 Nuisance Call Swarm      | `gh19_nuisance_calls.json` | 95/100 HIGH → alert on 'helper' call after call fatigue |
+| Legitimate Baseline           | `legit_baseline.json`   | 20/100 LOW → SEAMLESS_APPROVE (false-positive control) |
 
 Each fixture is a timed sequence of `phone_ui` steps (what the victim sees)
 plus sandbox `event` payloads (what the engine scores). Scores accumulate

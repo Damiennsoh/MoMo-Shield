@@ -37,6 +37,10 @@ st.set_page_config(
 SCENARIOS = {
     "GH01 — Fake Credit → Refund Scam": "gh01_fake_credit",
     "GH18 — New Device Takeover": "gh18_device_takeover",
+    "GH17 — Fake Support → Wallet Drain": "gh17_fake_support",
+    "GH02 — Reversal Syndicate & Forged Receipt": "gh02_reversal_syndicate",
+    "GH15 — Fake Business Listing & PIN Harvest": "gh15_fake_business_listing",
+    "GH19 — Nuisance Call Swarm → Fake Helper": "gh19_nuisance_calls",
     "Legitimate Baseline (False-Positive Control)": "legit_baseline",
 }
 

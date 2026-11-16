@@ -1,0 +1,83 @@
+{
+  "title": "GH17 — Fake Support → Wallet Drain & Unauthorized Borrowing",
+  "steps": [
+    {
+      "delay": 2.0,
+      "kind": "CALL",
+      "log": "Inbound call — impersonated 'MTN support' line",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "MTN Support Line",
+        "call_type": "voice",
+        "call_status": "Incoming call…"
+      }
+    },
+    {
+      "delay": 3.5,
+      "kind": "VOICE",
+      "log": "Scammer requests the verification code, then pushes a 'secure your wallet' pretext",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "MTN Support Line",
+        "call_type": "voice",
+        "call_status": "On call • 01:05",
+        "transcript": "“Good afternoon, this is MTN support. We detected unusual activity on your wallet. Please enter the 6-digit code we just sent to secure your account.”"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "Good afternoon, this is MTN support. We detected unusual activity on your wallet. Please enter the 6-digit code we just sent to secure your account.",
+        "counterparty_msisdn": "233500000077"
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "P2P",
+      "log": "Victim hurried into a large outbound transfer while on the call",
+      "phone_ui": {
+        "screen": "ussd",
+        "ussd_lines": [
+          "*170#",
+          "Transfer Money",
+          "Recipient: 055 000 0777",
+          "Amount: GHS 450.00",
+          "Enter MoMo PIN: ____"
+        ]
+      },
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "P2P_SEND",
+        "amount": 450.0,
+        "counterparty_msisdn": "233500000077"
+      }
+    },
+    {
+      "delay": 3.0,
+      "kind": "XTRACASH",
+      "log": "Unauthorized XtraCash loan activation drains remaining balance",
+      "phone_ui": {
+        "screen": "ussd",
+        "ussd_lines": [
+          "*170#",
+          "XtraCash",
+          "Loan Amount: GHS 200.00",
+          "Disbursed to wallet — balance now GHS 12.40",
+          "Enter MoMo PIN: ____"
+        ]
+      },
+      "event": {
+        "event_type": "transaction",
+        "msisdn": "233245550123",
+        "transaction_type": "XTRACASH_LOAN",
+        "amount": 200.0
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "HOLD",
+      "log": "Accumulated risk ≥75 — engine injects SIMULATED HOLD before PIN authorisation"
+    }
+  ]
+}

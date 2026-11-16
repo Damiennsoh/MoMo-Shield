@@ -54,12 +54,16 @@ def assess_local(event: dict, acc: dict):
             ("code", 15, "Language intent: verification code request"),
             ("blocked", 20, "Language intent: loss-aversion threat (account blocked)"),
             ("refund", 15, "Language intent: refund/reversal pretext"),
+            ("reverse", 20, "Language intent: reversal/forge pretext"),
+            ("receipt", 15, "Language intent: forged receipt presented"),
+            ("http", 15, "Language intent: suspicious link in message"),
+            (".com", 10, "Language intent: external link domain"),
         ]:
             if kw in txt:
                 score = _add(score, rules, pts, label)
         intent = {
             "pattern": "Authority + Loss Aversion (keyword fallback)",
-            "evidence_phrases": [kw for kw in ("pin", "otp", "code", "blocked", "refund") if kw in txt],
+            "evidence_phrases": [kw for kw in ("pin", "otp", "code", "blocked", "refund", "reverse", "receipt", "http") if kw in txt],
             "requested_secret": "PIN" if "pin" in txt else (
                 "OTP" if ("otp" in txt or "code" in txt) else None),
             "code_switching": "twi-english" if any(w in txt for w in ("wo ", "kyew", "sika", "mepa")) else "english",

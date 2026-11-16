@@ -1,0 +1,43 @@
+{
+  "scenario_name": "GH17 — Fake Support → Wallet Drain & Unauthorized Borrowing",
+  "description": "Impersonated service support sends links/instructions leading to hurried code entry, balance drain, and unauthorized XtraCash activation.",
+  "steps": [
+    {
+      "delay_seconds": 0,
+      "event": {
+        "event_id": "gh17-comm-1",
+        "msisdn": "+233240000004",
+        "event_type": "communication",
+        "channel": "VOICE",
+        "text_or_transcript": "Good afternoon, this is MTN support. We detected unusual activity on your wallet. Please enter the 6-digit code we just sent to secure your account.",
+        "counterparty_msisdn": "+233500000077",
+        "timestamp": "2026-11-28T14:00:00"
+      }
+    },
+    {
+      "delay_seconds": 3,
+      "event": {
+        "event_id": "gh17-tx-1",
+        "msisdn": "+233240000004",
+        "event_type": "transaction",
+        "transaction_type": "P2P_SEND",
+        "amount": 450.0,
+        "counterparty_msisdn": "+233500000077",
+        "ledger_verified": true,
+        "timestamp": "2026-11-28T14:01:00"
+      }
+    },
+    {
+      "delay_seconds": 6,
+      "event": {
+        "event_id": "gh17-tx-2",
+        "msisdn": "+233240000004",
+        "event_type": "transaction",
+        "transaction_type": "XTRACASH_LOAN",
+        "amount": 200.0,
+        "ledger_verified": true,
+        "timestamp": "2026-11-28T14:01:30"
+      }
+    }
+  ]
+}

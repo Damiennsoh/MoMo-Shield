@@ -1,0 +1,31 @@
+{
+  "scenario_name": "GH15 — Fake Business Listing & PIN-Harvesting Form",
+  "description": "Fake search/map business listings divert customers into third-party web forms requesting phone number, network, amount, and MoMo PIN.",
+  "steps": [
+    {
+      "delay_seconds": 0,
+      "event": {
+        "event_id": "gh15-comm-1",
+        "msisdn": "+233240000006",
+        "event_type": "communication",
+        "channel": "SMS",
+        "text_or_transcript": "Complete your payment verification at: https://fake-business-verify.com/pay. Enter your MoMo PIN to confirm the GHS 150 transaction.",
+        "counterparty_msisdn": null,
+        "timestamp": "2026-11-28T16:00:00"
+      }
+    },
+    {
+      "delay_seconds": 5,
+      "event": {
+        "event_id": "gh15-tx-1",
+        "msisdn": "+233240000006",
+        "event_type": "transaction",
+        "transaction_type": "P2P_SEND",
+        "amount": 150.0,
+        "counterparty_msisdn": "+233500000066",
+        "ledger_verified": true,
+        "timestamp": "2026-11-28T16:00:30"
+      }
+    }
+  ]
+}

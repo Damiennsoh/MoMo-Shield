@@ -9,7 +9,7 @@ end-to-end, not just the backend's own fixtures.
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -40,9 +40,16 @@ def _prepare(ev: dict) -> dict:
 def _run_scenario(name: str):
     global_window.reset()
     result = None
+    base = datetime.now()
+    step_i = 0
     for step in _load(name)["steps"]:
         if "event" in step:
-            result = asyncio.run(assess(_prepare(step["event"])))
+            ev = _prepare(step["event"])
+            # Windows clock granularity can give identical now() values to
+            # back-to-back events; space timestamps so window ordering is deterministic.
+            ev["timestamp"] = (base + timedelta(seconds=step_i * 2)).isoformat()
+            step_i += 1
+            result = asyncio.run(assess(ev))
     return result
 
 
@@ -65,3 +72,27 @@ def test_frontend_legitimate_baseline_stays_low():
     assert result.risk_score < 40
     assert result.risk_tier == "LOW"
     assert result.recommended_action == "SEAMLESS_APPROVE"
+
+
+def test_frontend_gh17_fake_support_reaches_high():
+    result = _run_scenario("gh17_fake_support.json")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
+
+
+def test_frontend_gh02_reversal_syndicate_reaches_high():
+    result = _run_scenario("gh02_reversal_syndicate.json")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
+
+
+def test_frontend_gh15_fake_business_reaches_high():
+    result = _run_scenario("gh15_fake_business_listing.json")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
+
+
+def test_frontend_gh19_nuisance_calls_reaches_high():
+    result = _run_scenario("gh19_nuisance_calls.json")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"

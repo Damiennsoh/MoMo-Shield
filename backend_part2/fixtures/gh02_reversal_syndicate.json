@@ -1,0 +1,43 @@
+{
+  "scenario_name": "GH02/AF01 — Reversal Syndicate & Forged Receipt",
+  "description": "Coordinated callers target individuals/agents with repeated 'mistaken transfer' stories or present SMS receipts with invalid transaction IDs.",
+  "steps": [
+    {
+      "delay_seconds": 0,
+      "event": {
+        "event_id": "gh02-comm-1",
+        "msisdn": "+233240000005",
+        "event_type": "communication",
+        "channel": "VOICE",
+        "text_or_transcript": "Hello, I accidentally sent you 800 cedis. Please reverse it back to my number 055 123 4567. I can send you the transaction receipt.",
+        "counterparty_msisdn": "+233551234567",
+        "timestamp": "2026-11-28T15:00:00"
+      }
+    },
+    {
+      "delay_seconds": 2,
+      "event": {
+        "event_id": "gh02-comm-2",
+        "msisdn": "+233240000005",
+        "event_type": "communication",
+        "channel": "SMS",
+        "text_or_transcript": "Transaction ID: TXN-99887766. Amount: GHS 800.00. Status: Successful. Please reverse to 0551234567.",
+        "counterparty_msisdn": "+233551234567",
+        "timestamp": "2026-11-28T15:00:15"
+      }
+    },
+    {
+      "delay_seconds": 4,
+      "event": {
+        "event_id": "gh02-tx-1",
+        "msisdn": "+233240000005",
+        "event_type": "transaction",
+        "transaction_type": "P2P_SEND",
+        "amount": 800.0,
+        "counterparty_msisdn": "+233551234567",
+        "ledger_verified": true,
+        "timestamp": "2026-11-28T15:01:00"
+      }
+    }
+  ]
+}

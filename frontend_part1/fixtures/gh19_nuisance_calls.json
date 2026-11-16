@@ -1,0 +1,83 @@
+{
+  "title": "GH19 — Nuisance Call Swarm → Fake Helper",
+  "steps": [
+    {
+      "delay": 2.0,
+      "kind": "CALL",
+      "log": "Missed call #1 from an unknown number",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "055 000 0055",
+        "call_type": "voice",
+        "call_status": "Missed call"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "[Missed call - 8 seconds]",
+        "counterparty_msisdn": "233500000055"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "CALL",
+      "log": "Missed call #2 from a second number",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "055 000 0044",
+        "call_type": "voice",
+        "call_status": "Missed call"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "[Missed call - 5 seconds]",
+        "counterparty_msisdn": "233500000044"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "CALL",
+      "log": "Missed call #3 from a third number — fatigue building",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "055 000 0033",
+        "call_type": "voice",
+        "call_status": "Missed call"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "[Missed call - 10 seconds]",
+        "counterparty_msisdn": "233500000033"
+      }
+    },
+    {
+      "delay": 3.5,
+      "kind": "VOICE",
+      "log": "'MTN helper' calls offering relief — requests a verification code",
+      "phone_ui": {
+        "screen": "call",
+        "caller": "MTN 'Helper' • 055 000 0022",
+        "call_type": "voice",
+        "call_status": "On call • 01:12",
+        "transcript": "“Hello, this is MTN customer care. We noticed you've been receiving suspicious calls. I can help block them. Please verify your account by entering the code I'm about to send.”"
+      },
+      "event": {
+        "event_type": "communication",
+        "msisdn": "233245550123",
+        "channel": "VOICE",
+        "text_or_transcript": "Hello, this is MTN customer care. We noticed you've been receiving suspicious calls. I can help block them. Please verify your account by entering the code I'm about to send.",
+        "counterparty_msisdn": "233500000022"
+      }
+    },
+    {
+      "delay": 1.5,
+      "kind": "HOLD",
+      "log": "Call-fatigue + credential request — engine raises FRAUDOPS alert before any code is entered"
+    }
+  ]
+}

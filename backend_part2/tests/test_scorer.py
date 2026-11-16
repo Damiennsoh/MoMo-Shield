@@ -38,3 +38,31 @@ def test_legitimate_scores_low():
     assert result.risk_score < 40
     assert result.risk_tier == "LOW"
     assert result.recommended_action == "SEAMLESS_APPROVE"
+
+def test_gh17_scores_high():
+    fixture = _load("gh17_fake_support.json")
+    result = _assess_all_steps(fixture)
+    print(f"\nGH17: score={result.risk_score} tier={result.risk_tier}")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
+
+def test_gh02_scores_high():
+    fixture = _load("gh02_reversal_syndicate.json")
+    result = _assess_all_steps(fixture)
+    print(f"\nGH02: score={result.risk_score} tier={result.risk_tier}")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
+
+def test_gh15_scores_high():
+    fixture = _load("gh15_fake_business_listing.json")
+    result = _assess_all_steps(fixture)
+    print(f"\nGH15: score={result.risk_score} tier={result.risk_tier}")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
+
+def test_gh19_scores_high():
+    fixture = _load("gh19_nuisance_calls.json")
+    result = _assess_all_steps(fixture)
+    print(f"\nGH19: score={result.risk_score} tier={result.risk_tier}")
+    assert result.risk_score >= 75
+    assert result.risk_tier == "HIGH"
