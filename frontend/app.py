@@ -5,8 +5,10 @@ rule, event-stream, and intent telemetry. The dashboard uses the FastAPI
 backend when reachable and deterministic local rules when it is not.
 """
 
+import html
 import io
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,8 +17,8 @@ import streamlit as st
 
 from components.fraudops_panel import live_assessment_markup, render_fraudops
 from components.mock_phone import phone_markup, render_phone
-from services.api_client import assess_event, reset_backend
-from services.audio import alert_tone_bytes
+from services.api_client import assess_event, check_gemini, publish_demo_device_event, reset_backend
+from services.audio import alert_tone_bytes, play_sfx, play_warning_audio
 from services.local_engine import new_accumulator
 
 BASE_DIR = Path(__file__).parent
@@ -29,6 +31,8 @@ SCENARIOS = {
     "GH19 — Nuisance Call Swarm → Fake Helper": "gh19_nuisance_calls",
     "Legitimate Baseline (False-Positive Control)": "legit_baseline",
 }
+DEMO_DEVICE_TOKEN = os.environ.get("DEMO_DEVICE_TOKEN", "")
+DEMO_DEVICE_URL = os.environ.get("DEMO_DEVICE_URL", "")
 
 st.set_page_config(
     page_title="MoMo Shield | FraudOps Command Center",
@@ -104,7 +108,7 @@ with st.sidebar:
     scenario_label = st.selectbox("Scenario", list(SCENARIOS.keys()), key="scenario_select")
     backend_url = st.text_input(
         "Backend API URL",
-        value="http://localhost:8000",
+        value=os.environ.get("BACKEND_API_URL", "http://localhost:8000"),
         key="backend_api_url",
         help="The dashboard process calls this FastAPI URL. For hosted demos, use the reachable API base URL.",
     )
@@ -112,9 +116,29 @@ with st.sidebar:
     play = c1.button("▶ Play selected", use_container_width=True, key="play_selected")
     reset_clicked = c2.button("⟲ Reset", use_container_width=True, key="reset_demo")
     run_all = st.button("▶ Run all 7 scenarios", use_container_width=True, key="run_all")
+    gemini_check_clicked = st.button("Test Gemini API", use_container_width=True, key="test_gemini")
+    sip_call_enabled = st.checkbox(
+        "Ring local SIP softphone on incoming-call steps",
+        value=False,
+        help="Optional. Only calls the single local PJSIP endpoint configured on your private Asterisk demo PBX; it cannot dial public numbers.",
+        key="sip_call_enabled",
+    )
     st.divider()
     st.caption("Backend unreachable? MoMo Shield switches to deterministic local rules and labels the engine source.")
+    if DEMO_DEVICE_URL:
+        st.markdown(
+            f'<a href="{html.escape(DEMO_DEVICE_URL, quote=True)}" target="_blank" rel="noopener noreferrer">'
+            "Open second-device handset simulator</a>",
+            unsafe_allow_html=True,
+        )
+        st.caption("Open on a phone/tablet on the same trusted Wi-Fi, then tap Connect to enable sound.")
+    else:
+        st.caption("Launch with `python run_demo.py` to create a temporary, protected second-device link.")
     st.caption("Synthetic demonstration only. No payment is authorized, delayed, or blocked.")
+    if st.session_state.get("demo_sip_result"):
+        st.caption("SIP demo: " + st.session_state["demo_sip_result"])
+    if st.session_state.get("demo_device_error"):
+        st.sidebar.warning("Second-device bridge unavailable: " + st.session_state["demo_device_error"])
 
 if reset_clicked:
     reset_scenario_state()
@@ -122,7 +146,19 @@ if reset_clicked:
     st.session_state.scenario_results = []
     st.session_state.scenario_records = []
     reset_backend(backend_url)
+    if DEMO_DEVICE_TOKEN:
+        try:
+            publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, {"type": "reset"})
+        except Exception as exc:
+            st.session_state["demo_device_error"] = str(exc)
     st.rerun()
+
+if gemini_check_clicked:
+    try:
+        gemini_status = check_gemini(backend_url)
+        st.sidebar.success(f"{gemini_status['message']} Model: {gemini_status['model']}.")
+    except Exception as exc:
+        st.sidebar.error(f"Gemini check failed: {exc}")
 
 left_col, right_col = st.columns([1, 1.35], gap="large")
 phone_ph = left_col.empty()
@@ -161,13 +197,14 @@ def show_alert_tone(tone: bytes, alert_number: int):
     with audio_ph.container():
         st.markdown(f"**🔔 Fraud intervention alert · event {alert_number}**")
         st.caption("Automatic playback is requested; browser policy may require pressing play once.")
-        st.audio(
-            io.BytesIO(tone),
-            format="audio/wav",
-            autoplay=True,
-            alt=f"Automatic fraud intervention warning tone, event {alert_number}",
-            width="stretch",
-        )
+        if not play_sfx("alert.wav"):
+            st.audio(
+                io.BytesIO(tone),
+                format="audio/wav",
+                autoplay=True,
+                alt=f"Automatic fraud intervention warning tone, event {alert_number}",
+                width="stretch",
+            )
 
 
 def render_results(records):
@@ -211,6 +248,11 @@ if play or run_all:
         scenario = load_scenario(key)
         reset_scenario_state()
         reset_backend(backend_url)
+        if DEMO_DEVICE_TOKEN:
+            try:
+                publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, {"type": "reset", "scenario": label})
+            except Exception as exc:
+                st.session_state["demo_device_error"] = str(exc)
         draw_live()
         progress_ph.progress(
             completed_steps / total_steps,
@@ -222,6 +264,41 @@ if play or run_all:
             time.sleep(min(float(step.get("delay", 0.15)), 0.20 if run_all else 0.30))
             if step.get("phone_ui"):
                 st.session_state.phone.update(step["phone_ui"])
+                phone_screen = st.session_state.phone.get("screen", "home")
+                step_kind = str(step.get("kind", "")).upper()
+                if phone_screen == "sms":
+                    sms_items = st.session_state.phone.get("sms", [])
+                    latest = sms_items[-1] if sms_items else {}
+                    device_event = {
+                        "type": "sms",
+                        "scenario": label,
+                        "caller": latest.get("from", "MoMo"),
+                        "message": latest.get("text", ""),
+                    }
+                    play_sfx("sms.wav")
+                elif phone_screen == "call":
+                    call_status = st.session_state.phone.get("call_status", "Incoming call")
+                    incoming_call = "incoming" in str(call_status).casefold() or "ringing" in str(call_status).casefold()
+                    device_event = {
+                        "type": "call",
+                        "scenario": label,
+                        "caller": st.session_state.phone.get("caller", "Unknown caller"),
+                        "status": call_status,
+                        "transcript": st.session_state.phone.get("transcript", ""),
+                        "trigger_sip": bool(sip_call_enabled and step_kind == "CALL" and incoming_call),
+                    }
+                    if step_kind == "CALL" and incoming_call:
+                        play_sfx("ring.wav")
+                else:
+                    device_event = {"type": "screen", "scenario": label,
+                                    "message": " · ".join(st.session_state.phone.get("ussd_lines", []))}
+                if DEMO_DEVICE_TOKEN:
+                    try:
+                        device_result = publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, device_event)
+                        if device_event.get("trigger_sip") and device_result.get("status") == "published":
+                            st.session_state["demo_sip_result"] = (device_result.get("sip") or {}).get("message", "SIP request accepted.")
+                    except Exception as exc:
+                        st.session_state["demo_device_error"] = str(exc)
 
             if "event" in step:
                 event = dict(step["event"])
@@ -280,6 +357,19 @@ if play or run_all:
                     tone = alert_tone_bytes(variant=st.session_state.alert_count)
                     st.session_state.alert_tone = tone
                     show_alert_tone(tone, st.session_state.alert_count)
+                    play_warning_audio(
+                        assessment.get("twi_warning_message") or "",
+                        assessment.get("english_warning_message") or "",
+                    )
+                    if DEMO_DEVICE_TOKEN:
+                        try:
+                            publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, {
+                                "type": "warning",
+                                "scenario": label,
+                                "warning": "Do not share your PIN or OTP. Verify through official support.",
+                            })
+                        except Exception as exc:
+                            st.session_state["demo_device_error"] = str(exc)
 
                 assessment["event_log"] = list(st.session_state.event_log)
                 st.session_state.ops = assessment

@@ -12,6 +12,7 @@ sys.path.insert(0, str(FRONTEND))
 from services.api_client import assess_event
 from services.audio import alert_tone_bytes
 from services.local_engine import new_accumulator
+from components.mock_phone import phone_markup
 
 FIXTURES = FRONTEND / "fixtures"
 EXPECTED = {
@@ -58,6 +59,71 @@ def test_alert_tone_is_valid_playable_wav():
         assert audio.getsampwidth() == 2
         assert audio.getframerate() == 22050
         assert audio.getnframes() > 0
+
+
+def test_phone_warning_and_caption_are_nested_in_single_phone_fragment():
+    markup = phone_markup({
+        "screen": "ussd",
+        "ussd_lines": ["*170#", "SIMULATED TRANSACTION HOLD"],
+        "warning": {"title": "FRAUD ALERT", "body": "Do not share your PIN."},
+    })
+    body_start = markup.index('<div class="phone-body">')
+    body_end = markup.index('</div>\n      <div class="phone-caption">', body_start)
+    warning_start = markup.index('<div class="phone-warning', body_start)
+    assert body_start < warning_start < body_end
+    assert '<div class="phone-caption">' in markup
+    assert markup.count('<div class="phone-frame">') == 1
+
+
+def test_bundled_sfx_assets_are_valid_offline_wavs():
+    for name in ("sms.wav", "ring.wav", "alert.wav"):
+        with wave.open(str(FRONTEND / "assets" / name), "rb") as audio:
+            assert audio.getnchannels() == 1
+            assert audio.getframerate() == 22050
+            assert audio.getnframes() > 0
+
+
+def test_recorded_mp3_sfx_overrides_bundled_wav(monkeypatch):
+    import services.audio as audio_service
+    requested = []
+    rendered = []
+
+    def read_asset(name):
+        requested.append(name)
+        return (b"recorded-mp3", "audio/mpeg") if name == "sms.mp3" else (None, None)
+
+    monkeypatch.setattr(audio_service, "_audio_bytes", read_asset)
+    monkeypatch.setattr(audio_service.components, "html", lambda markup, **kwargs: rendered.append(markup))
+    assert audio_service.play_sfx("sms.wav")
+    assert requested[0] == "sms.mp3"
+    assert "audio/mpeg" in rendered[0]
+
+
+def test_recorded_warning_clip_is_preferred_over_browser_tts(monkeypatch):
+    import services.audio as audio_service
+    requested = []
+    monkeypatch.setattr(audio_service, "play_sfx", lambda name, **kwargs: requested.append(name) or name == "warning_twi.mp3")
+    monkeypatch.setattr(audio_service, "speak_english_warning", lambda text: (_ for _ in ()).throw(AssertionError("TTS should not run")))
+    assert audio_service.play_warning_audio("Twi text", "English text") == "recorded"
+    assert requested == ["warning_twi.wav", "warning_twi.mp3"]
+
+
+def test_warning_falls_back_to_english_only_when_no_recording_is_supplied(monkeypatch):
+    import services.audio as audio_service
+    spoken = []
+    monkeypatch.setattr(audio_service, "play_sfx", lambda *args, **kwargs: False)
+    monkeypatch.setattr(audio_service, "speak_english_warning", lambda text: spoken.append(text) or True)
+    assert audio_service.play_warning_audio("Twi text", "English warning") == "english_tts"
+    assert spoken == ["English warning"]
+
+
+def test_prerecorded_english_warning_is_used_when_localized_clip_is_missing(monkeypatch):
+    import services.audio as audio_service
+    requested = []
+    monkeypatch.setattr(audio_service, "play_sfx", lambda name, **kwargs: requested.append(name) or name == "warning_en.mp3")
+    monkeypatch.setattr(audio_service, "speak_english_warning", lambda text: (_ for _ in ()).throw(AssertionError("TTS should not run")))
+    assert audio_service.play_warning_audio("Twi text", "English warning") == "recorded_english"
+    assert requested == ["warning_twi.wav", "warning_twi.mp3", "warning_en.wav", "warning_en.mp3"]
 
 
 def test_batch_replay_retains_inspectable_events_and_intent():

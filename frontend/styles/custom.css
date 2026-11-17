@@ -22,8 +22,8 @@ section[data-testid="stSidebar"] { background: #0f172a; }
   display: flex; justify-content: space-between; padding: 8px 18px 2px 18px;
   color: #e2e8f0; font-size: 11px; background: #0f172a;
 }
-.phone-body { padding: 10px 12px 100px 12px; height: 560px; overflow-y: auto; }
-.phone-caption { text-align: center; color: #64748b; font-size: 11.5px; margin-top: 10px; }
+.phone-body { position: relative; padding: 10px 12px 100px 12px; height: 560px; overflow-y: auto; }
+.phone-caption { position: relative; text-align: center; color: #64748b; font-size: 11.5px; padding: 4px 10px 8px; }
 
 /* SMS messenger */
 .sms-list { display: flex; flex-direction: column; gap: 8px; padding: 6px 2px; }

@@ -15,7 +15,66 @@ import httpx
 
 from services.local_engine import assess_local
 
-TIMEOUT_SECONDS = 8.0
+TIMEOUT_SECONDS = 20.0
+DEMO_DEVICE_TIMEOUT_SECONDS = 4.0
+
+# Backend base URLs that refused a connection. A refused socket costs seconds
+# on some networks, so once one call proves the engine is down we stop probing
+# until reset_backend() sees it come back (it runs at every scenario start).
+_UNREACHABLE_URLS = set()
+
+
+def _base(backend_url: str) -> str:
+    return backend_url.rstrip("/")
+
+
+def _mark_unreachable(backend_url: str) -> None:
+    _UNREACHABLE_URLS.add(_base(backend_url))
+
+
+def _is_unreachable(backend_url: str) -> bool:
+    return _base(backend_url) in _UNREACHABLE_URLS
+
+
+def publish_demo_device_event(backend_url: str, token: str, event: dict) -> dict:
+    """Mirror a synthetic fixture event to the opt-in second-device page."""
+    if not token:
+        return {"status": "disabled"}
+    if _is_unreachable(backend_url):
+        return {"status": "unreachable"}
+    try:
+        response = httpx.post(
+            _base(backend_url) + "/api/v1/demo-device/publish",
+            json=event,
+            headers={"Authorization": "Bearer " + token},
+            timeout=DEMO_DEVICE_TIMEOUT_SECONDS,
+        )
+    except httpx.ConnectError:
+        _mark_unreachable(backend_url)
+        return {"status": "unreachable"}
+    response.raise_for_status()
+    return response.json()
+
+
+def check_gemini(backend_url: str) -> dict:
+    """Ask the backend to make a real Gemini request using its configured key."""
+    response = httpx.post(
+        _base(backend_url) + "/api/v1/gemini/healthcheck",
+        timeout=TIMEOUT_SECONDS,
+    )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"message": response.text or "Backend returned an unreadable response."}
+    if response.is_error:
+        detail = data.get("detail", data)
+        if isinstance(detail, dict):
+            message = detail.get("message", str(detail))
+        else:
+            message = str(detail)
+        raise RuntimeError(message)
+    return data
+
 
 # Backend action names -> labels the FraudOps panel knows how to render.
 _ACTION_MAP = {
@@ -49,7 +108,11 @@ def _normalize(data: dict) -> dict:
 def reset_backend(backend_url: str) -> None:
     """Best-effort reset of backend session state before a scenario replay."""
     try:
-        httpx.post(backend_url.rstrip("/") + "/api/v1/reset", timeout=1.0)
+        resp = httpx.post(_base(backend_url) + "/api/v1/reset", timeout=1.0)
+        resp.raise_for_status()
+        _UNREACHABLE_URLS.discard(_base(backend_url))
+    except httpx.ConnectError:
+        _mark_unreachable(backend_url)
     except Exception:
         pass
 
@@ -59,11 +122,12 @@ def assess_event(event: dict, backend_url: str, accumulator: dict):
     # A refused connection means the engine is down; remember that for the
     # rest of this scenario so each event doesn't stall on a dead socket.
     prepared_event = _prepare_event(event)
-    if accumulator.get("_backend_unreachable"):
+    if accumulator.get("_backend_unreachable") or _is_unreachable(backend_url):
+        accumulator["_backend_unreachable"] = True
         return assess_local(prepared_event, accumulator), "local"
     try:
         resp = httpx.post(
-            backend_url.rstrip("/") + "/api/v1/assess",
+            _base(backend_url) + "/api/v1/assess",
             json={"event": prepared_event},
             timeout=TIMEOUT_SECONDS,
         )
@@ -72,6 +136,7 @@ def assess_event(event: dict, backend_url: str, accumulator: dict):
         data["source"] = "backend"
         return data, "backend"
     except httpx.ConnectError:
+        _mark_unreachable(backend_url)
         accumulator["_backend_unreachable"] = True
         return assess_local(prepared_event, accumulator), "local"
     except Exception:

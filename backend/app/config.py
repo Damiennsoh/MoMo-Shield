@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash-lite"
     gemini_timeout_seconds: int = 6
+    demo_device_token: str = ""
+    asterisk_ari_url: str = ""
+    asterisk_ari_username: str = ""
+    asterisk_ari_password: str = ""
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
     cors_origins: List[str] = ["http://localhost:8501", "http://127.0.0.1:8501"]

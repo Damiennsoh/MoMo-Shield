@@ -108,6 +108,8 @@ def render_fraudops(ops: dict):
         st.caption("Analysis source: " + source_label)
         if ops.get("llm_unavailable"):
             st.warning("Gemini was unavailable for this assessment; fallback rules were used.")
+        elif intent_source == "keyword_fallback":
+            st.info("Gemini was not configured for this assessment; deterministic keyword analysis was used. Set GEMINI_API_KEY and use Test Gemini API to verify live access.")
         if intent:
             evidence = intent.get("evidence_phrases") or []
             signal_text = str(ops.get("intent_text") or "")

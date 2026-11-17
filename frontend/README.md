@@ -41,6 +41,8 @@ Fixtures are synthetic and intended for local demonstrations only. The UI's “S
 
 Use **Play selected** for one scenario or **Run all 7 scenarios** for a visible, progress-tracked replay. The dashboard updates the handset and FraudOps pane as the fixture advances. It then displays result cards and an **Inspect event stream and intent for** selector; choose any scenario to inspect its timeline, communication signal, intent output, and engine source. The intent tab distinguishes Gemini from deterministic keyword fallback, filters evidence phrases to those appearing in the signal, and does not display a fabricated confidence score. A warning tone is requested automatically when an intervention is raised. A playable audio control remains as a fallback because browser autoplay policies can block sound until a visitor interacts with the page.
 
+When launched with `python run_demo.py`, the sidebar includes a random-token link to `/api/v1/demo-device`. Open it on a second device on the same Wi-Fi and tap **Connect** to enable its local Web Audio cues. The dashboard publishes only synthetic fixture phone events to this token-protected page. The optional **Ring local SIP softphone** checkbox sends an Asterisk ARI request only at a scenario step explicitly marked as an incoming call; missed-call fixture steps do not ring. See the repository root README for the Compose setup, SIP account settings, local-network firewall requirements, and optional recorded Twi/English call warning. The second-screen webpage is a simulation; an actual softphone only rings when the separate Asterisk container is configured and the local SIP account is registered.
+
 ## Project layout
 
 ```text
@@ -50,7 +52,7 @@ frontend/
 ├── services/
 │   ├── api_client.py         # HTTP API adapter and local fallback selection
 │   ├── local_engine.py       # Deterministic offline demonstration rules
-│   └── audio.py              # Locally generated alert tone
+│   ├── audio.py              # Offline local sound cues and warning voice fallback
 ├── fixtures/                 # Seven scenario sequences
 ├── styles/custom.css         # Dashboard styles
 └── .streamlit/config.toml    # Streamlit theme configuration

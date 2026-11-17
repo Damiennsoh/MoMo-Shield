@@ -60,14 +60,14 @@ def _warning_html(warning) -> str:
     variant = " watch" if warning.get("variant") == "watch" else ""
     icon = "🛡️" if variant else "⚠️"
     return f"""
-    <div class="phone-warning{variant}">
+    <div class="phone-warning{variant}" role="status" aria-live="polite">
       <div class="warn-title">{icon} {_esc(warning.get('title', 'FRAUD ALERT'))}</div>
       <div class="warn-body">{_esc(warning.get('body', ''))}</div>
     </div>"""
 
 
 def phone_markup(state: dict) -> str:
-    """Return one HTML fragment for the replaceable simulated handset."""
+    """Return one complete, correctly nested HTML fragment for the handset."""
     screen = state.get("screen", "home")
     if screen == "sms":
         body = _sms_bubbles(state.get("sms", []))
@@ -79,15 +79,16 @@ def phone_markup(state: dict) -> str:
         body = _home_screen()
 
     warning = _warning_html(state["warning"]) if state.get("warning") else ""
-
     return f"""
     <div class="phone-frame">
       <div class="phone-notch"></div>
       <div class="phone-statusbar"><span>MTN · Ghana</span><span>LTE ▂▄▆█ 🔋</span></div>
-      <div class="phone-body">{body}</div>
-      {warning}
+      <div class="phone-body">
+        {body}
+        {warning}
+      </div>
+      <div class="phone-caption">Victim handset (simulated — what the customer sees, in real time)</div>
     </div>
-    <div class="phone-caption">Victim handset (simulated — what the customer sees, in real time)</div>
     """
 
 

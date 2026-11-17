@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router as api_router
 from app.api.sandbox import router as sandbox_router
+from app.api.demo_device import router as demo_device_router
 from app.config import settings
 from app.utils.logger import setup_logging
 
@@ -23,6 +24,7 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(sandbox_router, prefix="/api/v1/sandbox")
+app.include_router(demo_device_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health():
