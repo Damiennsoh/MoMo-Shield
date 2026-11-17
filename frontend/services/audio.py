@@ -9,7 +9,7 @@ import struct
 import wave
 
 
-def alert_tone_bytes() -> bytes:
+def alert_tone_bytes(variant: int = 0) -> bytes:
     buf = io.BytesIO()
     rate = 22050
     with wave.open(buf, "wb") as w:
@@ -17,7 +17,8 @@ def alert_tone_bytes() -> bytes:
         w.setsampwidth(2)
         w.setframerate(rate)
         frames = bytearray()
-        for freq, dur in [(880, 0.22), (0, 0.06), (880, 0.22), (0, 0.06), (660, 0.4)]:
+        base = 820 + (int(variant) % 7) * 12
+        for freq, dur in [(base, 0.22), (0, 0.06), (base, 0.22), (0, 0.06), (620, 0.4)]:
             n = int(rate * dur)
             for i in range(n):
                 amp = int(12000 * math.sin(2 * math.pi * freq * i / rate)) if freq else 0

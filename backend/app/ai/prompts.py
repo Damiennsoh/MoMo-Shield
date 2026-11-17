@@ -21,11 +21,11 @@ FEW_SHOT_EXAMPLES = [
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
-        "pattern": {"type": ["STRING", "NULL"]},
+        "pattern": {"type": "STRING", "nullable": True},
         "evidence_phrases": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "requested_secret": {"type": ["STRING", "NULL"]},
-        "language_detected": {"type": ["STRING", "NULL"]},
-        "suggested_warning": {"type": ["STRING", "NULL"]}
+        "requested_secret": {"type": "STRING", "nullable": True},
+        "language_detected": {"type": "STRING", "nullable": True},
+        "suggested_warning": {"type": "STRING", "nullable": True},
     },
-    "required": ["pattern", "evidence_phrases", "requested_secret", "language_detected", "suggested_warning"]
+    "required": ["pattern", "evidence_phrases", "requested_secret", "language_detected", "suggested_warning"],
 }

@@ -4,7 +4,7 @@ Streamlit FraudOps Command Center for replaying synthetic mobile-money fraud sce
 
 ## Requirements and start
 
-Use Python 3.10 or newer. From the repository root, activate a virtual environment and install both sets of dependencies to run the complete demonstration:
+Use Python 3.10 or newer. From the repository root, activate a virtual environment and install both sets of dependencies to run the complete demonstration. The frontend requirements explicitly install NumPy 2.x and a compatible PyArrow version for Streamlit's compiled components:
 
 ```bash
 python -m pip install -r backend/requirements.txt -r frontend/requirements.txt
@@ -39,7 +39,7 @@ Scenario files in `fixtures/` contain timed handset UI steps and optional event 
 
 Fixtures are synthetic and intended for local demonstrations only. The UI's “SIMULATED HOLD” and alerts do not execute payment actions.
 
-Use **Play selected** for one scenario or **Run all 7 scenarios** for a quick batch replay. The batch button displays a results table and an **Inspect event stream and intent for** selector; choose any scenario to see its full event history, communication signal, intent output, and analysis source. The intent tab distinguishes Gemini from the deterministic keyword fallback and only displays evidence phrases whose wording appears in the signal, ignoring capitalization. Intent output is advisory, not a verified fraud finding or a model confidence score. Alert sounds appear in a normal player instead of relying on browser autoplay; press play in the audio control to hear the tone.
+Use **Play selected** for one scenario or **Run all 7 scenarios** for a visible, progress-tracked replay. The dashboard updates the handset and FraudOps pane as the fixture advances. It then displays result cards and an **Inspect event stream and intent for** selector; choose any scenario to inspect its timeline, communication signal, intent output, and engine source. The intent tab distinguishes Gemini from deterministic keyword fallback, filters evidence phrases to those appearing in the signal, and does not display a fabricated confidence score. A warning tone is requested automatically when an intervention is raised. A playable audio control remains as a fallback because browser autoplay policies can block sound until a visitor interacts with the page.
 
 ## Project layout
 

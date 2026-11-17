@@ -40,8 +40,30 @@ def _log_html(log) -> str:
     return '<div class="event-log">' + rows + "</div>"
 
 
+def live_assessment_markup(ops: dict) -> str:
+    """Single replaceable assessment fragment used during scripted playback."""
+    score = max(0, min(100, int(ops.get("risk_score", 0))))
+    tier = _esc(ops.get("risk_tier", "—"))
+    action = _esc(ops.get("recommended_action", "Assessing…"))
+    source = "FastAPI backend" if ops.get("source") == "backend" else "Local fallback"
+    rules = ops.get("triggered_rules") or []
+    rule_html = "".join(
+        '<div class="rule-chip">⚡ ' + _esc(rule) + "</div>" for rule in rules
+    ) or '<div class="muted">No rule triggered for this event.</div>'
+    return (
+        '<div class="live-assessment">'
+        '<div class="live-assessment-head"><span>LIVE FRAUD ASSESSMENT</span>'
+        '<span>' + source + '</span></div>'
+        '<div class="live-assessment-score"><strong>' + str(score) + '</strong>'
+        '<span>/ 100 · ' + tier + '</span></div>'
+        '<div class="live-assessment-action">Action: <b>' + action + '</b></div>'
+        '<div class="live-assessment-rules">' + rule_html + '</div>'
+        '</div>'
+    )
+
+
 def render_fraudops(ops: dict):
-    top = st.columns([1.4, 0.8, 0.8, 0.9])
+    top = st.columns([1.3, 1.0, 1.0, 1.2])
     with top[0]:
         st.markdown(gauge_html(ops["risk_score"]), unsafe_allow_html=True)
     with top[1]:
@@ -49,11 +71,11 @@ def render_fraudops(ops: dict):
         st.caption("≥75 HIGH · 40–74 MEDIUM · <40 LOW")
     with top[2]:
         lat = ops.get("latency_ms")
-        st.metric("Decision Latency", f"{lat:.0f} ms" if lat is not None else "—")
-        st.caption("Track 1 SLA: < 5,000 ms")
+        st.metric("Decision ms", f"{lat:.0f}" if lat is not None else "—")
+        st.caption("End-to-end API response · target < 5 s")
     with top[3]:
-        st.metric("Scoring Engine", "FastAPI Backend" if ops.get("source") == "backend"
-                  else "Local Rules (offline fallback)")
+        st.metric("Engine", "FastAPI" if ops.get("source") == "backend"
+                  else "Local fallback")
         st.caption("Communication intent: " + ("available" if ops.get("intent") else "not present"))
 
     tab1, tab2, tab3 = st.tabs(["🚨 Live Assessment", "📡 Event Stream", "🧠 Intent Analysis"])
@@ -102,7 +124,9 @@ def render_fraudops(ops: dict):
                 st.warning("Some analyzer evidence phrases did not match the message verbatim and are hidden.")
             elif not intent.get("pattern") and not intent.get("requested_secret"):
                 st.info("No suspicious intent was returned for this message.")
-            st.json(intent)
+            visible_intent = dict(intent)
+            visible_intent["evidence_phrases"] = matched
+            st.json(visible_intent)
             st.caption("Evidence is model/fallback output, not a verified fraud finding. Validate against operator policy before taking action.")
         else:
             st.markdown('<div class="muted">No text/voice intent was available for this assessment.</div>',

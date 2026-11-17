@@ -1,11 +1,12 @@
 /* ===================== base ===================== */
 .stApp { background: #0b1120; }
 section[data-testid="stSidebar"] { background: #0f172a; }
+[data-testid="stAppViewContainer"] > .main .block-container { max-width: 1540px; padding-top: 1.1rem; padding-bottom: 2.5rem; }
 
-.app-header { padding: 6px 4px 14px 4px; border-bottom: 1px solid #1e293b; margin-bottom: 14px; }
+.app-header { padding: 10px 8px 18px 8px; border-bottom: 1px solid #263449; margin-bottom: 18px; }
 .app-title { font-size: 26px; font-weight: 800; color: #f8fafc; }
 .app-subtitle { font-size: 15px; color: #facc15; font-weight: 700; margin-left: 8px; }
-.app-tagline { color: #94a3b8; font-size: 12.5px; margin-top: 3px; letter-spacing: .3px; }
+.app-tagline { color: #94a3b8; font-size: 12.5px; margin-top: 5px; letter-spacing: .5px; }
 
 /* ===================== mock phone ===================== */
 .phone-frame {
@@ -109,3 +110,31 @@ section[data-testid="stSidebar"] { background: #0f172a; }
 .log-time { color: #facc15; font-weight: 700; min-width: 58px; }
 .log-kind { color: #38bdf8; font-weight: 700; min-width: 70px; }
 .log-summary { color: #cbd5e1; }
+
+.live-assessment { border: 1px solid #29384e; border-radius: 16px; padding: 20px; background: radial-gradient(circle at 100% 0%, rgba(56,189,248,.10), transparent 45%), #111b2d; min-height: 260px; }
+.live-assessment-head { display: flex; justify-content: space-between; gap: 12px; color: #94a3b8; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.live-assessment-score { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 12px; }
+.live-assessment-score strong { color: #f8fafc; font-size: 52px; line-height: 1; }
+.live-assessment-score span { color: #facc15; font-weight: 700; }
+.live-assessment-action { color: #cbd5e1; border-top: 1px solid #29384e; padding-top: 12px; }
+.live-assessment-rules { margin-top: 14px; }
+
+/* Scenario cards and responsive demo layout */
+[data-testid="stVerticalBlockBorderWrapper"] { border-color: #29384e !important; background: linear-gradient(160deg, rgba(17, 27, 45, .92), rgba(12, 19, 33, .92)); }
+[data-testid="stMetric"] { min-width: 0; }
+[data-testid="stMetricValue"] { overflow-wrap: anywhere; }
+section[data-testid="stSidebar"] [data-testid="stTextInput"] { margin-bottom: .25rem; }
+@media (max-width: 1050px) {
+  [data-testid="stAppViewContainer"] > .main .block-container { padding-left: 1rem; padding-right: 1rem; }
+  .phone-frame { width: min(330px, 92%); min-height: 560px; }
+  .phone-body { height: 480px; }
+  .app-title { font-size: 23px; }
+}
+@media (max-width: 700px) {
+  .app-subtitle { display: block; margin-left: 0; margin-top: 4px; }
+  .app-tagline { font-size: 11px; line-height: 1.5; }
+  .phone-frame { width: min(330px, 100%); border-width: 8px; border-radius: 34px; }
+  .phone-body { height: 430px; padding-bottom: 112px; }
+  .phone-warning { padding: 10px 12px 14px; }
+  .rule-chip { font-size: 11px; }
+}

@@ -1,0 +1,130 @@
+Stop — do **not** abandon Streamlit over this. What you are seeing is not a Streamlit limitation; it is a **two-line bug in Kimi's `mock_phone.py`**. Look at the evidence in your own screenshot: the risk gauge, the tabs, the JSON intent tree, the event timeline, the dark MoMo theme, the phone frame, the status bar, and the USSD hold screen **all rendered perfectly**. The *only* thing that broke is one HTML string that got printed as text instead of rendered. That is a typo-level defect, not a framework failure. Switching to React/Next.js right now would be the exact "Saturday-morning meltdown" the Honest Assessment warned you against — and it would cost you the hackathon. Keep Streamlit. Fix the bug. Here is exactly what is wrong and how to fix it in 3 minutes.
+
+---
+
+## 🔬 Diagnosis: two bugs stacked together
+
+### Bug 1 — The HTML was emitted without `unsafe_allow_html=True`
+Streamlit has two ways to print a string:
+- `st.write(html_string)` → **escapes it and shows raw text** (this is what you see).
+- `st.markdown(html_string, unsafe_allow_html=True)` → **renders it as HTML/CSS**.
+
+Kimi's code rendered the phone *frame* correctly (so that part used `unsafe_allow_html=True`), but then emitted the **warning block** and the **caption block** as separate `st.write(...)` calls (or separate `st.markdown(...)` calls *missing* the flag). That's why the frame looks like a phone and the warning looks like source code sitting *below* it.
+
+### Bug 2 — A stray `</div>` broke the nesting
+Look at your leaked code carefully:
+
+```html
+<div class="phone-warning">
+  <div class="warn-title">⚠️ FRAUD ALERT — SIKA AFONO AKENKAN</div>
+  <div class="warn-body">Yɛn hu sɛ obi rehyɛ wo...</div>
+</div>
+</div>   <!-- ← THIS EXTRA CLOSING TAG IS THE KILLER -->
+<div class="phone-caption">Victim handset...</div>
+```
+
+That extra `</div>` closes the **phone-screen container early**, so the caption falls *outside* the phone visual. Even if you fix Bug 1, this stray tag will keep the layout broken. The warning must live **inside** `<div class="phone-screen">`, and the caption **inside** `<div class="phone-frame">`, with correct nesting.
+
+### The root architectural mistake
+Kimi split the phone into **multiple separate render calls** (frame here, warning there, caption elsewhere). In Streamlit, each `st.markdown` is its own DOM block, so a warning rendered in a *second* block can never visually sit *inside* the phone frame from the *first* block. **The entire phone must be ONE string, rendered in ONE `st.markdown(..., unsafe_allow_html=True)` call.**
+
+---
+
+## 🛠️ The Fix (replace the render logic in `components/mock_phone.py`)
+
+Build the whole handset as a single HTML string, with the warning conditionally embedded *inside* the screen, and render it once:
+
+```python
+import streamlit as st
+
+def render_mock_phone(state: dict):
+    """
+    state keys:
+      caller, message, action_prompt,
+      alert (bool), twi_msg, en_msg,
+      tier ('HIGH'|'MEDIUM'|'LOW')
+    """
+    # 1. The in-screen USSD / call view (what the victim sees)
+    screen_inner = f"""
+        <div class="ussd-screen">
+            <div class="ussd-line">*170#</div>
+            <div class="ussd-line">{'🔴 SIMULATED TRANSACTION HOLD' if state['alert'] else '🟢 APPROVED'}</div>
+            <div class="ussd-body">{state.get('message', '')}</div>
+            <div class="ussd-prompt">{state.get('action_prompt', '')}</div>
+        </div>
+    """
+
+    # 2. The warning banner, embedded INSIDE the screen (no stray </div>!)
+    warning_html = ""
+    if state["alert"]:
+        warning_html = f"""
+            <div class="phone-warning">
+                <div class="warn-title">⚠️ FRAUD ALERT — SIKA AFONO AKENKAN</div>
+                <div class="warn-body">{state.get('twi_msg', '')} {state.get('en_msg', '')}</div>
+            </div>
+        """
+
+    # 3. ONE complete, correctly-nested phone string
+    phone_html = f"""
+        <div class="phone-frame">
+            <div class="phone-status">
+                <span>MTN · Ghana</span><span>LTE ▮▮▮▯ 🔋</span>
+            </div>
+            <div class="phone-screen">
+                {screen_inner}
+                {warning_html}
+            </div>
+            <div class="phone-caption">
+                Victim handset (simulated — what the customer sees, in real time)
+            </div>
+        </div>
+    """
+
+    # 4. Render the WHOLE phone in ONE call, with HTML enabled
+    st.markdown(phone_html, unsafe_allow_html=True)
+```
+
+**What this changes vs Kimi's version:**
+- The warning is no longer a separate render call — it's a string *inside* the phone's HTML, so it visually sits within the phone frame.
+- The extra `</div>` is gone; nesting is `frame > screen > (ussd + warning)` and `frame > caption`.
+- A single `st.markdown(..., unsafe_allow_html=True)` renders everything as styled HTML.
+
+> ⚠️ **Also check `app.py`:** if the phone is currently rendered like `st.write(render_mock_phone(...))` or `st.markdown(render_mock_phone(...))` (without the flag), change every such call to `st.markdown(render_mock_phone(...), unsafe_allow_html=True)`. The flag must be on **every** call that emits HTML.
+
+> 💡 If after this fix the CSS still looks "flat" (Streamlit sometimes scopes `st.markdown` CSS), swap the final line to an isolated iframe render, which is bulletproof for custom CSS:
+> ```python
+> from streamlit.components.v1 import html as st_html
+> st_html(phone_html, height=560)
+> ```
+> (Then move the `.phone-frame/.phone-warning/...` rules into a `<style>` block at the top of `phone_html`.)
+
+---
+
+## ✅ What is actually working (so you can stop doubting the stack)
+
+From your screenshot, the **engine is flawless** — this is the part that wins the rubric:
+
+| Element | Status | Why it's good |
+|---|---|---|
+| Risk gauge **85 / HIGH** | ✅ correct | GH15 credential-exposure fired |
+| Latency **2659 ms** | ✅ under 5 s SLA | End-to-end API response |
+| "Gemini unavailable → fallback rules used" | ✅ **FEATURE, not bug** | Proves the never-die fallback works exactly as the Honest Assessment required |
+| Intent JSON (`pattern: Loss Aversion`, `requested_secret: PIN`, `language: Twi/English Code-Switch`) | ✅ correct | Fallback keyword extractor working |
+| "Evidence is model/fallback output, not a verified fraud finding" | ✅ perfect | This is the *honesty disclaimer* the assessment demanded — keep it |
+| Tabs (Live / Event Stream / Intent) | ✅ rendering | Streamlit is fine |
+
+The fallback banner is actually a **demo asset**: if a judge asks "what if the API dies?", you point at that yellow banner and say *"it already handled it — the deterministic engine still scored 85/HIGH."* Do not remove it.
+
+---
+
+## 🩹 Bonus bug I can see (fix before the demo)
+
+Your **left sidebar is rendering ~12 stacked "Backend API URL" inputs + Play/Reset buttons** — one per scenario. That's a loop bug: the code is iterating over all scenarios and emitting a control block for each. It should be **one** scenario dropdown + **one** API URL field + **one** Play/Reset. Find the `for scenario in SCENARIOS:` loop in the sidebar section of `app.py` and remove the per-scenario `st.text_input("Backend API URL")` / `st.button("Play")` calls inside it — keep a single set outside the loop. A judge scrolling that sidebar will think the UI is unfinished, so clean it up.
+
+---
+
+## Bottom line
+
+Streamlit is rendering your dashboard, your gauge, your tabs, and your JSON beautifully — the *only* failure is one HTML string that wasn't flagged as HTML and had a stray closing tag. That's a 3-line fix, not a framework problem. Apply the single-string render above, fix the sidebar loop, and your mock phone will show the styled Twi warning *inside* the handset. **Do not switch to React.** You are 9 days from a hard 11:30 AM Saturday deadline; the stack you have is the winning stack.
+
+Want me to also hand you the corrected `custom.css` block for `.phone-frame / .phone-screen / .phone-warning` so the warning banner sits flush inside the handset with the amber/red tier colors?

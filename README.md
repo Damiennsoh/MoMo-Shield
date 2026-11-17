@@ -17,7 +17,7 @@ Keep `backend/` and `frontend/` separate. They have different runtime roles, ent
 
 ## Requirements and setup
 
-Use Python 3.10 or newer. From the repository root, create and activate a virtual environment, then install both services' dependencies:
+Use Python 3.10 or newer. From the repository root, create and activate a virtual environment, then install both services' dependencies. The frontend pins NumPy 2.x and a compatible PyArrow range to avoid Streamlit dataframe import failures seen with mixed NumPy/PyArrow installs:
 
 ```bash
 python -m venv .venv
@@ -58,7 +58,7 @@ API schemas and interactive documentation are available at `http://localhost:800
 
 The dashboard provides seven simulated scenarios: fake credit/refund, new-device takeover, fake support/wallet drain, reversal syndicate, fake business/PIN harvest, nuisance-call swarm, and a legitimate baseline used as a false-positive control. Dashboard fixtures are in `frontend/fixtures/`; backend fixtures and tests are in `backend/`.
 
-Use **Run all 7 scenarios** in the dashboard sidebar to replay the full suite and see a table of risk tier, recommended action, and scoring source for each scenario. The scenario inspector lets you select any result to review its event stream and intent analysis, including whether Gemini or keyword fallback was used and which evidence phrases match the signal verbatim. Select **Play selected** to replay one fixture. The alert tone is presented as a playable audio control because browsers may block automatic playback.
+Use **Run all 7 scenarios** in the dashboard sidebar to replay the full suite and see live handset/telemetry updates, progress, and individual result cards. The scenario inspector lets you select any result to review its event stream and intent analysis, including whether Gemini or keyword fallback was used and which evidence phrases appear in the signal. Select **Play selected** to replay one fixture. A warning tone is requested automatically at a simulated intervention, with an audio control left available if browser autoplay policy blocks sound. The fixture pauses are capped at 0.3 seconds per step; actual duration depends on API response time and any configured Gemini call.
 
 Run the backend and fixture tests from the repository root:
 
@@ -72,6 +72,7 @@ Tests include API health and assessment checks, scoring rules, frontend-fixture 
 
 - Use synthetic data only. Do not submit real phone numbers, payment details, PINs, OTPs, or customer communications.
 - `SIMULATED_HOLD` and FraudOps alerts are demo outcomes. The software does not connect to a mobile-money ledger or enforce a real transaction hold.
+- The bundled attack cases are curated synthetic demonstrations, not live operator data. No external hackathon sandbox, credentials, real-time feed, or official test-case set is included in this repository.
 - Risk scoring and intent analysis are demonstration logic, not a validated fraud decision model. Security and operational hardening would be required before real deployment.
 - Backend state is in memory and local to one process; it is not suitable for multi-worker production deployments.
 

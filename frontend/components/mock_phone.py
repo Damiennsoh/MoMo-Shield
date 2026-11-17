@@ -66,9 +66,8 @@ def _warning_html(warning) -> str:
     </div>"""
 
 
-def render_phone(state: dict):
-    """Render the full phone frame. `state` keys: screen, sms, caller,
-    call_status, transcript, ussd_lines, warning."""
+def phone_markup(state: dict) -> str:
+    """Return one HTML fragment for the replaceable simulated handset."""
     screen = state.get("screen", "home")
     if screen == "sms":
         body = _sms_bubbles(state.get("sms", []))
@@ -81,7 +80,7 @@ def render_phone(state: dict):
 
     warning = _warning_html(state["warning"]) if state.get("warning") else ""
 
-    st.markdown(f"""
+    return f"""
     <div class="phone-frame">
       <div class="phone-notch"></div>
       <div class="phone-statusbar"><span>MTN · Ghana</span><span>LTE ▂▄▆█ 🔋</span></div>
@@ -89,4 +88,10 @@ def render_phone(state: dict):
       {warning}
     </div>
     <div class="phone-caption">Victim handset (simulated — what the customer sees, in real time)</div>
-    """, unsafe_allow_html=True)
+    """
+
+
+def render_phone(state: dict):
+    """Render the full phone frame. `state` keys: screen, sms, caller,
+    call_status, transcript, ussd_lines, warning."""
+    st.markdown(phone_markup(state), unsafe_allow_html=True)
