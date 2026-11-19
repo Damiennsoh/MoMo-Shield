@@ -43,7 +43,7 @@ def _call_screen(state) -> str:
 
 def _ussd_screen(state) -> str:
     lines = state.get("ussd_lines", ["*170#", "1) Transfer Money", "2) Buy Airtime"])
-    body = "\n".join(_esc(line) for line in lines)
+    body = "<br>".join(_esc(line) for line in lines)
     return f'<div class="ussd-screen">{body}</div>'
 
 
@@ -59,10 +59,13 @@ def _home_screen() -> str:
 def _warning_html(warning) -> str:
     variant = " watch" if warning.get("variant") == "watch" else ""
     icon = "🛡️" if variant else "⚠️"
+    call_ended = ('<div class="warn-call-ended">☎ Call disconnected at FraudOps intervention</div>'
+                  if warning.get("call_ended") else "")
     return f"""
     <div class="phone-warning{variant}" role="status" aria-live="polite">
       <div class="warn-title">{icon} {_esc(warning.get('title', 'FRAUD ALERT'))}</div>
       <div class="warn-body">{_esc(warning.get('body', ''))}</div>
+      {call_ended}
     </div>"""
 
 
@@ -79,7 +82,7 @@ def phone_markup(state: dict) -> str:
         body = _home_screen()
 
     warning = _warning_html(state["warning"]) if state.get("warning") else ""
-    return f"""
+    markup = f"""
     <div class="phone-frame">
       <div class="phone-notch"></div>
       <div class="phone-statusbar"><span>MTN · Ghana</span><span>LTE ▂▄▆█ 🔋</span></div>
@@ -90,9 +93,20 @@ def phone_markup(state: dict) -> str:
       <div class="phone-caption">Victim handset (simulated — what the customer sees, in real time)</div>
     </div>
     """
+    # Markdown interprets deeply indented HTML lines as code blocks even when
+    # unsafe HTML is enabled. Compact the *complete* interpolated fragment so
+    # every screen, warning, and caption is rendered as one HTML block.
+    return " ".join(markup.split())
 
 
-def render_phone(state: dict):
+def render_phone(state: dict, target=None):
     """Render the full phone frame. `state` keys: screen, sms, caller,
-    call_status, transcript, ussd_lines, warning."""
-    st.markdown(phone_markup(state), unsafe_allow_html=True)
+    call_status, transcript, ussd_lines, warning.
+
+    Compact markup before sending it through unsafe-HTML Markdown: Markdown
+    treats deeply indented nested ``<div>`` lines as code blocks, which exposed
+    the warning markup literally in the phone UI. ``target`` is a Streamlit
+    container/placeholder used by the live replay to replace the same element.
+    """
+    container = target if target is not None else st
+    container.markdown(phone_markup(state), unsafe_allow_html=True)

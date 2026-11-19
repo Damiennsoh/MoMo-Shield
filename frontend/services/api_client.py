@@ -1,13 +1,14 @@
 # Backend client with graceful offline fallback.
 #
 # Talks to the FastAPI engine (backend). ANY failure — connection
-# refused, timeout (>8s), 4xx/5xx — falls back to the built-in deterministic
+# refused, timeout (>9s), 4xx/5xx — falls back to the built-in deterministic
 # rule engine, so the demo never dies on hackathon Wi-Fi.
 #
 # Wire contract:
 #   POST {backend}/api/v1/assess   body {"event": {...}, "context": {...}}
 #   POST {backend}/api/v1/reset    clears per-MSIDN window + risk scores
 
+import hashlib
 import uuid
 from datetime import datetime
 
@@ -15,8 +16,16 @@ import httpx
 
 from services.local_engine import assess_local
 
-TIMEOUT_SECONDS = 20.0
+TIMEOUT_SECONDS = 9.0
 DEMO_DEVICE_TIMEOUT_SECONDS = 4.0
+
+
+def demo_device_event_key(scenario: str, kind: str, identity: str = "") -> str:
+    """Return a bounded stable key for a simulated handset card/update slot."""
+    digest = hashlib.sha256(identity.encode("utf-8", errors="replace")).hexdigest()[:16]
+    scenario_part = "-".join(str(scenario).casefold().split())[:96]
+    kind_part = "-".join(str(kind).casefold().split())[:24]
+    return f"{scenario_part}|{kind_part}|{digest}"
 
 # Backend base URLs that refused a connection. A refused socket costs seconds
 # on some networks, so once one call proves the engine is down we stop probing

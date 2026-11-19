@@ -11,8 +11,6 @@ services:
     ports:
       - "${DEMO_LAN_IP:-127.0.0.1}:5060:5060/udp"
       - "${DEMO_LAN_IP:-127.0.0.1}:10000-10050:10000-10050/udp"
-    volumes:
-      - ./demo/asterisk/sounds:/var/lib/asterisk/sounds/custom:ro
     healthcheck:
       test: ["CMD-SHELL", "asterisk -rx 'core show uptime' >/dev/null"]
       interval: 10s
@@ -28,13 +26,16 @@ services:
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
-      GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-15}
+      GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-7}
       DEMO_DEVICE_TOKEN: ${DEMO_DEVICE_TOKEN:?Generate a random DEMO_DEVICE_TOKEN in .env.demo}
+      DEMO_DEVICE_AUDIO_DIR: /app/frontend-assets
       ASTERISK_ARI_URL: http://asterisk:8088/ari
       ASTERISK_ARI_USERNAME: ${ASTERISK_ARI_USERNAME:-momoshield}
       ASTERISK_ARI_PASSWORD: ${ASTERISK_ARI_PASSWORD:?Set a strong local ARI password in .env.demo}
     ports:
       - "${DEMO_LAN_IP:-127.0.0.1}:8000:8000"
+    volumes:
+      - ./frontend/assets:/app/frontend-assets:ro
     depends_on:
       asterisk:
         condition: service_healthy

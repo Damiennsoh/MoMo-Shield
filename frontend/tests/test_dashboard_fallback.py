@@ -12,7 +12,9 @@ sys.path.insert(0, str(FRONTEND))
 from services.api_client import assess_event
 from services.audio import alert_tone_bytes
 from services.local_engine import new_accumulator
+from components import mock_phone
 from components.mock_phone import phone_markup
+from services.api_client import demo_device_event_key
 
 FIXTURES = FRONTEND / "fixtures"
 EXPECTED = {
@@ -61,18 +63,85 @@ def test_alert_tone_is_valid_playable_wav():
         assert audio.getnframes() > 0
 
 
-def test_phone_warning_and_caption_are_nested_in_single_phone_fragment():
+def test_phone_markup_is_compact_and_warning_caption_are_nested():
     markup = phone_markup({
         "screen": "ussd",
         "ussd_lines": ["*170#", "SIMULATED TRANSACTION HOLD"],
         "warning": {"title": "FRAUD ALERT", "body": "Do not share your PIN."},
     })
+    assert markup.startswith('<div class="phone-frame">')
+    assert "\n" not in markup
     body_start = markup.index('<div class="phone-body">')
-    body_end = markup.index('</div>\n      <div class="phone-caption">', body_start)
+    body_end = markup.index('<div class="phone-caption">', body_start)
     warning_start = markup.index('<div class="phone-warning', body_start)
     assert body_start < warning_start < body_end
-    assert '<div class="phone-caption">' in markup
     assert markup.count('<div class="phone-frame">') == 1
+    assert "*170#<br>SIMULATED TRANSACTION HOLD" in markup
+
+
+def test_active_call_ends_inside_the_intervention_warning():
+    markup = phone_markup({
+        "screen": "ussd",
+        "ussd_lines": ["*170#", "SIMULATED TRANSACTION HOLD"],
+        "warning": {"title": "FRAUD ALERT", "body": "Do not share your PIN.", "call_ended": True},
+    })
+    assert "Call disconnected at FraudOps intervention" in markup
+    assert markup.count('<div class="phone-warning') == 1
+
+
+def test_all_fixture_phone_screens_render_as_one_html_fragment():
+    for fixture_path in sorted(FIXTURES.glob("*.json")):
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        state = {"screen": "home"}
+        for step in fixture["steps"]:
+            if step.get("phone_ui"):
+                state.update(step["phone_ui"])
+                markup = phone_markup(state)
+                assert markup.startswith('<div class="phone-frame">'), fixture_path.name
+                assert "\n" not in markup, fixture_path.name
+                assert markup.count('<div class="phone-frame">') == 1, fixture_path.name
+                assert '<div class="phone-caption">' in markup, fixture_path.name
+                # Exercise an intervention overlay on every fixture's final
+                # handset state, not only the scenario that exposed the bug.
+                alerted = dict(state, warning={"title": "FRAUD ALERT", "body": "Keep your PIN private."})
+                alert_markup = phone_markup(alerted)
+                assert "<div class=\"phone-warning\"" in alert_markup, fixture_path.name
+                assert alert_markup.index('<div class="phone-body">') < alert_markup.index('<div class="phone-warning') < alert_markup.index('<div class="phone-caption">'), fixture_path.name
+
+
+def test_render_phone_uses_single_unsafe_html_markdown_call(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mock_phone.st, "markdown", lambda body, **kwargs: calls.append((body, kwargs)))
+    mock_phone.render_phone({"screen": "home"})
+    assert len(calls) == 1
+    assert calls[0][0].startswith('<div class="phone-frame">')
+    assert calls[0][1] == {"unsafe_allow_html": True}
+
+
+def test_live_phone_render_uses_the_same_single_html_path():
+    calls = []
+
+    class Placeholder:
+        def markdown(self, body, **kwargs):
+            calls.append((body, kwargs))
+
+    mock_phone.render_phone({"screen": "call", "caller": "Safe Number"}, target=Placeholder())
+    assert len(calls) == 1
+    assert '<div class="call-screen">' in calls[0][0]
+    assert calls[0][1] == {"unsafe_allow_html": True}
+
+
+def test_second_device_keys_upsert_call_updates_without_collapsing_distinct_callers():
+    scenario = "GH19 — Nuisance Call Swarm → Fake Helper"
+    first = demo_device_event_key(scenario, "call", "055 000 0055")
+    same_call_update = demo_device_event_key(scenario, "call", "055 000 0055")
+    other_call = demo_device_event_key(scenario, "call", "055 000 0044")
+    warning_1 = demo_device_event_key(scenario, "warning")
+    warning_2 = demo_device_event_key(scenario, "warning")
+    assert first == same_call_update
+    assert first != other_call
+    assert warning_1 == warning_2
+    assert len(first) <= 140
 
 
 def test_bundled_sfx_assets_are_valid_offline_wavs():
@@ -81,6 +150,9 @@ def test_bundled_sfx_assets_are_valid_offline_wavs():
             assert audio.getnchannels() == 1
             assert audio.getframerate() == 22050
             assert audio.getnframes() > 0
+    for name in ("sms.mp3", "ring.mp3"):
+        assert (FRONTEND / "assets" / name).stat().st_size > 1000
+    assert (FRONTEND / "assets" / "ring.mp3").read_bytes().startswith(b"ID3")
 
 
 def test_recorded_mp3_sfx_overrides_bundled_wav(monkeypatch):
@@ -117,6 +189,21 @@ def test_warning_falls_back_to_english_only_when_no_recording_is_supplied(monkey
     assert spoken == ["English warning"]
 
 
+def test_dashboard_warning_plays_after_alert_chime_and_caps_audio(monkeypatch):
+    import services.audio as audio_service
+    rendered = []
+    requested = []
+    monkeypatch.setattr(audio_service, "_audio_bytes", lambda name: (requested.append(name) or (b"wav", "audio/wav")))
+    monkeypatch.setattr(audio_service.components, "html", lambda markup, **kwargs: rendered.append(markup))
+    assert audio_service.play_sfx("alert.wav", max_duration_seconds=1.2)
+    assert "1200" in rendered[-1] and "a.pause()" in rendered[-1]
+    assert audio_service.play_sfx("warning_twi.wav", delay_ms=1100, max_duration_seconds=10)
+    assert "setTimeout" in rendered[-1] and "1100" in rendered[-1]
+    assert "10000" in rendered[-1] and "a.pause()" in rendered[-1]
+    assert requested[0] == "alert.mp3"
+    assert "warning_twi.mp3" in requested
+
+
 def test_prerecorded_english_warning_is_used_when_localized_clip_is_missing(monkeypatch):
     import services.audio as audio_service
     requested = []
@@ -151,4 +238,21 @@ def test_batch_replay_retains_inspectable_events_and_intent():
     assert len(app.metric) >= 13
     assert len(app.selectbox) >= 2
     assert not app.dataframe
+    assert not app.exception
+
+
+def test_gh01_call_disconnect_state_survives_the_later_hold_screen():
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(str(FRONTEND / "app.py"), default_timeout=60).run()
+    app.text_input[0].set_value("http://127.0.0.1:1").run()
+    app.selectbox[0].set_value("GH01 — Fake Credit → Refund Scam").run()
+    app.button[0].click().run(timeout=60)
+
+    warning = app.session_state["phone"].get("warning", {})
+    phone_markup = [element.value for element in app.markdown
+                    if '<div class="phone-frame">' in element.value][-1]
+    assert warning["call_ended"] is True
+    assert "Call disconnected at FraudOps intervention" in phone_markup
+    assert phone_markup.count('<div class="phone-frame">') == 1
     assert not app.exception

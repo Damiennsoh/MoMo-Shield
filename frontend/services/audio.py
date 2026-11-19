@@ -50,7 +50,7 @@ def _audio_bytes(sound_file_name: str):
     return path.read_bytes(), mime
 
 
-def play_sfx(sound_file_name: str, delay_ms: int = 0) -> bool:
+def play_sfx(sound_file_name: str, delay_ms: int = 0, max_duration_seconds: float = 0) -> bool:
     """Autoplay a bundled sound in an isolated browser frame; missing files are harmless."""
     requested = Path(sound_file_name)
     candidates = [requested.stem + ".mp3", requested.name]
@@ -63,10 +63,13 @@ def play_sfx(sound_file_name: str, delay_ms: int = 0) -> bool:
     if not payload:
         return False
     data = base64.b64encode(payload).decode("ascii")
+    max_ms = max(0, int(float(max_duration_seconds) * 1000))
     components.html(
         f'<audio id="momo-sfx" controls style="width:100%;height:32px" '
         f'src="data:{html.escape(mime)};base64,{data}"></audio>'
-        f'<script>setTimeout(function(){{document.getElementById("momo-sfx").play().catch(function(){{}});}},'
+        f'<script>setTimeout(function(){{var a=document.getElementById("momo-sfx");if(!a)return;'
+        f'var p=a.play();if({max_ms}>0)setTimeout(function(){{if(!a.paused){{a.pause();a.currentTime=0;}}}},{max_ms});'
+        f'if(p)p.catch(function(){{}});}},'
         f'{max(0, int(delay_ms))});</script>',
         height=42,
         scrolling=False,
@@ -74,15 +77,17 @@ def play_sfx(sound_file_name: str, delay_ms: int = 0) -> bool:
     return True
 
 
-def speak_english_warning(text: str) -> bool:
+def speak_english_warning(text: str, delay_ms: int = 1100, max_duration_seconds: float = 10) -> bool:
     """Use browser-native English TTS; no text is evaluated as JavaScript."""
     if not text or not text.strip():
         return False
     safe_text = json.dumps(text, ensure_ascii=True)
+    safe_delay = max(0, int(delay_ms))
+    max_ms = max(1000, int(float(max_duration_seconds) * 1000))
     components.html(
         "<script>(function(){try{window.speechSynthesis.cancel();"
         f"var u=new SpeechSynthesisUtterance({safe_text});u.lang='en-US';"
-        "setTimeout(function(){window.speechSynthesis.speak(u);},900);"
+        f"setTimeout(function(){{window.speechSynthesis.speak(u);setTimeout(function(){{window.speechSynthesis.cancel();}},{max_ms});}},{safe_delay});"
         "}catch(e){console.warn('Speech unavailable',e);}})();</script>",
         height=0,
         scrolling=False,
@@ -92,9 +97,9 @@ def speak_english_warning(text: str) -> bool:
 
 def play_warning_audio(twi_text: str = "", english_text: str = "") -> str:
     """Prefer an optional human-recorded Twi/English clip; never fake a Twi voice."""
-    if play_sfx("warning_twi.wav", delay_ms=900) or play_sfx("warning_twi.mp3", delay_ms=900):
+    if play_sfx("warning_twi.wav", delay_ms=1100, max_duration_seconds=10) or play_sfx("warning_twi.mp3", delay_ms=1100, max_duration_seconds=10):
         return "recorded"
-    if play_sfx("warning_en.wav", delay_ms=900) or play_sfx("warning_en.mp3", delay_ms=900):
+    if play_sfx("warning_en.wav", delay_ms=1100, max_duration_seconds=10) or play_sfx("warning_en.mp3", delay_ms=1100, max_duration_seconds=10):
         return "recorded_english"
     speak_english_warning(english_text)
     return "english_tts" if english_text else "none"

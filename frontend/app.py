@@ -16,8 +16,9 @@ from pathlib import Path
 import streamlit as st
 
 from components.fraudops_panel import live_assessment_markup, render_fraudops
-from components.mock_phone import phone_markup, render_phone
-from services.api_client import assess_event, check_gemini, publish_demo_device_event, reset_backend
+from components.mock_phone import render_phone
+from services.api_client import (assess_event, check_gemini, demo_device_event_key,
+                                 publish_demo_device_event, reset_backend)
 from services.audio import alert_tone_bytes, play_sfx, play_warning_audio
 from services.local_engine import new_accumulator
 
@@ -33,6 +34,8 @@ SCENARIOS = {
 }
 DEMO_DEVICE_TOKEN = os.environ.get("DEMO_DEVICE_TOKEN", "")
 DEMO_DEVICE_URL = os.environ.get("DEMO_DEVICE_URL", "")
+CALL_RING_MIN_SECONDS = 3.0
+WARNING_AUDIO_HOLD_SECONDS = 8.2
 
 st.set_page_config(
     page_title="MoMo Shield | FraudOps Command Center",
@@ -66,6 +69,10 @@ def init_state():
         "alert_count": 0,
         "scenario_results": [],
         "scenario_records": [],
+        "sip_audio_managed": False,
+        "sip_warning_audio_managed": False,
+        "victim_call_active": False,
+        "victim_call_interrupted": False,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -81,6 +88,10 @@ def reset_scenario_state():
     st.session_state.intent_text = None
     st.session_state.intent_source = "none"
     st.session_state.intent_model_unavailable = False
+    st.session_state.sip_audio_managed = False
+    st.session_state.sip_warning_audio_managed = False
+    st.session_state.victim_call_active = False
+    st.session_state.victim_call_interrupted = False
 
 
 def log_event(kind, summary):
@@ -120,9 +131,17 @@ with st.sidebar:
     sip_call_enabled = st.checkbox(
         "Ring local SIP softphone on incoming-call steps",
         value=False,
-        help="Optional. Only calls the single local PJSIP endpoint configured on your private Asterisk demo PBX; it cannot dial public numbers.",
+        help="Optional. Calls only the fixed local PJSIP/200 endpoint. If Asterisk accepts, SIP supplies the ring/warning audio and handset duplicates are muted; browser audio is the fallback if SIP is unavailable. SIP is single-scenario only.",
         key="sip_call_enabled",
     )
+    dashboard_audio_enabled = st.checkbox(
+        "Also play demo sounds in the FraudOps browser",
+        value=not bool(DEMO_DEVICE_TOKEN),
+        help="Use this only when you want a local dashboard speaker as well. It is muted automatically when SIP is managing the call audio.",
+        key="dashboard_audio_enabled",
+    )
+    if sip_call_enabled and run_all:
+        st.info("SIP calls are limited to Play selected. The seven-case replay uses the browser handset audio path.")
     st.divider()
     st.caption("Backend unreachable? MoMo Shield switches to deterministic local rules and labels the engine source.")
     if DEMO_DEVICE_URL:
@@ -142,6 +161,7 @@ with st.sidebar:
 
 if reset_clicked:
     reset_scenario_state()
+    st.session_state.sip_audio_managed = False
     st.session_state.alert_tone = None
     st.session_state.scenario_results = []
     st.session_state.scenario_records = []
@@ -181,7 +201,7 @@ def draw():
 
 def draw_live():
     """Update one phone fragment and one assessment fragment during replay."""
-    phone_ph.markdown(phone_markup(st.session_state.phone), unsafe_allow_html=True)
+    render_phone(st.session_state.phone, target=phone_ph)
     if st.session_state.ops:
         ops_ph.markdown(
             live_assessment_markup(st.session_state.ops),
@@ -247,7 +267,11 @@ if play or run_all:
     for scenario_index, (label, key) in enumerate(scenario_items, start=1):
         scenario = load_scenario(key)
         reset_scenario_state()
+        st.session_state.sip_audio_managed = False
+        st.session_state.sip_warning_audio_managed = False
         reset_backend(backend_url)
+        scenario_warning_audio_pending = False
+        pending_call_started_at = None
         if DEMO_DEVICE_TOKEN:
             try:
                 publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, {"type": "reset", "scenario": label})
@@ -260,6 +284,14 @@ if play or run_all:
         )
 
         for step_index, step in enumerate(scenario["steps"], start=1):
+            upcoming_phone = step.get("phone_ui", {})
+            if pending_call_started_at is not None and upcoming_phone.get("screen") == "call":
+                upcoming_status = str(upcoming_phone.get("call_status", "")).casefold()
+                if "incoming" not in upcoming_status and "ringing" not in upcoming_status:
+                    ring_remaining = CALL_RING_MIN_SECONDS - (time.monotonic() - pending_call_started_at)
+                    if ring_remaining > 0:
+                        time.sleep(ring_remaining)
+                    pending_call_started_at = None
             # Retain the narrated timeline feel without 6–16 second fixture sleeps.
             time.sleep(min(float(step.get("delay", 0.15)), 0.20 if run_all else 0.30))
             if step.get("phone_ui"):
@@ -272,33 +304,67 @@ if play or run_all:
                     device_event = {
                         "type": "sms",
                         "scenario": label,
+                        "event_key": demo_device_event_key(
+                            label, "sms", f"{latest.get('from', 'MoMo')}|{latest.get('text', '')}"
+                        ),
                         "caller": latest.get("from", "MoMo"),
                         "message": latest.get("text", ""),
                     }
-                    play_sfx("sms.wav")
+                    if dashboard_audio_enabled and not st.session_state.sip_audio_managed:
+                        play_sfx("sms.wav", max_duration_seconds=1.8)
                 elif phone_screen == "call":
                     call_status = st.session_state.phone.get("call_status", "Incoming call")
                     incoming_call = "incoming" in str(call_status).casefold() or "ringing" in str(call_status).casefold()
+                    call_status_lower = str(call_status).casefold()
+                    st.session_state.victim_call_active = (
+                        not any(word in call_status_lower for word in ("missed", "ended", "declined"))
+                        and (incoming_call or "on call" in call_status_lower or "connected" in call_status_lower)
+                    )
                     device_event = {
                         "type": "call",
                         "scenario": label,
+                        # Fixture call-state updates (ringing -> connected) are
+                        # one handset call, not a second incoming call card.
+                        "event_key": demo_device_event_key(
+                            label, "call", st.session_state.phone.get("caller", "Unknown caller")
+                        ),
                         "caller": st.session_state.phone.get("caller", "Unknown caller"),
                         "status": call_status,
                         "transcript": st.session_state.phone.get("transcript", ""),
-                        "trigger_sip": bool(sip_call_enabled and step_kind == "CALL" and incoming_call),
+                        "trigger_sip": bool(sip_call_enabled and not run_all and step_kind == "CALL" and incoming_call),
                     }
                     if step_kind == "CALL" and incoming_call:
-                        play_sfx("ring.wav")
+                        pending_call_started_at = time.monotonic()
                 else:
                     device_event = {"type": "screen", "scenario": label,
+                                    "event_key": demo_device_event_key(label, "screen"),
                                     "message": " · ".join(st.session_state.phone.get("ussd_lines", []))}
                 if DEMO_DEVICE_TOKEN:
                     try:
                         device_result = publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, device_event)
                         if device_event.get("trigger_sip") and device_result.get("status") == "published":
-                            st.session_state["demo_sip_result"] = (device_result.get("sip") or {}).get("message", "SIP request accepted.")
+                            sip_result = device_result.get("sip") or {}
+                            st.session_state.sip_audio_managed = sip_result.get("status") == "requested"
+                            # Let the victim handset/browser play the warning
+                            # at the exact intervention event. Asterisk's
+                            # safety dialplan waits silently until this event
+                            # hangs up the active local call.
+                            st.session_state.sip_warning_audio_managed = False
+                            st.session_state["demo_sip_result"] = sip_result.get("message", "SIP request completed.")
+                            if not st.session_state.sip_audio_managed and dashboard_audio_enabled:
+                                play_sfx("ring.wav", max_duration_seconds=6)
+                        elif (device_event.get("type") == "call" and "incoming" in str(device_event.get("status", "")).casefold()
+                              and dashboard_audio_enabled and not st.session_state.sip_audio_managed):
+                            play_sfx("ring.wav", max_duration_seconds=6)
                     except Exception as exc:
                         st.session_state["demo_device_error"] = str(exc)
+                        st.session_state.sip_audio_managed = False
+                        st.session_state.sip_warning_audio_managed = False
+                        if device_event.get("trigger_sip") and dashboard_audio_enabled:
+                            play_sfx("ring.wav", max_duration_seconds=6)
+                elif dashboard_audio_enabled and device_event.get("type") == "call":
+                    if device_event.get("trigger_sip") or "incoming" in str(device_event.get("status", "")).casefold():
+                        play_sfx("ring.wav", max_duration_seconds=6)
 
             if "event" in step:
                 event = dict(step["event"])
@@ -326,6 +392,9 @@ if play or run_all:
                 log_event(event_kind, event_summary)
 
                 action = assessment.get("recommended_action")
+                call_ended_at_intervention = bool(
+                    st.session_state.victim_call_active or st.session_state.victim_call_interrupted
+                )
                 if action == "SIMULATED_HOLD":
                     st.session_state.phone["screen"] = "ussd"
                     st.session_state.phone["ussd_lines"] = [
@@ -337,37 +406,52 @@ if play or run_all:
                         "title": "FRAUD ALERT — SIKA AFONO AKENKAN",
                         "body": f"{assessment.get('twi_warning_message') or 'Suspected scam activity.'} "
                                 "Do NOT share your PIN. MTN will never ask for it. Call 100.",
+                        "call_ended": call_ended_at_intervention,
                     }
+                    st.session_state.victim_call_interrupted = call_ended_at_intervention
+                    st.session_state.victim_call_active = False
                 elif action == "FRAUDOPS_ALERT":
                     st.session_state.phone["warning"] = {
                         "variant": "watch",
                         "title": "ACCOUNT ON WATCH — FA KASA",
                         "body": "No transaction was executed in this simulation. "
                                 f"{assessment.get('twi_warning_message') or 'Call MTN 100 to verify any request.'}",
+                        "call_ended": call_ended_at_intervention,
                     }
+                    st.session_state.victim_call_interrupted = call_ended_at_intervention
+                    st.session_state.victim_call_active = False
                 elif action == "COOLING_OFF_PROMPT":
                     st.session_state.phone["warning"] = {
                         "title": "SUSPECTED SIKA AFONO — VERIFY FIRST",
                         "body": "Slow down. Verify this request through the official MoMo app or by calling 100.",
+                        "call_ended": call_ended_at_intervention,
                     }
+                    st.session_state.victim_call_interrupted = call_ended_at_intervention
+                    st.session_state.victim_call_active = False
 
                 if action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT", "COOLING_OFF_PROMPT"):
                     st.session_state.alert_played = True
                     st.session_state.alert_count += 1
                     tone = alert_tone_bytes(variant=st.session_state.alert_count)
                     st.session_state.alert_tone = tone
-                    show_alert_tone(tone, st.session_state.alert_count)
-                    play_warning_audio(
-                        assessment.get("twi_warning_message") or "",
-                        assessment.get("english_warning_message") or "",
-                    )
+                    if dashboard_audio_enabled and not st.session_state.sip_warning_audio_managed:
+                        show_alert_tone(tone, st.session_state.alert_count)
+                        play_warning_audio(
+                            assessment.get("twi_warning_message") or "",
+                            assessment.get("english_warning_message") or "",
+                        )
                     if DEMO_DEVICE_TOKEN:
                         try:
                             publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, {
                                 "type": "warning",
                                 "scenario": label,
+                                "event_key": demo_device_event_key(label, "warning"),
                                 "warning": "Do not share your PIN or OTP. Verify through official support.",
+                                "warning_twi": assessment.get("twi_warning_message") or "",
+                                "warning_english": assessment.get("english_warning_message") or "Do not share your PIN or OTP. Verify through official support.",
+                                "suppress_audio": bool(st.session_state.sip_warning_audio_managed),
                             })
+                            scenario_warning_audio_pending = not st.session_state.sip_warning_audio_managed
                         except Exception as exc:
                             st.session_state["demo_device_error"] = str(exc)
 
@@ -387,6 +471,12 @@ if play or run_all:
                 text=(f"Scenario {scenario_index}/{len(scenario_items)} · {label} · "
                       f"step {step_index}/{len(scenario['steps'])}: {step_kind}"),
             )
+
+        if scenario_warning_audio_pending and run_all:
+            # The handset defers the next reset until its bounded warning
+            # playback ends, so its warning remains beside the scenario that
+            # triggered it instead of being cleared mid-sentence.
+            time.sleep(WARNING_AUDIO_HOLD_SECONDS)
 
         if st.session_state.ops:
             final_assessment = dict(st.session_state.ops)

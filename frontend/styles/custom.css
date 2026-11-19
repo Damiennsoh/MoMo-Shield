@@ -74,6 +74,7 @@ section[data-testid="stSidebar"] { background: #0f172a; }
 }
 .warn-title { font-weight: 800; font-size: 13px; }
 .warn-body { font-size: 12px; margin-top: 4px; line-height: 1.45; }
+.warn-call-ended { display: inline-block; margin-top: 7px; padding: 3px 7px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .03em; }
 /* Pre-emptive watch state (FRAUDOPS_ALERT) — amber, not the red hold */
 .phone-warning.watch {
   background: linear-gradient(180deg, #78350f, #92400e);
