@@ -57,6 +57,9 @@ services:
       DEMO_DEVICE_URL: http://${DEMO_LAN_IP:-127.0.0.1}:8000/api/v1/demo-device#token=${DEMO_DEVICE_TOKEN}
     ports:
       - "${DEMO_LAN_IP:-127.0.0.1}:8501:8501"
+      # Also bind localhost so the browser treats the page as a secure context
+      # and allows microphone access for Live Signal Lab transcription.
+      - "127.0.0.1:8501:8501"
     depends_on:
       backend:
         condition: service_healthy

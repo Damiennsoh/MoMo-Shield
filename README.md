@@ -15,6 +15,24 @@ MoMo-Shield/
 
 Keep `backend/` and `frontend/` separate. They have different runtime roles, entry points, dependencies, and deployment needs. The dashboard communicates with the backend over HTTP; they do not need to be merged into one application. The frontend can also run without the API by using its deterministic local rules engine.
 
+## Technology stack
+
+| Tool | Role in MoMo Shield |
+|---|---|
+| **Python 3.12** | Runtime for both services; all demo logic is Python. |
+| **FastAPI + Uvicorn** | Backend HTTP API (`/api/v1/assess`, `/demo-device/*`) serving risk assessments, the second-handset event stream, audio assets, and SIP/SIP-MESSAGE bridging. |
+| **Pydantic / pydantic-settings** | Request/response schemas for events and assessments; typed configuration from `.env` files. |
+| **Streamlit** | FraudOps dashboard — scenario replay, Live Signal Lab, event injector, provider-readiness page, and the simulated victim handset view. |
+| **httpx** | Async HTTP client used by the backend to call the Asterisk ARI and by the frontend to call the backend. |
+| **Google GenAI SDK (Gemini `gemini-3.5-flash-lite`)** | Optional intent extraction (authority/loss-aversion levers, requested-secret detection), audio transcription for the mic flow, and the healthcheck. Deterministic rules remain the primary scorer; Gemini is advisory and time-bounded. |
+| **pytest** | Backend and frontend suites covering scoring rules, API contracts, fixtures, and safety guards. |
+| **Docker Compose** | Three-service demo stack: `asterisk`, `backend`, `dashboard` — LAN-bound ports, health checks, private ARI networking. |
+| **Asterisk (PJSIP/ARI)** | Local-only SIP PBX. Originates calls to the fixed demo endpoint `PJSIP/200`, reports channel state, accepts hangup requests, and delivers SIP `MESSAGE` text notifications. No PSTN/trunk connectivity. |
+| **Linphone** | Optional softphone on a second device that registers to Asterisk as extension `200` — the "real phone" that rings and receives SIP text messages during the demo. |
+| **Server-Sent Events (SSE)** | Streams handset events (`sms`, `call`, `warning`, `screen`, `reset`) from the backend to the token-protected second-device browser page. |
+| **Browser Web Audio + Web Speech API** | Handset/dashboard sound effects (ring, SMS, alert tones) and English text-to-speech warnings; Twi safety wording stays disabled pending fluent-speaker review. |
+| **numpy / pandas / pyarrow** | Data handling for the Streamlit dashboard (pinned for compatibility). |
+
 ## Requirements and setup
 
 Use Python 3.10 or newer. From the repository root, create and activate a virtual environment, then install both services' dependencies. The frontend pins NumPy 2.x and a compatible PyArrow range to avoid Streamlit dataframe import failures seen with mixed NumPy/PyArrow installs:
@@ -47,7 +65,7 @@ docker compose --env-file .env.demo -f docker-compose.demo.yml up --build -d
 
 `setup_demo.py` detects the host's LAN address and creates `.env.demo` with fresh handset-token, SIP, and ARI credentials without printing them. Review the file and change the LAN address if detection selected the wrong network. Add `GEMINI_API_KEY` there only if you want the live Gemini integration enabled in this stack.
 
-Install the [free Linphone softphone](https://www.linphone.org/en/download/) on a phone or laptop on the same Wi-Fi and add a SIP/UDP account with server/domain `<DEMO_LAN_IP>`, port `5060`, username and authentication ID `200`, and the `ASTERISK_SIP_PASSWORD` from `.env.demo`. Another SIP client can also be used. No Linphone cloud account or SIP trunk is needed. In the dashboard, enable **Ring local SIP softphone on incoming-call steps**, then play a single scenario such as **GH01 — Fake Credit → Refund Scam**. Its synthetic incoming-call step asks the backend to ring only `PJSIP/200`. The FraudOps call card and SIP originate both use a 3-second ring window. The demo harness may end that exact local lab call when it publishes a synthetic warning, and the mock/second-handset warning appears on the same event. This is a test-only local simulation: it does not intercept, monitor, or control any customer, carrier, cellular, or PSTN call and does not perform a real fraud intervention. A 12-second PBX failsafe ends orphaned lab calls if the dashboard disappears. No arbitrary destination or outbound/PSTN route is configured. Missed-call fixture steps are displayed as missed and do not originate a SIP call.
+Install the [free Linphone softphone](https://www.linphone.org/en/download/) on a phone or laptop on the same Wi-Fi and add a SIP/UDP account with server/domain `<DEMO_LAN_IP>`, port `5060`, username and authentication ID `200`, and the `ASTERISK_SIP_PASSWORD` from `.env.demo`. Another SIP client can also be used. No Linphone cloud account or SIP trunk is needed. In the dashboard, enable **Ring local SIP softphone on incoming-call steps**, then play a single scenario such as **GH01 — Fake Credit → Refund Scam**. Its synthetic incoming-call step asks the backend to ring only `PJSIP/200`. The call rings for up to 60 seconds until answered, declined, or ended. When FraudOps publishes a HIGH-tier warning, the backend lets the victim answer first, then terminates the exact local lab call and delivers the warning to the handset, dashboard, and Linphone (as a SIP `MESSAGE` text). MEDIUM-tier cooling-off warnings notify without ending the call; LOW-risk calls continue until the user ends them manually from the handset page or Linphone. This is a test-only local simulation: it does not intercept, monitor, or control any customer, carrier, cellular, or PSTN call and does not perform a real fraud intervention. A 5-minute PBX failsafe ends orphaned lab calls if the dashboard disappears. No arbitrary destination or outbound/PSTN route is configured. Missed-call fixture steps are displayed as missed and do not originate a SIP call.
 
 The optional local SIP test call intentionally stays silent after answer and may be terminated by the demo harness at a synthetic warning event; this is not call interception or a production control. Warning guidance is context-specific English demo copy and may use browser-native speech; the on-screen text remains available. The dashboard does not use unreviewed Twi recordings as safety guidance.
 
@@ -59,7 +77,7 @@ Use only a private/trusted Wi-Fi network. Set `DEMO_LAN_IP` and `ASTERISK_MEDIA_
 docker compose --env-file .env.demo -f docker-compose.demo.yml down
 ```
 
-The Compose file includes health checks, a read-only frontend audio mount, LAN-bound SIP/RTP/backend/dashboard ports, and a private backend-to-Asterisk ARI path. This sandbox does not have Docker installed, so the Compose file can be statically validated here but the Asterisk container path still must be smoke-tested on the hackathon laptop with Docker before relying on it for the live judging demo. The regular Streamlit/FastAPI path remains available without Docker or Asterisk.
+The Compose file includes health checks, a read-only frontend audio mount, LAN-bound SIP/RTP/backend/dashboard ports, and a private backend-to-Asterisk ARI path. The dashboard is also bound to `127.0.0.1:8501` so the laptop browser treats it as a secure context and allows microphone access for Live Signal Lab transcription; use `http://localhost:8501` on the demo machine and the LAN URL for other devices. The regular Streamlit/FastAPI path remains available without Docker or Asterisk.
 
 To run services separately, use two terminals with the same virtual environment:
 
@@ -73,7 +91,7 @@ cd frontend
 streamlit run app.py
 ```
 
-The backend works without a Gemini key; communication-intent analysis then uses the built-in keyword fallback. To enable Gemini, copy `backend/.env.example` to `backend/.env` and set `GEMINI_API_KEY`, then restart the backend. Gemini analysis is bounded to 7 seconds; the dashboard's assessment request timeout is 9 seconds, leaving a response margin before its local rules fallback. Never commit `.env` or real customer data. Use **Test Gemini API** in the dashboard sidebar to make a real, neutral Gemini request and verify the configured key/model; the check reports configuration or provider errors without exposing the key. `CORS_ORIGINS` is only needed for browser-based cross-origin clients; the current Streamlit API client makes server-to-server HTTP requests, so browser CORS is not what connects the dashboard to the API.
+The backend works without a Gemini key; communication-intent analysis then uses the built-in keyword fallback. To enable Gemini, copy `backend/.env.example` to `backend/.env` and set `GEMINI_API_KEY`, then restart the backend. Gemini analysis is bounded by `GEMINI_TIMEOUT_SECONDS` (15s in the demo stack); the dashboard's assessment request timeout is 18 seconds so slow-but-successful Gemini responses are not abandoned. Never commit `.env` or real customer data. Use **Test Gemini API** in the dashboard sidebar to make a real, neutral Gemini request and verify the configured key/model; the check reports configuration or provider errors without exposing the key. `CORS_ORIGINS` is only needed for browser-based cross-origin clients; the current Streamlit API client makes server-to-server HTTP requests, so browser CORS is not what connects the dashboard to the API.
 
 ## Frontend/backend integration
 
@@ -83,7 +101,7 @@ API schemas and interactive documentation are available at `http://localhost:800
 
 ## Live Signal Lab, accessibility, and provider readiness
 
-Choose **Live Signal Lab** to assess a new synthetic SMS or voice transcript with the existing FastAPI/local-fallback pipeline. Each sample gets a fresh synthetic identity, so prior samples do not affect its score. The workspace displays the actual engine result, provenance, latency, intent evidence, triggered rules, and contextual guidance. Optional microphone transcription is consent-gated, WAV-only, capped at 8 MB, and returns an editable draft; the app does not intentionally persist raw audio. Gemini must be configured for transcription and the optional case-reference panel. Use fictional content only; the UI asks you to replace apparent phone numbers and numeric PIN/OTP values with placeholders.
+Choose **Live Signal Lab** to assess a new synthetic SMS or voice transcript with the existing FastAPI/local-fallback pipeline. Each sample gets a fresh synthetic identity, so prior samples do not affect its score. The workspace displays the actual engine result, provenance, latency, intent evidence, triggered rules, and contextual guidance. Optional microphone transcription is consent-gated, WAV-only, capped at 8 MB, and returns an editable draft; the app does not intentionally persist raw audio. Browser microphone access requires a secure context, so use `http://localhost:8501` on the machine running the dashboard (plain HTTP on a LAN IP is blocked by browsers). Gemini must be configured for transcription and the optional case-reference panel. Use fictional content only; the UI asks you to replace apparent phone numbers and numeric PIN/OTP values with placeholders.
 
 The **Synthetic Event Injector** validates one transaction or device-binding event at a time and uses an isolated identity. The **Provider Feed Readiness** workspace explicitly reports **NOT CONNECTED**. It does not simulate a “live” feed. A real listener requires written provider authorization, a documented sandbox interface, test credentials and data, schema details, and approved security/privacy rules. Feature-phone SMS/USSD delivery and smartphone-app observation are not present.
 

@@ -5,6 +5,7 @@ import html
 import io
 import json
 import math
+import re
 import struct
 import wave
 from pathlib import Path
@@ -81,7 +82,9 @@ def speak_english_warning(text: str, delay_ms: int = 1100, max_duration_seconds:
     """Use browser-native English TTS; no text is evaluated as JavaScript."""
     if not text or not text.strip():
         return False
-    safe_text = json.dumps(text, ensure_ascii=True)
+    spoken = re.sub(r"\bPIN\b", "pin", text, flags=re.IGNORECASE)
+    spoken = re.sub(r"\bOTP\b", "one-time password", spoken, flags=re.IGNORECASE)
+    safe_text = json.dumps(spoken, ensure_ascii=True)
     safe_delay = max(0, int(delay_ms))
     max_ms = max(1000, int(float(max_duration_seconds) * 1000))
     components.html(

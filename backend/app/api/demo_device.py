@@ -29,6 +29,8 @@ _NEXT_ID = 1
 _EVENT_LOCK = Lock()
 _ACTIVE_SIP_CHANNEL_ID: Optional[str] = None
 _CALL_DECLINED = False
+_HANGUP_TASK = None
+_WARNING_TASK = None
 DEMO_SIP_RING_SECONDS = 60
 _AUDIO_MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}
 _AUDIO_ASSETS = {
@@ -36,6 +38,110 @@ _AUDIO_ASSETS = {
     for stem in ("ring", "sms", "alert")
     for suffix in _AUDIO_MIME
 }
+
+
+async def _hangup_after_answer(channel_id: str, timeout: float = 65.0) -> dict:
+    """Background task: let the call ring until the victim answers (channel
+    state 'Up'), then end it. Gives up if the channel dies or times out."""
+    global _ACTIVE_SIP_CHANNEL_ID
+    base = _ari_base()
+    deadline = time.monotonic() + timeout
+    try:
+        async with httpx.AsyncClient(timeout=2.0, auth=_ari_auth()) as client:
+            while time.monotonic() < deadline:
+                try:
+                    response = await client.get(base + "/channels/" + channel_id)
+                except Exception:
+                    await asyncio.sleep(1.0)
+                    continue
+                if response.status_code == 404:
+                    if _ACTIVE_SIP_CHANNEL_ID == channel_id:
+                        _ACTIVE_SIP_CHANNEL_ID = None
+                    return {"status": "already_ended", "channel_id": channel_id}
+                if response.status_code == 200:
+                    state = str(response.json().get("state") or "").lower()
+                    if state == "up":
+                        try:
+                            await client.delete(base + "/channels/" + channel_id)
+                        except Exception:
+                            pass
+                        if _ACTIVE_SIP_CHANNEL_ID == channel_id:
+                            _ACTIVE_SIP_CHANNEL_ID = None
+                        return {"status": "hangup_after_answer", "channel_id": channel_id}
+                await asyncio.sleep(1.0)
+    except Exception as exc:
+        log.warning("Deferred SIP hangup failed: %s", exc)
+    return {"status": "answer_timeout", "channel_id": channel_id}
+
+
+def _schedule_hangup_after_answer() -> dict:
+    """Schedule the answer-aware hangup for the active demo call, if any."""
+    global _HANGUP_TASK
+    channel_id = _ACTIVE_SIP_CHANNEL_ID
+    if not channel_id:
+        return {"status": "no_active_call"}
+    if _HANGUP_TASK and not _HANGUP_TASK.done():
+        return {"status": "already_pending", "channel_id": channel_id}
+    _HANGUP_TASK = asyncio.create_task(_hangup_after_answer(channel_id))
+    return {"status": "pending_answer", "channel_id": channel_id}
+
+
+async def _deliver_warning_after_answer(channel_id: str, payload: dict,
+                                        timeout: float = 65.0) -> dict:
+    """Hold a HIGH-tier warning until the victim answers (or the ring window
+    ends), then push it to handsets, notify Linphone by SIP MESSAGE, and end
+    the call. The FraudOps dashboard shows its own alert independently."""
+    global _ACTIVE_SIP_CHANNEL_ID
+    base = _ari_base()
+    deadline = time.monotonic() + timeout
+    answered = False
+    try:
+        async with httpx.AsyncClient(timeout=2.0, auth=_ari_auth()) as client:
+            while time.monotonic() < deadline:
+                try:
+                    response = await client.get(base + "/channels/" + channel_id)
+                except Exception:
+                    await asyncio.sleep(1.0)
+                    continue
+                if response.status_code == 404:
+                    break
+                if response.status_code == 200:
+                    state = str(response.json().get("state") or "").lower()
+                    if state == "up":
+                        answered = True
+                        try:
+                            await client.delete(base + "/channels/" + channel_id)
+                        except Exception:
+                            pass
+                        break
+                await asyncio.sleep(1.0)
+    except Exception as exc:
+        log.warning("Answer-aware warning delivery failed: %s", exc)
+    if _ACTIVE_SIP_CHANNEL_ID == channel_id:
+        _ACTIVE_SIP_CHANNEL_ID = None
+    if _CALL_DECLINED:
+        return {"status": "suppressed", "suppressed": "call_declined",
+                "answered": answered, "sip": None}
+    event_id = _append_event(payload)
+    warn_text = payload.get("warning_english") or payload.get("warning")
+    sip = None
+    if warn_text and await _endpoint_registered():
+        sip = await _send_sip_message("MoMo Shield: " + warn_text[:300])
+    return {"status": "delivered", "event_id": event_id,
+            "answered": answered, "sip": sip}
+
+
+def _schedule_warning_after_answer(payload: dict) -> dict:
+    """Queue a warning so handset delivery waits for call pickup."""
+    global _WARNING_TASK
+    channel_id = _ACTIVE_SIP_CHANNEL_ID
+    if not channel_id:
+        return {"status": "no_active_call"}
+    if _WARNING_TASK and not _WARNING_TASK.done():
+        return {"status": "already_pending", "channel_id": channel_id}
+    _WARNING_TASK = asyncio.create_task(
+        _deliver_warning_after_answer(channel_id, payload))
+    return {"status": "pending_answer", "channel_id": channel_id}
 
 
 class DemoDeviceEvent(BaseModel):
@@ -243,6 +349,11 @@ async def publish_demo_device_event(event: DemoDeviceEvent,
         # Victim declined the call: FraudOps still logs the alert, but the
         # handset stays silent — no warning sound or card for a declined call.
         return {"status": "suppressed", "suppressed": "call_declined", "sip": None}
+    if (event.type == "warning" and event.sip_hangup
+            and _ACTIVE_SIP_CHANNEL_ID and not _CALL_DECLINED):
+        queued = _schedule_warning_after_answer(payload)
+        if queued.get("status") == "pending_answer":
+            return {"status": "queued", "sip": queued}
     event_id = _append_event(payload)
     sip = None
     if event.type == "call" and event.trigger_sip:
@@ -251,11 +362,11 @@ async def publish_demo_device_event(event: DemoDeviceEvent,
         if sip.get("status") != "requested":
             fallback = dict(payload, sip_managed=False, force_browser_ring=True)
             _append_event(fallback)
-    elif event.type == "call" and event.sip_hangup and _ACTIVE_SIP_CHANNEL_ID:
-        sip = await _hangup_demo_call()
+    elif event.type == "call" and event.sip_hangup:
+        sip = _schedule_hangup_after_answer()
     elif event.type == "warning":
-        if event.sip_hangup and _ACTIVE_SIP_CHANNEL_ID:
-            sip = await _hangup_demo_call()
+        if event.sip_hangup:
+            sip = _schedule_hangup_after_answer()
         warn_text = event.warning_english or event.warning
         if warn_text and await _endpoint_registered():
             msg = await _send_sip_message("MoMo Shield: " + warn_text[:300])
@@ -350,7 +461,7 @@ function playBuffer(buffer,kind,generation){
 }
 function speakEnglish(text,generation){
   if(generation!==playbackVersion||!text||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return Promise.resolve(false);
-  const spokenText=String(text||'').replace(/PIN/gi,'pin').replace(/OTP/gi,'one-time password');const utterance=new SpeechSynthesisUtterance(spokenText.slice(0,360));utterance.lang='en-GH';
+  const spokenText=String(text||'').replace(/\bPIN\b/gi,'pin').replace(/\bOTP\b/gi,'one-time password');const utterance=new SpeechSynthesisUtterance(spokenText.slice(0,360));utterance.lang='en-GH';
   const voices=window.speechSynthesis.getVoices();const voice=voices.find(v=>v.lang.toLowerCase()==='en-gh')||voices.find(v=>v.lang.toLowerCase().startsWith('en-gb'))||voices.find(v=>v.lang.toLowerCase().startsWith('en-us'));if(voice)utterance.voice=voice;
   currentSoundKind='warning';return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;if(generation===playbackVersion){if(currentTimer){clearTimeout(currentTimer);currentTimer=null;}currentFinish=null;currentSoundKind='';}resolve(true);};currentFinish=finish;utterance.onend=finish;utterance.onerror=finish;window.speechSynthesis.speak(utterance);currentTimer=setTimeout(()=>{window.speechSynthesis.cancel();finish();},audioLimits.warning*1000);});
 }
