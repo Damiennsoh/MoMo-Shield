@@ -20,11 +20,7 @@ def rule_gh01_active_call(event: TransactionEvent, window: EventWindow) -> Tuple
         return 20, "GH01: Outbound transfer during active voice call"
     return 0, None
 
-_SECRET_HINTS = ("pin", "otp", "code", "password", "secret")
-
-def _requests_secret(text: str) -> bool:
-    t = (text or "").lower()
-    return any(hint in t for hint in _SECRET_HINTS)
+from app.engine.credential_requests import has_explicit_credential_request as _requests_secret
 
 def rule_gh18_new_device(event: DeviceBindingEvent, window: EventWindow) -> Tuple[int, Optional[str]]:
     if event.action in (DeviceAction.APP_INSTALL, DeviceAction.NEW_DEVICE_LOGIN, DeviceAction.WALLET_ENROLMENT, DeviceAction.SIM_SWAP):
@@ -41,9 +37,7 @@ def rule_gh18_otp_activity(event: DeviceBindingEvent, window: EventWindow) -> Tu
     return 0, None
 
 def rule_communication_pin_request(event: CommunicationEvent, llm_secret: Optional[str]) -> Tuple[int, Optional[str]]:
-    secret = (llm_secret or "").lower()
-    text = (event.text_or_transcript or "").lower()
-    if any(kw in secret for kw in ("pin", "otp", "code")) or any(kw in text for kw in ("send your pin", "enter your pin", "fa wo pin")):
+    if _requests_secret(event.text_or_transcript or ""):
         return 30, "Credential request detected in communication"
     return 0, None
 
@@ -86,9 +80,7 @@ def rule_gh02_reversal_pretext(event: CommunicationEvent) -> Tuple[int, Optional
 def rule_gh15_link_credential(event: CommunicationEvent, llm_secret: Optional[str]) -> Tuple[int, Optional[str]]:
     text = (event.text_or_transcript or "").lower()
     has_link = any(kw in text for kw in ("http", "www.", ".com", ".net", ".link"))
-    secret = (llm_secret or "").lower()
-    requests_secret = _requests_secret(text) or any(kw in secret for kw in ("pin", "otp", "code"))
-    if has_link and requests_secret:
+    if has_link and _requests_secret(text):
         return 20, "GH15: Credential request via suspicious link/form"
     return 0, None
 

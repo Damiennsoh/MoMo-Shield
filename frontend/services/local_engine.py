@@ -6,6 +6,8 @@ its API cannot be reached.
 """
 
 from datetime import datetime
+from services.interventions import build_intervention
+from services.credential_requests import has_explicit_credential_request
 
 
 def new_accumulator() -> dict:
@@ -19,8 +21,7 @@ def _add(score: int, rules: list, points: int, label: str) -> int:
 
 
 def _is_secret_request(text: str) -> bool:
-    text = (text or "").lower()
-    return any(word in text for word in ("pin", "otp", "code", "password", "secret"))
+    return has_explicit_credential_request(text)
 
 
 def assess_local(event: dict, acc: dict):
@@ -125,9 +126,16 @@ def assess_local(event: dict, acc: dict):
         "intent": intent,
         "intent_source": "keyword_fallback" if event_type == "communication" else "none",
         "recommended_action": action,
-        "twi_warning_message": "Wɔrehyɛ wo sɛ fa wo PIN kɔ ma!" if tier == "HIGH" else None,
+        "twi_warning_message": None,
         "timestamp": event.get("timestamp") or datetime.now().isoformat(),
     }
+    intervention = build_intervention(event, out, history)
+    out.update({
+        "english_warning_message": intervention["message"],
+        "intervention_category": intervention["category"],
+        "intervention_title": intervention["title"],
+        "intervention_message": intervention["message"],
+    })
     history.append(dict(event))
     state.update({"score": score, "rules": rules, "events": history, "intent": intent})
     return out

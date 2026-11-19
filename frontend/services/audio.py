@@ -95,11 +95,16 @@ def speak_english_warning(text: str, delay_ms: int = 1100, max_duration_seconds:
     return True
 
 
+def stop_spoken_warning() -> None:
+    """Stop an active browser-native speech warning when the user asks."""
+    components.html(
+        "<script>try{window.speechSynthesis.cancel();}catch(e){console.warn('Speech stop unavailable',e);}</script>",
+        height=0,
+        scrolling=False,
+    )
+
+
 def play_warning_audio(twi_text: str = "", english_text: str = "") -> str:
-    """Prefer an optional human-recorded Twi/English clip; never fake a Twi voice."""
-    if play_sfx("warning_twi.wav", delay_ms=1100, max_duration_seconds=10) or play_sfx("warning_twi.mp3", delay_ms=1100, max_duration_seconds=10):
-        return "recorded"
-    if play_sfx("warning_en.wav", delay_ms=1100, max_duration_seconds=10) or play_sfx("warning_en.mp3", delay_ms=1100, max_duration_seconds=10):
-        return "recorded_english"
+    """Speak the selected contextual English warning; Twi waits for fluent review."""
     speak_english_warning(english_text)
     return "english_tts" if english_text else "none"

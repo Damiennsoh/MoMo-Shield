@@ -19,7 +19,7 @@ def _sms_bubbles(messages) -> str:
             f'<div class="{cls}">{sender}'
             f'<div class="bubble-text">{_esc(m.get("text", ""))}</div></div>'
         )
-    return f'<div class="sms-list">{"".join(out)}</div>'
+    return f'<div class="sms-list" role="list" aria-label="Simulated text messages">{"".join(out)}</div>'
 
 
 def _call_screen(state) -> str:
@@ -35,8 +35,8 @@ def _call_screen(state) -> str:
       <div class="call-status">{_esc(state.get('call_status', 'Ringing…'))}</div>
       {t_html}
       <div class="call-actions">
-        <span class="call-btn decline">✕</span>
-        <span class="call-btn accept">✓</span>
+        <span class="call-btn decline" role="img" aria-label="Simulated decline control">✕</span>
+        <span class="call-btn accept" role="img" aria-label="Simulated answer control">✓</span>
       </div>
     </div>"""
 
@@ -58,11 +58,14 @@ def _home_screen() -> str:
 
 def _warning_html(warning) -> str:
     variant = " watch" if warning.get("variant") == "watch" else ""
+    large = " large" if warning.get("large_text") else ""
     icon = "🛡️" if variant else "⚠️"
+    live_role = "alert" if warning.get("severity") == "urgent" else "status"
+    live_mode = "assertive" if warning.get("severity") == "urgent" else "polite"
     call_ended = ('<div class="warn-call-ended">☎ Call disconnected at FraudOps intervention</div>'
                   if warning.get("call_ended") else "")
     return f"""
-    <div class="phone-warning{variant}" role="status" aria-live="polite">
+    <div class="phone-warning{variant}{large}" role="{live_role}" aria-live="{live_mode}" aria-atomic="true">
       <div class="warn-title">{icon} {_esc(warning.get('title', 'FRAUD ALERT'))}</div>
       <div class="warn-body">{_esc(warning.get('body', ''))}</div>
       {call_ended}
@@ -83,7 +86,7 @@ def phone_markup(state: dict) -> str:
 
     warning = _warning_html(state["warning"]) if state.get("warning") else ""
     markup = f"""
-    <div class="phone-frame">
+    <div class="phone-frame" role="group" aria-label="Simulated customer handset">
       <div class="phone-notch"></div>
       <div class="phone-statusbar"><span>MTN · Ghana</span><span>LTE ▂▄▆█ 🔋</span></div>
       <div class="phone-body">

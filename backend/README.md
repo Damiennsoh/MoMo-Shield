@@ -1,46 +1,44 @@
 # MoMo Shield Backend
 
-FastAPI service for the MoMo Shield demonstration. It validates event payloads, applies deterministic risk rules, accumulates risk by MSISDN in process memory, and optionally analyzes communication text with Gemini. Without Gemini credentials, it uses the built-in keyword-intent fallback.
+FastAPI service for the MoMo Shield synthetic demonstration. It validates event payloads, applies deterministic risk rules, accumulates risk by identity in process memory, and optionally analyzes communication text with Gemini. Without Gemini credentials, communication intent uses the built-in keyword fallback. This is a prototype, not a production payment-control or fraud-detection system.
 
 ## Requirements and start
 
-Use Python 3.10 or newer. From the repository root, activate a virtual environment and install `backend/requirements.txt`, or install it from this directory:
+Use Python 3.10 or newer. From the repository root, install `backend/requirements.txt`, or install it from this directory:
 
 ```bash
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-The API listens on `http://localhost:8000`. Interactive OpenAPI docs are at `/docs`; the health check is `GET /health`. The repository-root launcher `python run_demo.py` starts this service together with the Streamlit dashboard.
+The API listens at `http://localhost:8000`. OpenAPI documentation is at `/docs`; `GET /health` is the basic health check. From the repository root, `python run_demo.py` starts this API and the Streamlit dashboard together.
 
 ## Configuration
 
-Copy `.env.example` to `.env` in this directory if you need to configure the service. Set `GEMINI_API_KEY` to enable Gemini intent extraction; leave it unset to use the keyword fallback. The default model is `gemini-3.5-flash-lite`; `GEMINI_MODEL` and `GEMINI_TIMEOUT_SECONDS` configure that integration (the demo defaults to 7 seconds). The dashboard assessment request allows 9 seconds before using local rules. Use `POST /api/v1/gemini/healthcheck` or the dashboard's **Test Gemini API** button to make a real, neutral model request and verify access. A missing key returns `not_configured`; an invalid key, unavailable model, timeout, or provider error returns a clear failure without exposing the key. `BACKEND_HOST`, `BACKEND_PORT`, `RISK_THRESHOLD_MEDIUM`, and `RISK_THRESHOLD_HIGH` set runtime options. `CORS_ORIGINS` configures FastAPI CORS for browser-based clients; the current Streamlit client is server-to-server and does not require browser CORS.
+Copy `.env.example` to `.env` in this directory if needed. Set `GEMINI_API_KEY` only to enable optional Gemini intent analysis, transcription, and case-reference retrieval. Without it, typed-text assessment and local rules remain available; optional transcription and case-reference requests report that they are not configured. `GEMINI_MODEL` and `GEMINI_TIMEOUT_SECONDS` configure intent requests. Use `POST /api/v1/gemini/healthcheck` or the dashboard's **Test Gemini API** button to make a real, neutral model request and verify access. Errors are reported without exposing the key. `BACKEND_HOST`, `BACKEND_PORT`, risk thresholds, and `CORS_ORIGINS` configure runtime behavior.
 
-Keep `.env` private. All supplied fixtures are synthetic. Do not use production customer, payment, PIN, or OTP data.
+Keep `.env` private. Use fictional, synthetic test material only. Do not submit real phone numbers, payment details, PINs, OTPs, customer communications, or live call audio. Audio submitted for transcription is forwarded to the configured Gemini service; its processing is subject to that provider's terms. This application does not intentionally persist raw audio.
 
-## API contract
+## API surface
 
-- `GET /health` returns a basic service status.
-- `POST /api/v1/gemini/healthcheck` makes a real Gemini request when credentials are configured and reports whether the integration works.
-- `GET /api/v1/demo-device` serves the synthetic second-device handset page. Its stream at `GET /api/v1/demo-device/stream`, publisher at `POST /api/v1/demo-device/publish`, and allowlisted audio assets at `GET /api/v1/demo-device/audio/{filename}` require the per-demo `DEMO_DEVICE_TOKEN` bearer token. Set `DEMO_DEVICE_AUDIO_DIR` when assets are mounted outside the default repository path.
-- When the publisher receives a `call` event with `trigger_sip=true`, it asks Asterisk to ring only the code-fixed `PJSIP/200` local endpoint for the same three-second window shown in FraudOps. It retains the generated ARI channel ID and hangs up only that call when the warning/intervention or reset event is published. The handset suppresses its duplicate browser ringtone when ARI accepts the request; if SIP is unavailable, a follow-up stream event enables browser ringing. The Compose setup has no PSTN trunk or arbitrary-number route; ARI is private to the Compose network.
-- `POST /api/v1/assess` accepts `{"event": { ... }, "context": ...}`. `event_type` must be `transaction`, `device_binding`, or `communication`, with required fields for that event type. The response includes `risk_score` (0–100), `risk_tier`, `triggered_rules`, optional `llm_extracted_intent`, `intent_source` (`gemini`, `keyword_fallback`, or `none`), `recommended_action`, and warning text. The source identifies the method used; it is not a confidence score or proof of fraud.
-- `POST /api/v1/reset` clears the demo's in-memory event window and risk accumulators.
-- `POST /api/v1/sandbox/webhook` accepts a sandbox event directly or nested under `event` or `data`.
+- `GET /health` — basic service status.
+- `POST /api/v1/assess` — assesses one transaction, device-binding, or communication event. The result includes a prototype risk score/tier, triggered rules, source/provenance, recommendation, and contextual warning. A score is not a calibrated probability or proof of fraud.
+- `POST /api/v1/reset` — clears the in-memory risk window.
+- `POST /api/v1/gemini/healthcheck` — makes a real minimal Gemini request only when configured; it does not test a provider/payment feed.
+- `POST /api/v1/transcribe` — accepts a consented WAV sample up to 8 MiB when Gemini is configured and returns an editable transcript draft, not an assessment. The request body is size-limited while streaming; raw bytes are not intentionally logged or persisted.
+- `POST /api/v1/case-reference` — optional Gemini-backed retrieval from the versioned synthetic case library. Its advisory response is separate from and cannot change the assessment score or action.
+- `/api/v1/demo-device` — optional token-protected synthetic second-screen handset stream and publisher for the local demonstration. It is not a feature-phone SMS service or provider integration.
 
-The frontend adapter in `../frontend/services/api_client.py` adds event IDs and timestamps when omitted by scenario fixtures and supplies `ledger_verified` for transaction events. The API schema and exact field definitions are also available from `/docs` at runtime.
+There is no provider listener, webhook, ledger connection, transaction hold, cellular SMS/USSD delivery, smartphone-wallet observation, or production call-interception capability in this repository. Provider Feed Readiness is a status/documentation workspace only. A future listener requires written authorization, a documented sandbox interface, test credentials and data, an agreed schema, and approved security/privacy/retention rules.
 
-## Tests
+The optional Asterisk/SIP path is a test-lab simulation limited to the configured local softphone endpoint. It is not connected to an operator, cellular network, PSTN trunk, customer call, or call-interception system.
 
-From the repository root, install the backend dependencies and run:
+## Frontend connection and tests
+
+The Streamlit adapter in `../frontend/services/api_client.py` calls the assessment and reset endpoints and labels backend versus local-fallback results. Synthetic event identities are generated separately for each sample. From the repository root, run the backend and frontend regression suites with:
 
 ```bash
-python -m pytest backend/tests -q
+python -m pytest backend/tests frontend/tests -q
 ```
 
-The suite covers health and assessment endpoints, scoring rules, and all frontend scenario fixtures. The fixture replays call the scoring engine directly after applying the same event defaults as the frontend adapter; they do not launch Streamlit.
-
-## Demo limitations
-
-State is held in memory in a single process. It is reset by `/api/v1/reset` and lost when the process restarts. It is not a durable store or a multi-worker-safe production architecture. Risk actions such as `SIMULATED_HOLD` are illustrative only; this service is not connected to a payment ledger.
+State is held in a single process and is lost on restart. It is not durable or a multi-worker-safe production architecture. All actions and outcomes such as `SIMULATED_HOLD` are illustrative only; no payment is authorized, delayed, or blocked.

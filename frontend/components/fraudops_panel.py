@@ -90,9 +90,10 @@ def render_fraudops(ops: dict):
         else:
             st.markdown('<div class="muted">No rules triggered — transaction profile is normal.</div>',
                         unsafe_allow_html=True)
-        if ops.get("twi_warning_message"):
-            st.warning('📢 Handset alert (Twi): *' + ops["twi_warning_message"] + '* — '
-                       "“MTN will never ask for your PIN or OTP. Call 100 to verify any request.”")
+        if ops.get("intervention_message"):
+            st.markdown("**Victim-facing guidance (English demo copy)**")
+            st.info(ops["intervention_message"])
+            st.caption("Context-aware prototype guidance; no provider alert or real transaction control is connected.")
 
     with tab2:
         st.markdown(_log_html(ops.get("event_log")), unsafe_allow_html=True)

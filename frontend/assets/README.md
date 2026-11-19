@@ -1,8 +1,7 @@
 # Demo audio assets
 
-The dashboard bundles local `sms.wav`, `ring.wav`, and `alert.wav` cues. For a custom sound, add `sms.mp3`, `ring.mp3`, or `alert.mp3`; MP3 takes precedence over the matching bundled WAV. An alert cue can be followed by a human-recorded intervention warning:
+The dashboard bundles short local `sms.wav`, `ring.wav`, and `alert.wav` cues. Optional `sms.mp3`, `ring.mp3`, or `alert.mp3` assets may replace those non-speech cues; MP3 takes precedence over the matching WAV.
 
-- `warning_twi.mp3` or `warning_twi.wav`: preferred, consented combined Twi/English recording.
-- `warning_en.mp3` or `warning_en.wav`: optional recorded English fallback if the combined recording is absent.
+Contextual intervention guidance remains visible as text and may be read with browser-native English speech. The demo intentionally does not load prerecorded `warning_twi.*` or `warning_en.*` safety clips. Twi/Akan and Ghanaian Pidgin safety copy remains disabled until fluent-speaker review; a generic or unreviewed recording must not be presented as validated advice.
 
-On intervention, the dashboard plays the alert cue first, then the combined recording, English-only recording, or browser-native English TTS in that order. Dashboard warning playback is capped at 10 seconds. The handset simulator uses the same asset names via the token-authenticated backend audio route; its warning playback is capped at 8 seconds. MP3 and WAV files are picked up on the next scenario run without code changes. Use only synthetic demo content and recordings the team has permission and consent to use. No bundled file is represented as native Twi speech; provide the team's own recording for that.
+The mock handset includes explicit read-aloud and stop-speech controls plus a larger-text toggle. Browser speech quality and availability depend on the device. Use synthetic demo content only; do not record real customer or caller audio.

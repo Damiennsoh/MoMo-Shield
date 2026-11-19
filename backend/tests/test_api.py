@@ -226,3 +226,112 @@ def test_assess_endpoint_gh01():
         body = r.json()
     assert body["risk_tier"] == "HIGH"
     assert body["recommended_action"] == "SIMULATED_HOLD"
+
+
+def test_transaction_amount_above_synthetic_ceiling_is_rejected():
+    response = client.post("/api/v1/assess", json={"event": {
+        "event_type": "transaction",
+        "msisdn": "+233000000000",
+        "transaction_type": "P2P_SEND",
+        "amount": 100001,
+        "ledger_verified": False,
+        "timestamp": "2026-11-19T00:00:00Z",
+    }})
+    assert response.status_code == 400
+
+
+def test_transcription_requires_configured_gemini(monkeypatch):
+    from app.api import routes
+    from types import SimpleNamespace
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(gemini_enabled=False))
+    response = client.post("/api/v1/transcribe", content=b"", headers={"Content-Type": "audio/wav"})
+    assert response.status_code == 503
+
+
+def test_transcription_accepts_only_a_wav_draft_and_does_not_assess_audio(monkeypatch):
+    import asyncio
+    from app.api import routes
+    from types import SimpleNamespace
+    captured = {}
+
+    async def fake_transcribe(audio_bytes, language_hint):
+        captured["audio"] = audio_bytes
+        captured["language"] = language_hint
+        return {"transcript": "fictional words", "uncertain": False, "note": "Review draft."}
+
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(gemini_enabled=True))
+    monkeypatch.setattr(routes, "transcribe_wav", fake_transcribe)
+    wav = b"RIFF" + (4).to_bytes(4, "little") + b"WAVE" + b"test"
+    response = client.post(
+        "/api/v1/transcribe?language_hint=English",
+        content=wav,
+        headers={"Content-Type": "audio/wav"},
+    )
+    assert response.status_code == 200
+    assert response.json()["transcript"] == "fictional words"
+    assert captured == {"audio": wav, "language": "English"}
+    assert "risk_score" not in response.json()
+
+
+def test_transcription_rejects_non_wav_and_malformed_wav(monkeypatch):
+    from app.api import routes
+    from types import SimpleNamespace
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(gemini_enabled=True))
+    wrong_type = client.post("/api/v1/transcribe", content=b"audio", headers={"Content-Type": "text/plain"})
+    assert wrong_type.status_code == 415
+    malformed = client.post("/api/v1/transcribe", content=b"not a wav file", headers={"Content-Type": "audio/wav"})
+    assert malformed.status_code == 415
+
+
+def test_transcription_rejects_payload_over_eight_mb(monkeypatch):
+    from app.api import routes
+    from types import SimpleNamespace
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(gemini_enabled=True))
+    response = client.post(
+        "/api/v1/transcribe",
+        content=b"RIFF" + b"x" * (8 * 1024 * 1024),
+        headers={"Content-Type": "audio/wav"},
+    )
+    assert response.status_code == 413
+
+
+def test_case_reference_response_is_advisory_and_has_no_decision_fields(monkeypatch):
+    from app.api import routes
+    from types import SimpleNamespace
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(gemini_enabled=True))
+
+    async def fake_reference(text):
+        return {"status": "possible_match", "matched_case_ids": ["SYN-001"], "advisory_only": True}
+
+    monkeypatch.setattr(routes, "run_case_reference", fake_reference)
+    response = client.post("/api/v1/case-reference", json={"text": "fictional support asks for code"})
+    assert response.status_code == 200
+    assert response.json()["advisory_only"] is True
+    assert "risk_score" not in response.json()
+    assert "recommended_action" not in response.json()
+
+
+def test_provider_listener_is_not_registered():
+    paths = set(app.openapi()["paths"])
+    assert not any("provider" in path.casefold() or "feed" in path.casefold() for path in paths)
+
+
+def test_credential_warning_is_not_a_credential_request():
+    from app.engine.rules import _requests_secret
+    assert not _requests_secret("We will never ask for your OTP. Do not give your PIN to callers.")
+    assert _requests_secret("Send me your OTP now.")
+    assert _requests_secret("Never share your PIN. Read me your OTP now.")
+
+
+def test_transcription_redacts_generic_numeric_code_and_phone_values():
+    from app.ai.transcription import _redact_likely_sensitive_values
+    redacted = _redact_likely_sensitive_values("Your code is 123456. Call 0241234567.")
+    assert "123456" not in redacted
+    assert "0241234567" not in redacted
+    assert "[CODE]" in redacted
+    assert "[PHONE]" in redacted
+
+
+def test_demo_handset_does_not_allow_unreviewed_warning_audio_assets():
+    from app.api import demo_device
+    assert not any(name.startswith("warning_") for name in demo_device._AUDIO_ASSETS)

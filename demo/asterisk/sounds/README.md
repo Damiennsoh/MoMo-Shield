@@ -1,5 +1,3 @@
-# Asterisk demo sound directory
+# Asterisk lab-demo sound directory
 
-The local SIP call intentionally stays silent after Linphone answers. FraudOps terminates the fixed demo call when it emits the intervention warning, so a long PBX recording cannot keep the call alive past the simulated hold. The Asterisk dialplan has a 12-second failsafe if the dashboard disconnects before sending that intervention.
-
-For the audible Twi/English warning, use `frontend/assets/warning_twi.wav` or `.mp3`; the token-authenticated handset audio path plays it when the intervention event appears, followed by English-only recording or English TTS fallback if needed. This directory is retained as a safe place for future PBX-specific sounds, but `momo-warning.wav` is not currently played by the synchronized call path.
+This directory belongs only to the optional local SIP softphone simulation. The configured test call is silent after answer; the demo harness may end that fixed lab call when a synthetic intervention event is published, with a dialplan timeout as a failsafe. This behavior does not intercept, monitor, or control a customer/carrier/PSTN call and is not a real payment or fraud intervention. No localized warning recordings are used as safety guidance.

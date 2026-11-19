@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore")
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_embedding_model: str = "gemini-embedding-001"
     gemini_timeout_seconds: int = 7
     demo_device_token: str = ""
     demo_device_audio_dir: str = ""

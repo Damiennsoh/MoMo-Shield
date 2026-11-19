@@ -69,13 +69,13 @@ def test_phone_markup_is_compact_and_warning_caption_are_nested():
         "ussd_lines": ["*170#", "SIMULATED TRANSACTION HOLD"],
         "warning": {"title": "FRAUD ALERT", "body": "Do not share your PIN."},
     })
-    assert markup.startswith('<div class="phone-frame">')
+    assert markup.startswith('<div class="phone-frame"')
     assert "\n" not in markup
     body_start = markup.index('<div class="phone-body">')
     body_end = markup.index('<div class="phone-caption">', body_start)
     warning_start = markup.index('<div class="phone-warning', body_start)
     assert body_start < warning_start < body_end
-    assert markup.count('<div class="phone-frame">') == 1
+    assert markup.count('<div class="phone-frame"') == 1
     assert "*170#<br>SIMULATED TRANSACTION HOLD" in markup
 
 
@@ -97,9 +97,9 @@ def test_all_fixture_phone_screens_render_as_one_html_fragment():
             if step.get("phone_ui"):
                 state.update(step["phone_ui"])
                 markup = phone_markup(state)
-                assert markup.startswith('<div class="phone-frame">'), fixture_path.name
+                assert markup.startswith('<div class="phone-frame"'), fixture_path.name
                 assert "\n" not in markup, fixture_path.name
-                assert markup.count('<div class="phone-frame">') == 1, fixture_path.name
+                assert markup.count('<div class="phone-frame"') == 1, fixture_path.name
                 assert '<div class="phone-caption">' in markup, fixture_path.name
                 # Exercise an intervention overlay on every fixture's final
                 # handset state, not only the scenario that exposed the bug.
@@ -114,7 +114,7 @@ def test_render_phone_uses_single_unsafe_html_markdown_call(monkeypatch):
     monkeypatch.setattr(mock_phone.st, "markdown", lambda body, **kwargs: calls.append((body, kwargs)))
     mock_phone.render_phone({"screen": "home"})
     assert len(calls) == 1
-    assert calls[0][0].startswith('<div class="phone-frame">')
+    assert calls[0][0].startswith('<div class="phone-frame"')
     assert calls[0][1] == {"unsafe_allow_html": True}
 
 
@@ -171,46 +171,21 @@ def test_recorded_mp3_sfx_overrides_bundled_wav(monkeypatch):
     assert "audio/mpeg" in rendered[0]
 
 
-def test_recorded_warning_clip_is_preferred_over_browser_tts(monkeypatch):
-    import services.audio as audio_service
-    requested = []
-    monkeypatch.setattr(audio_service, "play_sfx", lambda name, **kwargs: requested.append(name) or name == "warning_twi.mp3")
-    monkeypatch.setattr(audio_service, "speak_english_warning", lambda text: (_ for _ in ()).throw(AssertionError("TTS should not run")))
-    assert audio_service.play_warning_audio("Twi text", "English text") == "recorded"
-    assert requested == ["warning_twi.wav", "warning_twi.mp3"]
-
-
-def test_warning_falls_back_to_english_only_when_no_recording_is_supplied(monkeypatch):
+def test_contextual_warning_uses_english_tts_without_loading_recorded_safety_clips(monkeypatch):
     import services.audio as audio_service
     spoken = []
-    monkeypatch.setattr(audio_service, "play_sfx", lambda *args, **kwargs: False)
+    monkeypatch.setattr(audio_service, "play_sfx", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Warning clips are not used")))
     monkeypatch.setattr(audio_service, "speak_english_warning", lambda text: spoken.append(text) or True)
-    assert audio_service.play_warning_audio("Twi text", "English warning") == "english_tts"
-    assert spoken == ["English warning"]
+    assert audio_service.play_warning_audio("unreviewed localization", "Do not send money back based on a screenshot.") == "english_tts"
+    assert spoken == ["Do not send money back based on a screenshot."]
 
 
-def test_dashboard_warning_plays_after_alert_chime_and_caps_audio(monkeypatch):
+def test_spoken_warning_has_a_stop_control(monkeypatch):
     import services.audio as audio_service
     rendered = []
-    requested = []
-    monkeypatch.setattr(audio_service, "_audio_bytes", lambda name: (requested.append(name) or (b"wav", "audio/wav")))
     monkeypatch.setattr(audio_service.components, "html", lambda markup, **kwargs: rendered.append(markup))
-    assert audio_service.play_sfx("alert.wav", max_duration_seconds=1.2)
-    assert "1200" in rendered[-1] and "a.pause()" in rendered[-1]
-    assert audio_service.play_sfx("warning_twi.wav", delay_ms=1100, max_duration_seconds=10)
-    assert "setTimeout" in rendered[-1] and "1100" in rendered[-1]
-    assert "10000" in rendered[-1] and "a.pause()" in rendered[-1]
-    assert requested[0] == "alert.mp3"
-    assert "warning_twi.mp3" in requested
-
-
-def test_prerecorded_english_warning_is_used_when_localized_clip_is_missing(monkeypatch):
-    import services.audio as audio_service
-    requested = []
-    monkeypatch.setattr(audio_service, "play_sfx", lambda name, **kwargs: requested.append(name) or name == "warning_en.mp3")
-    monkeypatch.setattr(audio_service, "speak_english_warning", lambda text: (_ for _ in ()).throw(AssertionError("TTS should not run")))
-    assert audio_service.play_warning_audio("Twi text", "English warning") == "recorded_english"
-    assert requested == ["warning_twi.wav", "warning_twi.mp3", "warning_en.wav", "warning_en.mp3"]
+    audio_service.stop_spoken_warning()
+    assert "speechSynthesis.cancel()" in rendered[0]
 
 
 def test_batch_replay_retains_inspectable_events_and_intent():
@@ -251,8 +226,8 @@ def test_gh01_call_disconnect_state_survives_the_later_hold_screen():
 
     warning = app.session_state["phone"].get("warning", {})
     phone_markup = [element.value for element in app.markdown
-                    if '<div class="phone-frame">' in element.value][-1]
+                    if '<div class="phone-frame"' in element.value][-1]
     assert warning["call_ended"] is True
     assert "Call disconnected at FraudOps intervention" in phone_markup
-    assert phone_markup.count('<div class="phone-frame">') == 1
+    assert phone_markup.count('<div class="phone-frame"') == 1
     assert not app.exception

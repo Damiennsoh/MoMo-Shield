@@ -16,10 +16,16 @@ from pathlib import Path
 import streamlit as st
 
 from components.fraudops_panel import live_assessment_markup, render_fraudops
+from components.live_lab import (
+    render_live_signal_lab,
+    render_provider_feed_readiness,
+    render_synthetic_event_injector,
+)
 from components.mock_phone import render_phone
 from services.api_client import (assess_event, check_gemini, demo_device_event_key,
                                  publish_demo_device_event, reset_backend)
-from services.audio import alert_tone_bytes, play_sfx, play_warning_audio
+from services.audio import alert_tone_bytes, play_sfx, play_warning_audio, stop_spoken_warning
+from services.interventions import build_intervention
 from services.local_engine import new_accumulator
 
 BASE_DIR = Path(__file__).parent
@@ -60,6 +66,7 @@ def init_state():
         "ops": None,
         "accumulator": new_accumulator(),
         "event_log": [],
+        "assessment_history": [],
         "alert_played": False,
         "intent": None,
         "intent_text": None,
@@ -83,6 +90,7 @@ def reset_scenario_state():
     st.session_state.ops = None
     st.session_state.accumulator = new_accumulator()
     st.session_state.event_log = []
+    st.session_state.assessment_history = []
     st.session_state.alert_played = False
     st.session_state.intent = None
     st.session_state.intent_text = None
@@ -116,32 +124,53 @@ st.markdown("""
 
 with st.sidebar:
     st.header("⚙️ Demo Controls")
-    scenario_label = st.selectbox("Scenario", list(SCENARIOS.keys()), key="scenario_select")
+    workspace = st.radio(
+        "Workspace",
+        ("Curated scenario replay", "Live Signal Lab", "Synthetic Event Injector", "Provider Feed Readiness"),
+        key="workspace_select",
+    )
     backend_url = st.text_input(
         "Backend API URL",
         value=os.environ.get("BACKEND_API_URL", "http://localhost:8000"),
         key="backend_api_url",
         help="The dashboard process calls this FastAPI URL. For hosted demos, use the reachable API base URL.",
     )
-    c1, c2 = st.columns(2)
-    play = c1.button("▶ Play selected", use_container_width=True, key="play_selected")
-    reset_clicked = c2.button("⟲ Reset", use_container_width=True, key="reset_demo")
-    run_all = st.button("▶ Run all 7 scenarios", use_container_width=True, key="run_all")
+    if workspace == "Curated scenario replay":
+        scenario_label = st.selectbox("Scenario", list(SCENARIOS.keys()), key="scenario_select")
+        c1, c2 = st.columns(2)
+        play = c1.button("▶ Play selected", use_container_width=True, key="play_selected")
+        reset_clicked = c2.button("⟲ Reset", use_container_width=True, key="reset_demo")
+        run_all = st.button("▶ Run all 7 scenarios", use_container_width=True, key="run_all")
+        sip_call_enabled = st.checkbox(
+            "Ring local SIP softphone on incoming-call steps",
+            value=False,
+            help="Optional local demo only. Calls the fixed local PJSIP/200 endpoint for the incoming ring; the handset/browser provides warning speech. SIP is single-scenario only.",
+            key="sip_call_enabled",
+        )
+        dashboard_audio_enabled = st.checkbox(
+            "Also play demo sounds in the FraudOps browser",
+            value=not bool(DEMO_DEVICE_TOKEN),
+            help="Use this only when you want a local dashboard speaker as well. It is muted automatically when SIP is managing the call audio.",
+            key="dashboard_audio_enabled",
+        )
+        large_warning_text = st.checkbox(
+            "Use larger handset warning text",
+            value=False,
+            key="large_warning_text",
+        )
+        if st.button("Stop spoken warning", use_container_width=True, key="stop_replay_speech"):
+            stop_spoken_warning()
+        if sip_call_enabled and run_all:
+            st.info("SIP calls are limited to Play selected. The seven-case replay uses the browser handset audio path.")
+    else:
+        scenario_label = list(SCENARIOS.keys())[0]
+        play = False
+        reset_clicked = False
+        run_all = False
+        sip_call_enabled = False
+        dashboard_audio_enabled = False
+        large_warning_text = False
     gemini_check_clicked = st.button("Test Gemini API", use_container_width=True, key="test_gemini")
-    sip_call_enabled = st.checkbox(
-        "Ring local SIP softphone on incoming-call steps",
-        value=False,
-        help="Optional. Calls only the fixed local PJSIP/200 endpoint. If Asterisk accepts, SIP supplies the ring/warning audio and handset duplicates are muted; browser audio is the fallback if SIP is unavailable. SIP is single-scenario only.",
-        key="sip_call_enabled",
-    )
-    dashboard_audio_enabled = st.checkbox(
-        "Also play demo sounds in the FraudOps browser",
-        value=not bool(DEMO_DEVICE_TOKEN),
-        help="Use this only when you want a local dashboard speaker as well. It is muted automatically when SIP is managing the call audio.",
-        key="dashboard_audio_enabled",
-    )
-    if sip_call_enabled and run_all:
-        st.info("SIP calls are limited to Play selected. The seven-case replay uses the browser handset audio path.")
     st.divider()
     st.caption("Backend unreachable? MoMo Shield switches to deterministic local rules and labels the engine source.")
     if DEMO_DEVICE_URL:
@@ -179,6 +208,16 @@ if gemini_check_clicked:
         st.sidebar.success(f"{gemini_status['message']} Model: {gemini_status['model']}.")
     except Exception as exc:
         st.sidebar.error(f"Gemini check failed: {exc}")
+
+if workspace == "Live Signal Lab":
+    render_live_signal_lab(backend_url)
+    st.stop()
+if workspace == "Synthetic Event Injector":
+    render_synthetic_event_injector(backend_url)
+    st.stop()
+if workspace == "Provider Feed Readiness":
+    render_provider_feed_readiness()
+    st.stop()
 
 left_col, right_col = st.columns([1, 1.35], gap="large")
 phone_ph = left_col.empty()
@@ -384,6 +423,14 @@ if play or run_all:
                 assessment["intent_text"] = st.session_state.intent_text
                 assessment["intent_source"] = st.session_state.intent_source
                 assessment["llm_unavailable"] = st.session_state.intent_model_unavailable
+                intervention = build_intervention(
+                    event, assessment, st.session_state.assessment_history
+                )
+                assessment["intervention_category"] = intervention["category"]
+                assessment["intervention_title"] = intervention["title"]
+                assessment["intervention_message"] = intervention["message"]
+                assessment["victim_intervention"] = intervention
+                st.session_state.assessment_history.append(dict(event))
                 event_kind = event.get("event_type", "event").upper()
                 event_summary = (
                     f"{event.get('transaction_type') or event.get('action') or event.get('channel', '')} "
@@ -398,14 +445,15 @@ if play or run_all:
                 if action == "SIMULATED_HOLD":
                     st.session_state.phone["screen"] = "ussd"
                     st.session_state.phone["ussd_lines"] = [
-                        "*170#", "⛔ SIMULATED TRANSACTION HOLD",
-                        "Suspicious activity flagged by MoMo Shield.",
-                        "FraudOps has been alerted.", "Call 100 for assistance.",
+                        "*170#", "SIMULATED RISK NOTICE",
+                        "No real transaction was held.",
+                        "Verify through the official provider channel.",
                     ]
                     st.session_state.phone["warning"] = {
-                        "title": "FRAUD ALERT — SIKA AFONO AKENKAN",
-                        "body": f"{assessment.get('twi_warning_message') or 'Suspected scam activity.'} "
-                                "Do NOT share your PIN. MTN will never ask for it. Call 100.",
+                        "title": intervention["title"],
+                        "body": intervention["message"],
+                        "severity": intervention["severity"],
+                        "large_text": large_warning_text,
                         "call_ended": call_ended_at_intervention,
                     }
                     st.session_state.victim_call_interrupted = call_ended_at_intervention
@@ -413,17 +461,21 @@ if play or run_all:
                 elif action == "FRAUDOPS_ALERT":
                     st.session_state.phone["warning"] = {
                         "variant": "watch",
-                        "title": "ACCOUNT ON WATCH — FA KASA",
-                        "body": "No transaction was executed in this simulation. "
-                                f"{assessment.get('twi_warning_message') or 'Call MTN 100 to verify any request.'}",
+                        "title": intervention["title"],
+                        "body": intervention["message"],
+                        "severity": intervention["severity"],
+                        "large_text": large_warning_text,
                         "call_ended": call_ended_at_intervention,
                     }
                     st.session_state.victim_call_interrupted = call_ended_at_intervention
                     st.session_state.victim_call_active = False
                 elif action == "COOLING_OFF_PROMPT":
                     st.session_state.phone["warning"] = {
-                        "title": "SUSPECTED SIKA AFONO — VERIFY FIRST",
-                        "body": "Slow down. Verify this request through the official MoMo app or by calling 100.",
+                        "variant": "watch",
+                        "title": intervention["title"],
+                        "body": intervention["message"],
+                        "severity": intervention["severity"],
+                        "large_text": large_warning_text,
                         "call_ended": call_ended_at_intervention,
                     }
                     st.session_state.victim_call_interrupted = call_ended_at_intervention
@@ -436,19 +488,15 @@ if play or run_all:
                     st.session_state.alert_tone = tone
                     if dashboard_audio_enabled and not st.session_state.sip_warning_audio_managed:
                         show_alert_tone(tone, st.session_state.alert_count)
-                        play_warning_audio(
-                            assessment.get("twi_warning_message") or "",
-                            assessment.get("english_warning_message") or "",
-                        )
+                        play_warning_audio("", intervention["message"])
                     if DEMO_DEVICE_TOKEN:
                         try:
                             publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, {
                                 "type": "warning",
                                 "scenario": label,
                                 "event_key": demo_device_event_key(label, "warning"),
-                                "warning": "Do not share your PIN or OTP. Verify through official support.",
-                                "warning_twi": assessment.get("twi_warning_message") or "",
-                                "warning_english": assessment.get("english_warning_message") or "Do not share your PIN or OTP. Verify through official support.",
+                                "warning": intervention["message"],
+                                "warning_english": intervention["message"],
                                 "suppress_audio": bool(st.session_state.sip_warning_audio_managed),
                             })
                             scenario_warning_audio_pending = not st.session_state.sip_warning_audio_managed

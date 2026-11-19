@@ -25,5 +25,8 @@ class AssessResponse(BaseModel):
     recommended_action: str
     twi_warning_message: Optional[str] = None
     english_warning_message: Optional[str] = None
+    intervention_category: Optional[str] = None
+    intervention_title: Optional[str] = None
+    intervention_message: Optional[str] = None
     event_id: str
     timestamp: datetime

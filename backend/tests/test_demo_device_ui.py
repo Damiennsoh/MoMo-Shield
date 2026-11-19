@@ -36,6 +36,11 @@ def test_second_device_audio_is_authenticated_sequential_and_sip_aware():
     assert "Authorization:'Bearer '+token" in _PHONE_PAGE
     assert "event.sip_managed&&!event.force_browser_ring" in _PHONE_PAGE
     assert "Browser speech muted to avoid competing with the local SIP call." in _PHONE_PAGE
-    assert "warning_twi.mp3" in _PHONE_PAGE and "warning_en.wav" in _PHONE_PAGE
     assert "SpeechSynthesisUtterance" in _PHONE_PAGE and "en-GH" in _PHONE_PAGE
     assert "if(warningInProgress)await warningPlayback" in _PHONE_PAGE
+    assert "warning_twi.mp3" not in _PHONE_PAGE and "warning_en.wav" not in _PHONE_PAGE
+    assert "Read warning aloud" in _PHONE_PAGE
+    assert "Stop speech" in _PHONE_PAGE
+    assert "Larger text" in _PHONE_PAGE
+    assert "aria-live','assertive'" in _PHONE_PAGE
+    assert "This transaction was stopped" not in _PHONE_PAGE

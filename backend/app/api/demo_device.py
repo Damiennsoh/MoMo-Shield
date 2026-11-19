@@ -32,7 +32,7 @@ DEMO_SIP_RING_SECONDS = 3
 _AUDIO_MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}
 _AUDIO_ASSETS = {
     f"{stem}{suffix}"
-    for stem in ("ring", "sms", "alert", "warning_twi", "warning_en")
+    for stem in ("ring", "sms", "alert")
     for suffix in _AUDIO_MIME
 }
 
@@ -46,7 +46,6 @@ class DemoDeviceEvent(BaseModel):
     status: str = Field(default="", max_length=80)
     transcript: str = Field(default="", max_length=1200)
     warning: str = Field(default="", max_length=600)
-    warning_twi: str = Field(default="", max_length=800)
     warning_english: str = Field(default="", max_length=800)
     suppress_audio: bool = False
     ussd_lines: list[str] = Field(default_factory=list, max_length=10)
@@ -214,6 +213,7 @@ header{max-width:460px;margin:0 auto 14px;color:#94a3b8;font-size:12px;letter-sp
 .phone{max-width:460px;min-height:75vh;margin:auto;border:8px solid #334155;border-radius:32px;background:#020617;overflow:hidden;box-shadow:0 20px 60px #0008;display:flex;flex-direction:column}
 .status{padding:13px 18px;background:#0f172a;display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1}.screen{padding:18px;flex:1}.card{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:16px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .sms{border-radius:18px 18px 18px 4px;background:#1e293b}.label{color:var(--yellow);font-size:12px;font-weight:800;margin-bottom:8px}.call{text-align:center;padding:30px 16px}.avatar{font-size:42px;margin:12px}.warning{border:1px solid #ef4444;background:#450a0a;padding:16px;border-radius:14px;margin-top:16px;color:#fff}
+.warning.large{font-size:1.3rem;line-height:1.6}.warning.large .label{font-size:1rem}.warning .actions{flex-wrap:wrap}.warning .actions button{min-height:48px}
 .call.ended{border-color:#475569;opacity:.86}.call.ended .label{color:#fca5a5}
 .actions{display:flex;gap:10px;margin-top:20px}.actions button,#connect{flex:1;border:0;border-radius:12px;padding:14px;font-weight:800;background:#15803d;color:white}.actions button:last-child{background:#b91c1c}#connect{display:block;width:100%;max-width:460px;margin:16px auto;background:#1d4ed8}.quiet{font-size:12px;color:#94a3b8;text-align:center;padding:12px}.connection{color:#facc15;font-size:13px;text-align:center}
 </style></head><body><header>MoMo Shield · synthetic demo handset</header>
@@ -223,7 +223,7 @@ header{max-width:460px;margin:0 auto 14px;color:#94a3b8;font-size:12px;letter-sp
 <script>
 const token=location.hash.startsWith('#token=')?decodeURIComponent(location.hash.slice(7)):'';
 const screen=document.getElementById('screen'),status=document.getElementById('clock'),info=document.getElementById('connection'),button=document.getElementById('connect');
-const audioFiles={sms:['sms.mp3','sms.wav'],call:['ring.mp3','ring.wav'],alert:['alert.mp3','alert.wav'],warning:['warning_twi.mp3','warning_twi.wav','warning_en.mp3','warning_en.wav']};
+const audioFiles={sms:['sms.mp3','sms.wav'],call:['ring.mp3','ring.wav'],alert:['alert.mp3','alert.wav'],warning:[]};
 const audioLimits={sms:1.8,call:6,alert:1.2,warning:8};
 let audio=null,currentNodes=[],currentTimer=null,currentFinish=null,currentSoundKind='',playbackVersion=0;
 let soundQueue=Promise.resolve(),warningPlayback=Promise.resolve(),warningInProgress=false;
@@ -272,7 +272,7 @@ async function playOne(kind,text,generation){
     const alert=await getBuffer('alert.wav');if(generation!==playbackVersion)return;
     if(alert)await playBuffer(alert,'alert',generation);else await tone([[880,0,.14],[880,.2,.14],[620,.42,.24]],'alert');
     if(generation!==playbackVersion)return;
-    const spoken=await speakEnglish(text||'Fraud alert. This transaction was stopped. Do not share your PIN or OTP. Verify through official support.',generation);
+    const spoken=await speakEnglish(text||'MoMo Shield demo guidance. Pause and verify through official support. Do not share your PIN or OTP.',generation);
     if(!spoken&&generation===playbackVersion)await tone([[880,0,.14],[880,.2,.14],[620,.42,.24]],'warning');
     return;
   }
@@ -316,10 +316,15 @@ async function draw(event){
       const callStatus=activeCall.querySelector('.quiet');if(callStatus)callStatus.textContent='Disconnected at simulated transaction hold';
       const actions=activeCall.querySelector('.actions');if(actions)actions.remove();
     }
-    const card=node('article','warning','');card.append(node('div','label','FRAUD ALERT · SYNTHETIC DEMO'));
-    if(event.warning_twi){card.append(node('div','label','Twi'),node('div','',event.warning_twi));}
-    if(event.warning_english){card.append(node('div','label','English'),node('div','',event.warning_english));}
-    if(!event.warning_twi&&!event.warning_english)card.append(node('div','',event.warning||event.message||'Verify before sharing a PIN or code.'));
+    const card=node('article','warning','');card.setAttribute('role','alert');card.setAttribute('aria-live','assertive');card.setAttribute('aria-atomic','true');
+    card.append(node('div','label','SAFETY GUIDANCE · SYNTHETIC DEMO'));
+    const warningText=event.warning_english||event.warning||event.message||'Pause and verify through official support. Do not share a PIN or code.';
+    card.append(node('div','',warningText));
+    const controls=node('div','actions',''),read=node('button','','Read warning aloud'),stop=node('button','','Stop speech'),large=node('button','','Larger text');
+    read.onclick=()=>{stopPlayback();speakEnglish(warningText,playbackVersion);};
+    stop.onclick=()=>stopPlayback();
+    large.setAttribute('aria-pressed','false');large.onclick=()=>{const enabled=card.classList.toggle('large');large.setAttribute('aria-pressed',String(enabled));large.textContent=enabled?'Standard text':'Larger text';};
+    controls.append(read,stop,large);card.append(controls);
     if(event.suppress_audio)card.append(node('div','quiet','Browser speech muted to avoid competing with the local SIP call.'));
     const updated=add(card,event.event_key||((event.scenario||'')+'|warning'));
     if(!updated&&!event.suppress_audio)queueSound('warning',event.warning_english||event.warning||event.message||'');else if(event.suppress_audio)stopPlayback();

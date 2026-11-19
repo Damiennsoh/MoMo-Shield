@@ -34,7 +34,7 @@ class TransactionEvent(BaseModel):
     msisdn: str = Field(..., pattern=r"^\+?[0-9]{9,15}$")
     event_type: EventType = EventType.TRANSACTION
     transaction_type: TransactionType
-    amount: float = Field(ge=0)
+    amount: float = Field(ge=0, le=100000)
     counterparty_msisdn: Optional[str] = None
     ledger_verified: bool
     ussd_session_active: bool = False
@@ -55,12 +55,18 @@ class CommunicationEvent(BaseModel):
     event_type: EventType = EventType.COMMUNICATION
     channel: ChannelType
     text_or_transcript: str = Field(..., min_length=1, max_length=5000)
+    language_hint: Optional[str] = Field(default=None, max_length=48)
+    input_source: Optional[str] = Field(default=None, max_length=32)
     counterparty_msisdn: Optional[str] = None
     timestamp: datetime
 
 class AssessRequest(BaseModel):
     event: dict
     context: Optional[dict] = None
+
+class CaseReferenceRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000)
+    language_hint: Optional[str] = Field(default=None, max_length=48)
 
 def parse_event(raw: dict):
     event_type = raw.get("event_type")

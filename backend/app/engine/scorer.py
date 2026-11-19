@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.config import settings
 from app.models.events import parse_event, CommunicationEvent
 from app.models.responses import AssessResponse, TriggeredRule, LLMIntent
 from app.engine.state import global_window
 from app.engine.rules import run_rules_for_event
+from app.engine.interventions import build_intervention
 from app.ai.gemini_client import extract_intent
 from app.ai.fallback import keyword_intent
 from app.utils.logger import get_logger
@@ -27,23 +28,16 @@ def _action_from_tier(tier: str, event) -> str:
     return "SIMULATED_HOLD"
 
 def _twi_warning(tier: str, llm_intent: LLMIntent, action: str) -> str:
-    if tier != "HIGH":
-        return None
-    if llm_intent and llm_intent.requested_secret:
-        return "Wɔrehyɛ wo sɛ fa wo PIN kɔ ma! — Do not share your PIN."
-    if action == "FRAUDOPS_ALERT":
-        return "Sɛ wo yɛ den a, frɛ MTN 100. Mma wo PIN biara."
-    return "Yɛn hu sɛ obi rehyɛ wo ma ɛyɛ den. Fa ayɛ nkyerɛ."
-
-def _english_warning(tier: str, action: str) -> str:
-    if tier != "HIGH":
-        return None
-    if action == "FRAUDOPS_ALERT":
-        return "⚠️ HIGH RISK: FraudOps alerted. Customer cooling-off prompt shown. No transaction was executed."
-    return "⚠️ HIGH RISK: Transaction placed on simulated hold."
+    # Safety-critical Twi wording is intentionally withheld until a fluent-speaker review.
+    return None
 
 async def assess(raw_event: dict) -> AssessResponse:
     event = parse_event(raw_event)
+    prior_events = global_window.get_events(
+        msisdn=event.msisdn,
+        within=timedelta(minutes=30),
+        before=event.timestamp,
+    )
     global_window.add(event.msisdn, event)
     
     llm_intent = None
@@ -71,13 +65,17 @@ async def assess(raw_event: dict) -> AssessResponse:
     action = _action_from_tier(risk_tier, event)
     
     triggered_rules = [TriggeredRule(rule_id=f"R{i+1}", description=desc, points=pts) for i, (pts, desc) in enumerate(rule_results)]
+    intervention = build_intervention(event, risk_tier, triggered_rules, prior_events)
 
     return AssessResponse(
         msisdn=event.msisdn, risk_score=risk_score, risk_tier=risk_tier,
         triggered_rules=triggered_rules, llm_extracted_intent=llm_intent,
         llm_unavailable=llm_unavailable, intent_source=intent_source,
         recommended_action=action,
-        twi_warning_message=_twi_warning(risk_tier, llm_intent, action),
-        english_warning_message=_english_warning(risk_tier, action),
+        twi_warning_message=None,
+        english_warning_message=intervention["message"],
+        intervention_category=intervention["category"],
+        intervention_title=intervention["title"],
+        intervention_message=intervention["message"],
         event_id=event.event_id, timestamp=datetime.utcnow()
     )

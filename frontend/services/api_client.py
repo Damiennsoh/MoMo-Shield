@@ -85,6 +85,45 @@ def check_gemini(backend_url: str) -> dict:
     return data
 
 
+def transcribe_audio(backend_url: str, audio_bytes: bytes, language_hint: str = "English") -> dict:
+    """Send consented synthetic WAV for a draft transcript; no assessment is made here."""
+    response = httpx.post(
+        _base(backend_url) + "/api/v1/transcribe",
+        params={"language_hint": language_hint},
+        content=audio_bytes,
+        headers={"Content-Type": "audio/wav"},
+        timeout=TIMEOUT_SECONDS * 2,
+    )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"detail": response.text or "Backend returned an unreadable response."}
+    if response.is_error:
+        detail = data.get("detail", data)
+        raise RuntimeError(str(detail))
+    if not isinstance(data.get("transcript"), str):
+        raise RuntimeError("Backend returned an invalid transcript response.")
+    return data
+
+
+def find_case_reference(backend_url: str, text: str, language_hint: str = "English") -> dict:
+    """Request a separate advisory retrieval result for synthetic text only."""
+    response = httpx.post(
+        _base(backend_url) + "/api/v1/case-reference",
+        json={"text": text, "language_hint": language_hint},
+        timeout=TIMEOUT_SECONDS * 3,
+    )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"detail": response.text or "Backend returned an unreadable response."}
+    if response.is_error:
+        raise RuntimeError(str(data.get("detail", data)))
+    if not isinstance(data.get("retrieved_cases"), list):
+        raise RuntimeError("Backend returned an invalid case-reference response.")
+    return data
+
+
 # Backend action names -> labels the FraudOps panel knows how to render.
 _ACTION_MAP = {
     "SOFT_WARNING": "COOLING_OFF_PROMPT",
