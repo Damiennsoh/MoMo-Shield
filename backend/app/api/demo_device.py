@@ -28,7 +28,8 @@ _EVENTS = deque(maxlen=100)
 _NEXT_ID = 1
 _EVENT_LOCK = Lock()
 _ACTIVE_SIP_CHANNEL_ID: Optional[str] = None
-DEMO_SIP_RING_SECONDS = 3
+_CALL_DECLINED = False
+DEMO_SIP_RING_SECONDS = 60
 _AUDIO_MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}
 _AUDIO_ASSETS = {
     f"{stem}{suffix}"
@@ -50,6 +51,8 @@ class DemoDeviceEvent(BaseModel):
     suppress_audio: bool = False
     ussd_lines: list[str] = Field(default_factory=list, max_length=10)
     trigger_sip: bool = False
+    sip_message: bool = False
+    sip_hangup: bool = False
 
 
 def _check_token(value: Optional[str]) -> None:
@@ -73,14 +76,54 @@ def _events_after(cursor: int) -> tuple[int, list[dict]]:
         return latest, [item for item in _EVENTS if item["id"] > cursor]
 
 
+
+
+def _ari_base() -> str:
+    base = settings.asterisk_ari_url.rstrip("/")
+    return base if base.endswith("/ari") else base + "/ari"
+
+
+def _ari_auth() -> tuple:
+    return (settings.asterisk_ari_username, settings.asterisk_ari_password)
+
+
+async def _endpoint_registered() -> bool:
+    """True only when the fixed demo softphone has a live registration."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0, auth=_ari_auth()) as client:
+            response = await client.get(_ari_base() + "/endpoints/PJSIP/200")
+        if response.status_code != 200:
+            return False
+        return bool(response.json().get("channel_ids"))
+    except Exception:
+        return False
+
+
+async def _send_sip_message(body: str) -> dict:
+    """Deliver a SIP MESSAGE to the registered demo softphone (text, not a call)."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0, auth=_ari_auth()) as client:
+            response = await client.post(_ari_base() + "/messages", json={
+                "to": "PJSIP/200",
+                "from": "MoMo Shield Demo <7000>",
+                "body": body[:500],
+            })
+        if response.status_code in (200, 201, 202):
+            return {"status": "sent", "message": "SIP text message sent to the demo softphone."}
+        return {"status": "unavailable", "message": "Asterisk did not accept the SIP message."}
+    except Exception as exc:
+        log.warning("SIP MESSAGE send failed: %s", exc)
+        return {"status": "unavailable", "message": "Asterisk did not accept the SIP message."}
+
 async def _originate_demo_call() -> dict:
     """Ring only the explicitly configured PJSIP endpoint on the private PBX."""
     if not (settings.asterisk_ari_url and settings.asterisk_ari_username
             and settings.asterisk_ari_password):
         return {"status": "not_configured", "message": "Asterisk SIP calling is not configured."}
-    base = settings.asterisk_ari_url.rstrip("/")
-    if not base.endswith("/ari"):
-        base += "/ari"
+    base = _ari_base()
+    if not await _endpoint_registered():
+        return {"status": "unregistered",
+                "message": "Demo softphone is not registered; using browser ringtone fallback."}
     channel_id = "momo-demo-" + uuid.uuid4().hex[:16]
     params = {
         "endpoint": "PJSIP/200",
@@ -191,6 +234,15 @@ async def publish_demo_device_event(event: DemoDeviceEvent,
         # Linphone ringtone. If ARI rejects the request, a follow-up event
         # explicitly asks the handset to provide the browser ringtone.
         payload["sip_managed"] = True
+    global _CALL_DECLINED
+    if event.type == "reset":
+        _CALL_DECLINED = False
+    if event.type == "call" and event.trigger_sip:
+        _CALL_DECLINED = False
+    if event.type == "warning" and _CALL_DECLINED:
+        # Victim declined the call: FraudOps still logs the alert, but the
+        # handset stays silent — no warning sound or card for a declined call.
+        return {"status": "suppressed", "suppressed": "call_declined", "sip": None}
     event_id = _append_event(payload)
     sip = None
     if event.type == "call" and event.trigger_sip:
@@ -199,9 +251,46 @@ async def publish_demo_device_event(event: DemoDeviceEvent,
         if sip.get("status") != "requested":
             fallback = dict(payload, sip_managed=False, force_browser_ring=True)
             _append_event(fallback)
-    elif event.type in ("warning", "reset") and _ACTIVE_SIP_CHANNEL_ID:
+    elif event.type == "call" and event.sip_hangup and _ACTIVE_SIP_CHANNEL_ID:
+        sip = await _hangup_demo_call()
+    elif event.type == "warning":
+        if event.sip_hangup and _ACTIVE_SIP_CHANNEL_ID:
+            sip = await _hangup_demo_call()
+        warn_text = event.warning_english or event.warning
+        if warn_text and await _endpoint_registered():
+            msg = await _send_sip_message("MoMo Shield: " + warn_text[:300])
+            sip = sip or msg
+    elif event.type == "sms" and event.sip_message:
+        if await _endpoint_registered():
+            sip = await _send_sip_message(f"MoMo Shield demo: {event.caller} — {event.message}")
+        else:
+            sip = {"status": "unregistered",
+                   "message": "Demo softphone is not registered; handset shows the SMS only."}
+    elif event.type == "reset" and _ACTIVE_SIP_CHANNEL_ID:
         sip = await _hangup_demo_call()
     return {"status": "published", "event_id": event_id, "sip": sip}
+
+
+class CallActionRequest(BaseModel):
+    action: Literal["answer", "decline", "end"]
+
+
+@router.post("/demo-device/call-action")
+async def demo_device_call_action(req: CallActionRequest,
+                                  authorization: Optional[str] = Header(default=None)):
+    """Handset Answer/Decline controls. Decline ends the SIP leg and suppresses
+    the pending warning; Answer is acknowledged (assessment runs in parallel)."""
+    global _CALL_DECLINED
+    token = authorization.removeprefix("Bearer ") if authorization else None
+    _check_token(token)
+    if req.action == "decline":
+        _CALL_DECLINED = True
+        sip = await _hangup_demo_call()
+        return {"status": "declined", "sip": sip}
+    if req.action == "end":
+        sip = await _hangup_demo_call()
+        return {"status": "ended", "sip": sip}
+    return {"status": "answered", "sip": None}
 
 
 _PHONE_PAGE = r'''<!doctype html>
@@ -224,7 +313,7 @@ header{max-width:460px;margin:0 auto 14px;color:#94a3b8;font-size:12px;letter-sp
 const token=location.hash.startsWith('#token=')?decodeURIComponent(location.hash.slice(7)):'';
 const screen=document.getElementById('screen'),status=document.getElementById('clock'),info=document.getElementById('connection'),button=document.getElementById('connect');
 const audioFiles={sms:['sms.mp3','sms.wav'],call:['ring.mp3','ring.wav'],alert:['alert.mp3','alert.wav'],warning:[]};
-const audioLimits={sms:1.8,call:6,alert:1.2,warning:8};
+const audioLimits={sms:1.8,call:6,alert:1.2,warning:15};
 let audio=null,currentNodes=[],currentTimer=null,currentFinish=null,currentSoundKind='',playbackVersion=0;
 let soundQueue=Promise.resolve(),warningPlayback=Promise.resolve(),warningInProgress=false;
 const audioCache=new Map();
@@ -261,7 +350,7 @@ function playBuffer(buffer,kind,generation){
 }
 function speakEnglish(text,generation){
   if(generation!==playbackVersion||!text||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return Promise.resolve(false);
-  const utterance=new SpeechSynthesisUtterance(text.slice(0,360));utterance.lang='en-GH';
+  const spokenText=String(text||'').replace(/PIN/gi,'pin').replace(/OTP/gi,'one-time password');const utterance=new SpeechSynthesisUtterance(spokenText.slice(0,360));utterance.lang='en-GH';
   const voices=window.speechSynthesis.getVoices();const voice=voices.find(v=>v.lang.toLowerCase()==='en-gh')||voices.find(v=>v.lang.toLowerCase().startsWith('en-gb'))||voices.find(v=>v.lang.toLowerCase().startsWith('en-us'));if(voice)utterance.voice=voice;
   currentSoundKind='warning';return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;if(generation===playbackVersion){if(currentTimer){clearTimeout(currentTimer);currentTimer=null;}currentFinish=null;currentSoundKind='';}resolve(true);};currentFinish=finish;utterance.onend=finish;utterance.onerror=finish;window.speechSynthesis.speak(utterance);currentTimer=setTimeout(()=>{window.speechSynthesis.cancel();finish();},audioLimits.warning*1000);});
 }
@@ -298,14 +387,14 @@ async function draw(event){
   }
   if(event.type==='sms'){const card=node('article','card sms','');card.append(node('div','label',event.scenario||'Incoming message'),node('div','',event.caller||'MoMo'),node('div','',event.message||''));const updated=add(card,event.event_key||'');if(!updated)queueSound('sms');status.textContent='✉ New simulated message';return;}
   if(event.type==='call'){
-    const callStatus=event.status||'Ringing',statusText=callStatus.toLowerCase(),missed=statusText.includes('missed'),incoming=statusText.includes('incoming')||statusText.includes('ringing');
-    const card=node('article','card call',''),title=missed?'MISSED CALL · SIMULATED':incoming?'INCOMING CALL · SIMULATED':'CALL IN PROGRESS · SIMULATED';card.dataset.callStatus=callStatus;
+    const callStatus=event.status||'Ringing',statusText=callStatus.toLowerCase(),missed=statusText.includes('missed'),ended=statusText.includes('ended')||statusText.includes('declined'),incoming=statusText.includes('incoming')||statusText.includes('ringing');
+    const card=node('article','card call',''),title=missed?'MISSED CALL · SIMULATED':ended?'CALL ENDED · SIMULATED':incoming?'INCOMING CALL · SIMULATED':'CALL IN PROGRESS · SIMULATED';card.dataset.callStatus=callStatus;
     card.append(node('div','label',title),node('div','avatar','☎'),node('div','',event.caller||'Unknown caller'),node('div','quiet',event.sip_managed&&!event.force_browser_ring?'Linphone ringtone selected · browser ringtone suppressed':callStatus));
-    if(incoming){const actions=node('div','actions',''),answer=node('button','','Answer (demo)'),decline=node('button','','Decline');answer.onclick=()=>{stopPlayback();status.textContent='Answered · simulated handset';};decline.onclick=()=>{stopPlayback();status.textContent='Call declined · demo';};actions.append(answer,decline);card.append(actions);}
+    if(incoming){const actions=node('div','actions',''),answer=node('button','','Answer (demo)'),decline=node('button','','Decline');const callAction=(action)=>{fetch('/api/v1/demo-device/call-action',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({action})}).catch(()=>{});};answer.onclick=()=>{callAction('answer');stopPlayback();status.textContent='Answered · simulated handset';};decline.onclick=()=>{callAction('decline');stopPlayback();status.textContent='Call declined · demo';};const end=node('button','','End call');end.onclick=()=>{callAction('end');stopPlayback();const lbl=card.querySelector('.label');if(lbl)lbl.textContent='CALL ENDED · USER ENDED';const act=card.querySelector('.actions');if(act)act.remove();status.textContent='Call ended by user';};actions.append(answer,decline,end);card.append(actions);}
     if(event.transcript)card.append(node('div','card',event.transcript));
     const updated=add(card,event.event_key||'');
     if(incoming&&(!updated||event.force_browser_ring)){if(event.sip_managed&&!event.force_browser_ring){stopPlayback();status.textContent='☎ Incoming call · Linphone audio';}else{queueSound('call');status.textContent='☎ Incoming call';}}
-    else if(!incoming)stopPlayback();
+    else if(!incoming){stopPlayback();if(!ended&&!missed){const act=node('div','actions',''),end=node('button','','End call');end.onclick=()=>{fetch('/api/v1/demo-device/call-action',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({action:'end'})}).catch(()=>{});stopPlayback();const lbl=card.querySelector('.label');if(lbl)lbl.textContent='CALL ENDED · USER ENDED';act.remove();status.textContent='Call ended by user';};act.append(end);card.append(act);}}
     return;
   }
   if(event.type==='warning'){

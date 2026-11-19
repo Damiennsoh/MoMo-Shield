@@ -38,7 +38,28 @@ def rule_gh18_otp_activity(event: DeviceBindingEvent, window: EventWindow) -> Tu
 
 def rule_communication_pin_request(event: CommunicationEvent, llm_secret: Optional[str]) -> Tuple[int, Optional[str]]:
     if _requests_secret(event.text_or_transcript or ""):
-        return 30, "Credential request detected in communication"
+        return 45, "Credential request detected in communication"
+    return 0, None
+
+
+def rule_communication_impersonation(event: CommunicationEvent) -> Tuple[int, Optional[str]]:
+    text = (event.text_or_transcript or "").lower()
+    if any(kw in text for kw in (
+        "i am from", "i'm from", "this is", "we are from",
+        "mtn", "vodafone", "telecel", "airteltigo", "moMo office",
+        "customer care", "support team", "fraud department", "agent",
+    )):
+        return 15, "Operator/authority impersonation detected"
+    return 0, None
+
+
+def rule_communication_urgency(event: CommunicationEvent) -> Tuple[int, Optional[str]]:
+    text = (event.text_or_transcript or "").lower()
+    if any(kw in text for kw in (
+        "expires", "expire", "urgent", "asap", "immediately", "right now",
+        "be fast", "act now", "before it", "limited time", "quickly",
+    )):
+        return 15, "Urgency/loss-aversion pressure detected"
     return 0, None
 
 def rule_communication_authority(event: CommunicationEvent, llm_pattern: Optional[str]) -> Tuple[int, Optional[str]]:
@@ -126,6 +147,8 @@ def run_rules_for_event(event, window: EventWindow, llm_intent: dict = None) -> 
             if pts > 0 and desc: results.append((pts, desc))
     elif isinstance(event, CommunicationEvent):
         comm_window_rules = [
+            (rule_communication_impersonation, (event,)),
+            (rule_communication_urgency, (event,)),
             (rule_gh02_reversal_pretext, (event,)),
             (rule_gh15_link_credential, (event, llm_intent.get("requested_secret"))),
             (rule_gh19_harassment_burst, (event, window)),

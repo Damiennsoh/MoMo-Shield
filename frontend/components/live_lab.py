@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
+import os
 import time
 
 import streamlit as st
 
 from components.fraudops_panel import render_fraudops
-from services.api_client import assess_event, find_case_reference, transcribe_audio
+from services.api_client import (assess_event, demo_device_event_key, find_case_reference,
+                                 publish_demo_device_event, transcribe_audio)
 from services.audio import speak_english_warning, stop_spoken_warning
 from services.interventions import build_intervention
 from services.live_signal import (
@@ -38,6 +40,78 @@ def _assess(event: dict, backend_url: str, identity_label: str) -> dict:
     assessment["synthetic_identity_label"] = identity_label
     assessment["submitted_event"] = copy.deepcopy(event)
     return assessment
+
+
+
+
+DEMO_DEVICE_TOKEN = os.environ.get("DEMO_DEVICE_TOKEN", "")
+_WARNING_ACTIONS = ("SIMULATED_HOLD", "FRAUDOPS_ALERT", "COOLING_OFF_PROMPT")
+
+
+def _publish_live_event(backend_url: str, payload: dict) -> None:
+    """Best-effort mirror to the token-protected second-device handset."""
+    if not DEMO_DEVICE_TOKEN:
+        return
+    try:
+        publish_demo_device_event(backend_url, DEMO_DEVICE_TOKEN, payload)
+    except Exception:
+        pass
+
+
+def _publish_incoming_signal(event: dict, backend_url: str, sip_voice: bool, sip_sms: bool) -> None:
+    """Show the judge-submitted signal on the simulated handset (and Linphone for voice)."""
+    if event.get("event_type") != "communication":
+        return
+    label = str(event.get("event_id", "live"))
+    if event.get("channel") == "VOICE":
+        _publish_live_event(backend_url, {
+            "type": "call", "scenario": "Live Signal Lab",
+            "event_key": demo_device_event_key("Live Signal Lab", "call", label),
+            "caller": "Unknown caller", "status": "Incoming call",
+            "transcript": event.get("text_or_transcript", ""),
+            "trigger_sip": bool(sip_voice),
+        })
+        st.session_state.phone = {
+            "screen": "call", "caller": "Unknown caller",
+            "call_status": "Incoming call…", "call_type": "voice",
+        }
+    else:
+        text = event.get("text_or_transcript", "")
+        _publish_live_event(backend_url, {
+            "type": "sms", "scenario": "Live Signal Lab",
+            "event_key": demo_device_event_key("Live Signal Lab", "sms", label),
+            "caller": "Unknown sender", "message": text,
+            "sip_message": bool(sip_sms),
+        })
+        st.session_state.phone = {
+            "screen": "sms",
+            "sms": [{"dir": "in", "from": "Unknown sender", "text": text}],
+        }
+
+
+def _publish_intervention(event: dict, assessment: dict, backend_url: str) -> None:
+    """Raise the fraud warning on the handset when the engine intervenes.
+    For SIP-managed calls the backend also hangs up the Linphone leg here."""
+    action = assessment.get("recommended_action")
+    if action not in _WARNING_ACTIONS:
+        return
+    _publish_live_event(backend_url, {
+        "type": "warning", "scenario": "Live Signal Lab",
+        "event_key": demo_device_event_key("Live Signal Lab", "warning"),
+        "warning": "Do not share your PIN or OTP. Verify through official support.",
+        "warning_twi": assessment.get("twi_warning_message") or "",
+        "warning_english": assessment.get("english_warning_message")
+                          or "Do not share your PIN or OTP. Verify through official support.",
+        # HIGH-tier interventions end the call without consent; MEDIUM cooling-off
+        # warns but lets the call continue until the victim ends it manually.
+        "sip_hangup": action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT"),
+    })
+    st.session_state.phone["warning"] = {
+        "title": "FRAUD ALERT — LIVE SIGNAL",
+        "body": (assessment.get("twi_warning_message")
+                 or "Suspected scam activity. Do NOT share your PIN. Call 100."),
+        "call_ended": True,
+    }
 
 
 def _render_intervention(event: dict, assessment: dict) -> None:
@@ -163,6 +237,19 @@ def render_live_signal_lab(backend_url: str) -> None:
         "Use fictional content only. Never enter a real PIN, OTP, phone number, balance, account detail, "
         "or customer conversation. The score is a prototype rule score, not a fraud probability."
     )
+    col_ring, col_msg = st.columns(2)
+    with col_ring:
+        sip_voice_enabled = st.checkbox(
+            "Ring Linphone for voice signals",
+            value=True, key="live_sip_voice",
+            help="Voice submissions originate a local SIP call to PJSIP/200. If the softphone is not registered, the browser handset rings instead.",
+        )
+    with col_msg:
+        sip_sms_enabled = st.checkbox(
+            "Send SMS signals to Linphone as SIP text",
+            value=True, key="live_sip_sms",
+            help="SMS submissions deliver a SIP MESSAGE to the registered softphone so it shows a real text notification. No call is placed.",
+        )
 
     channel_label = st.radio(
         "Signal channel",
@@ -273,8 +360,29 @@ def render_live_signal_lab(backend_url: str) -> None:
                         language_hint,
                         input_source,
                     )
+                    _publish_incoming_signal(event, backend_url, sip_voice_enabled, sip_sms_enabled)
                     identity = identity_label_for_event(event)
                     assessment = _assess(event, backend_url, identity)
+                    _publish_intervention(event, assessment, backend_url)
+                    if event.get("channel") == "VOICE":
+                        action = assessment.get("recommended_action")
+                        if action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT"):
+                            call_status = "Call ended · fraud intervention"
+                            sip_hangup = True
+                        elif action == "COOLING_OFF_PROMPT":
+                            call_status = "Call in progress · cooling-off notice"
+                            sip_hangup = False
+                        else:
+                            call_status = "Call in progress · no intervention"
+                            sip_hangup = False
+                        _publish_live_event(backend_url, {
+                            "type": "call", "scenario": "Live Signal Lab",
+                            "event_key": demo_device_event_key("Live Signal Lab", "call",
+                                str(event.get("event_id", "live"))),
+                            "caller": "Unknown caller", "status": call_status,
+                            "sip_hangup": sip_hangup,
+                        })
+                        st.session_state.phone["call_status"] = call_status
                     assessment["intervention"] = build_intervention(event, assessment)
                     st.session_state.live_signal_result = {
                         "event": event,
@@ -344,6 +452,7 @@ def render_synthetic_event_injector(backend_url: str) -> None:
                     event = build_device_event(device_action, preceded_by_otp)
                 identity = identity_label_for_event(event)
                 assessment = _assess(event, backend_url, identity)
+                _publish_intervention(event, assessment, backend_url)
                 assessment["intervention"] = build_intervention(event, assessment)
                 st.session_state.synthetic_event_result = {
                     "event": event,

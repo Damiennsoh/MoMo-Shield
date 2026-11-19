@@ -497,6 +497,7 @@ if play or run_all:
                                 "event_key": demo_device_event_key(label, "warning"),
                                 "warning": intervention["message"],
                                 "warning_english": intervention["message"],
+                                "sip_hangup": action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT"),
                                 "suppress_audio": bool(st.session_state.sip_warning_audio_managed),
                             })
                             scenario_warning_audio_pending = not st.session_state.sip_warning_audio_managed

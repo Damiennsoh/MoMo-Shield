@@ -1,7 +1,7 @@
 # Backend client with graceful offline fallback.
 #
 # Talks to the FastAPI engine (backend). ANY failure — connection
-# refused, timeout (>9s), 4xx/5xx — falls back to the built-in deterministic
+# refused, timeout (>18s), 4xx/5xx — falls back to the built-in deterministic
 # rule engine, so the demo never dies on hackathon Wi-Fi.
 #
 # Wire contract:
@@ -16,7 +16,7 @@ import httpx
 
 from services.local_engine import assess_local
 
-TIMEOUT_SECONDS = 9.0
+TIMEOUT_SECONDS = 18.0
 DEMO_DEVICE_TIMEOUT_SECONDS = 4.0
 
 
