@@ -19,3 +19,5 @@ Thumbs.db
 *.zip
 node_modules/
 .env.local
+.next/
+fraudops-web/.next/
