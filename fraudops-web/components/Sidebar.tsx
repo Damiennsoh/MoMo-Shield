@@ -6,48 +6,52 @@ interface Props {
 }
 
 const WORKSPACES = [
-  { id: "replay", label: "Curated Scenario Replay", desc: "7 fixture scenarios, timed replay" },
-  { id: "lab", label: "Live Signal Lab", desc: "SMS / voice transcript assessment" },
-  { id: "injector", label: "Synthetic Event Injector", desc: "Single transaction / device event" },
-  { id: "provider", label: "Provider Feed Readiness", desc: "Honest integration status" },
+  { id: "replay", label: "Scenario replay", desc: "Guided fraud simulations", step: "01" },
+  { id: "lab", label: "Signal lab", desc: "Test SMS and call signals", step: "02" },
+  { id: "injector", label: "Event injector", desc: "Submit a synthetic event", step: "03" },
+  { id: "provider", label: "Provider readiness", desc: "Integration status", step: "04" },
 ];
 
 export default function Sidebar({ active, onSelect }: Props) {
   return (
-    <aside className="w-full shrink-0 lg:w-64">
-      <div className="panel p-3">
-        <p className="label px-2 pb-2 pt-1">Workspace</p>
-        <div className="space-y-1" role="tablist" aria-label="FraudOps workspaces">
+    <aside className="w-full shrink-0 lg:w-[258px]">
+      <div className="panel p-3 lg:sticky lg:top-28">
+        <div className="px-2 pb-3 pt-1">
+          <p className="label">Demo workflow</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">Choose a workspace to explore the protection flow.</p>
+        </div>
+        <nav className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-1" aria-label="FraudOps workspaces">
           {WORKSPACES.map((w) => (
             <button
               key={w.id}
-              role="tab"
-              aria-selected={active === w.id}
+              type="button"
+              aria-current={active === w.id ? "page" : undefined}
               onClick={() => onSelect(w.id)}
-              className={`w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
+              className={`min-w-[190px] flex-1 rounded-xl border px-3 py-3 text-left transition-colors lg:min-w-0 lg:flex-none ${
                 active === w.id
-                  ? "border border-accent/30 bg-accent/[0.08]"
-                  : "border border-transparent hover:bg-ink-800"
+                  ? "border-accent/35 bg-accent/[0.09]"
+                  : "border-transparent bg-ink-800/60 hover:border-white/10 hover:bg-ink-800"
               }`}
             >
-              <p className={`text-[13px] font-semibold ${active === w.id ? "text-accent" : "text-slate-200"}`}>
-                {w.label}
-              </p>
-              <p className="text-[11px] text-slate-500">{w.desc}</p>
+              <span className="flex items-center gap-2.5">
+                <span className={`font-mono text-[10px] font-bold ${active === w.id ? "text-accent" : "text-slate-500"}`}>{w.step}</span>
+                <span className={`text-[13px] font-bold ${active === w.id ? "text-white" : "text-slate-200"}`}>{w.label}</span>
+              </span>
+              <span className="mt-1 block pl-6 text-[11px] text-slate-400">{w.desc}</span>
             </button>
           ))}
-        </div>
+        </nav>
 
-        <div className="mt-4 border-t border-white/[0.06] px-2 pb-1 pt-3">
-          <p className="label">Backend API URL</p>
-          <p className="mt-1 truncate font-mono text-[11px] text-slate-400">
+        <div className="mt-4 border-t border-white/10 px-2 pb-1 pt-4">
+          <p className="label">System endpoint</p>
+          <p className="mt-1 break-all font-mono text-[11px] leading-relaxed text-slate-300">
             {process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"}
           </p>
-          <p className="mt-3 label">Compliance</p>
-          <ul className="mt-1.5 space-y-1 text-[11px] leading-snug text-slate-500">
-            <li>· Act 843 (Data Protection, 2012)</li>
-            <li>· Synthetic data only — no real PIN/OTP</li>
-            <li>· Consent-gated recording in Live Lab</li>
+          <p className="mt-4 label">Responsible demo</p>
+          <ul className="mt-2 flex flex-col gap-2 text-[11px] leading-relaxed text-slate-400">
+            <li>Act 843 · Data Protection Act</li>
+            <li>Synthetic data only · never enter a real PIN or OTP</li>
+            <li>Voice recording requires consent</li>
           </ul>
         </div>
       </div>
