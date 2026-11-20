@@ -16,7 +16,7 @@ export default function AssessmentCard({ a, title }: { a: Assessment; title?: st
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label">{title ?? "Live assessment"}</p>
-          <p className={`mt-1 font-mono text-3xl font-bold tabular-nums ${tierColor(a.risk_tier)}`}>
+          <p className={`mt-1 font-mono text-4xl font-extrabold tabular-nums ${tierColor(a.risk_tier)}`} aria-label={`Risk score ${a.risk_score} out of 100`}>
             {a.risk_score}
             <span className="text-base text-slate-500">/100</span>
           </p>

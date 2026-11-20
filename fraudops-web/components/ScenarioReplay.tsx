@@ -135,7 +135,7 @@ export default function ScenarioReplay() {
   return (
     <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
       {/* scenario list */}
-      <div className="panel flex flex-col p-4">
+      <div className="panel flex max-h-[560px] flex-col p-4">
         <div className="flex items-center justify-between">
           <p className="label">Scenarios</p>
           <div className="flex gap-2">
