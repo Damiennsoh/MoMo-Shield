@@ -36,22 +36,27 @@ export default function LiveSignalLab() {
     setAssessment(null);
     setCases(null);
     const started = performance.now();
+    const eventId = `lab-${Date.now()}`;
+    const handsetEventKey = `live-signal|${channel.toLowerCase()}|${eventId}`;
     try {
       if (channel === "SMS") {
         await api.publishHandset({
           type: "sms", from: callerId || "Live Signal Lab", body: text,
           scenario: "Live Signal Lab", sip_message: smsToLinphone,
+          event_key: handsetEventKey,
         }).catch(() => {});
       } else {
         await api.publishHandset({
           type: "call", from: callerId || "Unknown caller", status: "Incoming call",
-          transcript: text, scenario: "Live Signal Lab",
-          trigger_sip: ringLinphone,
+            transcript: text, scenario: "Live Signal Lab",
+            trigger_sip: ringLinphone,
+            event_key: handsetEventKey,
+
         }).catch(() => {});
       }
 
       const a = await api.assess({
-        event_id: `lab-${Date.now()}`,
+        event_id: eventId,
         msisdn,
         event_type: "communication",
         channel,
@@ -75,20 +80,31 @@ export default function LiveSignalLab() {
             text: a.english_warning_message ?? a.guidance ?? EN_WARNING,
             text_twi: a.twi_warning_message ?? undefined,
             scenario: "Live Signal Lab",
-            // HIGH kills the call only after the victim answers; MEDIUM warns
-            // but lets the call continue until the user ends it manually.
-            sip_hangup: killCall,
-            interrupt_now: Boolean(a.reported_number_match),
+            event_key: `${handsetEventKey}|warning`,
+            call_event_key: channel === "VOICE" ? handsetEventKey : "",
+            from: callerId || "Unknown caller",
+            // A warning from an SMS must never hang up an unrelated SIP call.
+            // Reported caller ID is an immediate signal only with corroborating HIGH risk.
+            sip_hangup: channel === "VOICE" && killCall,
+            interrupt_now:
+              channel === "VOICE" &&
+              a.risk_tier === "HIGH" &&
+              Boolean(a.reported_number_match),
           })
           .catch(() => {});
       }
       if (channel === "VOICE") {
         await api.publishHandset({
           type: "call_status",
-          status: killCall ? "Call ended · fraud intervention"
-                          : a.risk_tier === "MEDIUM" ? "Call in progress · cooling-off notice"
-                          : "Call in progress · no intervention",
+          status: killCall
+            ? a.risk_tier === "HIGH" && a.reported_number_match
+              ? "Call ended · corroborated reported-number match"
+              : "Call in progress · high-risk warning pending pickup"
+            : a.risk_tier === "MEDIUM"
+              ? "Call in progress · cooling-off notice"
+              : "Call in progress · no intervention",
           scenario: "Live Signal Lab",
+          event_key: handsetEventKey,
         }).catch(() => {});
       }
 
@@ -100,7 +116,8 @@ export default function LiveSignalLab() {
       }
       void started;
     } catch (e) {
-      // local deterministic fallback, clearly labelled
+      // Local scoring is advisory only; it cannot dispatch alerts or control Linphone.
+      setError("Backend assessment unavailable. This local-only estimate did not send an alert or control the Linphone call.");
       const lower = text.toLowerCase();
       let score = 12;
       const rules: string[] = ["Baseline: normal transaction telemetry"];
@@ -168,7 +185,7 @@ export default function LiveSignalLab() {
       <div className="panel p-5">
         <p className="label">Signal assessment</p>
         <p className="mt-1 text-sm text-slate-400">
-          Assess an SMS or voice signal against the detection engine, review the evidence, and surface customer guidance.
+          Submit a fictional SMS or reviewed voice transcript for an on-demand assessment. This is not live call listening or background SMS monitoring; no OTP entry is required to flag an explicit credential request.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">

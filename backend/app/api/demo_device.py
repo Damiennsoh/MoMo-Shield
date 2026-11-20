@@ -28,7 +28,6 @@ _EVENTS = deque(maxlen=100)
 _NEXT_ID = 1
 _EVENT_LOCK = Lock()
 _ACTIVE_SIP_CHANNEL_ID: Optional[str] = None
-_CALL_DECLINED = False
 _HANGUP_TASK = None
 _WARNING_TASK = None
 DEMO_SIP_RING_SECONDS = 60
@@ -88,9 +87,9 @@ def _schedule_hangup_after_answer() -> dict:
 
 async def _deliver_warning_after_answer(channel_id: str, payload: dict,
                                         timeout: float = 65.0) -> dict:
-    """Hold a HIGH-tier warning until the victim answers (or the ring window
-    ends), then push it to handsets, notify Linphone by SIP MESSAGE, and end
-    the call. The FraudOps dashboard shows its own alert independently."""
+    """Defer a HIGH voice warning until pickup or ring timeout, then show it.
+    End the SIP leg only if the recipient answered; otherwise mark the call as
+    ended before pickup. The dashboard alert remains independent."""
     global _ACTIVE_SIP_CHANNEL_ID
     base = _ari_base()
     deadline = time.monotonic() + timeout
@@ -119,9 +118,15 @@ async def _deliver_warning_after_answer(channel_id: str, payload: dict,
         log.warning("Answer-aware warning delivery failed: %s", exc)
     if _ACTIVE_SIP_CHANNEL_ID == channel_id:
         _ACTIVE_SIP_CHANNEL_ID = None
-    if _CALL_DECLINED:
-        return {"status": "suppressed", "suppressed": "call_declined",
-                "answered": answered, "sip": None}
+    if not answered and payload.get("call_event_key"):
+        _append_event({
+            "type": "call",
+            "scenario": payload.get("scenario"),
+            "event_key": payload["call_event_key"],
+            "caller": payload.get("caller", "Unknown caller"),
+            "status": "Call ended before pickup",
+        })
+    payload = dict(payload, sip_hangup=answered, interrupt_now=False)
     event_id = _append_event(payload)
     warn_text = payload.get("warning_english") or payload.get("warning")
     sip = None
@@ -148,6 +153,8 @@ class DemoDeviceEvent(BaseModel):
     type: Literal["sms", "call", "screen", "warning", "reset"]
     scenario: str = Field(default="MoMo Shield synthetic demo", max_length=120)
     event_key: str = Field(default="", max_length=360)
+    call_event_key: str = Field(default="", max_length=360)
+    level: Literal["HIGH", "MEDIUM", "LOW"] = "HIGH"
     caller: str = Field(default="Unknown caller", max_length=80)
     message: str = Field(default="", max_length=1200)
     status: str = Field(default="", max_length=80)
@@ -201,7 +208,9 @@ async def _endpoint_registered() -> bool:
             response = await client.get(_ari_base() + "/endpoints/PJSIP/200")
         if response.status_code != 200:
             return False
-        return bool(response.json().get("channel_ids"))
+        endpoint = response.json()
+        state = str(endpoint.get("state") or "").lower()
+        return state in {"online", "ringing", "busy", "inuse", "onhold"} or bool(endpoint.get("channel_ids"))
     except Exception:
         return False
 
@@ -341,17 +350,9 @@ async def publish_demo_device_event(event: DemoDeviceEvent,
         # Linphone ringtone. If ARI rejects the request, a follow-up event
         # explicitly asks the handset to provide the browser ringtone.
         payload["sip_managed"] = True
-    global _CALL_DECLINED
-    if event.type == "reset":
-        _CALL_DECLINED = False
-    if event.type == "call" and event.trigger_sip:
-        _CALL_DECLINED = False
-    if event.type == "warning" and _CALL_DECLINED:
-        # Victim declined the call: FraudOps still logs the alert, but the
-        # handset stays silent — no warning sound or card for a declined call.
-        return {"status": "suppressed", "suppressed": "call_declined", "sip": None}
     if (event.type == "warning" and event.sip_hangup
-            and _ACTIVE_SIP_CHANNEL_ID and not _CALL_DECLINED):
+            and not event.interrupt_now
+            and _ACTIVE_SIP_CHANNEL_ID):
         queued = _schedule_warning_after_answer(payload)
         if queued.get("status") == "pending_answer":
             return {"status": "queued", "sip": queued}
@@ -393,13 +394,12 @@ class CallActionRequest(BaseModel):
 @router.post("/demo-device/call-action")
 async def demo_device_call_action(req: CallActionRequest,
                                   authorization: Optional[str] = Header(default=None)):
-    """Handset Answer/Decline controls. Decline ends the SIP leg and suppresses
-    the pending warning; Answer is acknowledged (assessment runs in parallel)."""
-    global _CALL_DECLINED
+    """Handle demo handset actions. Answer only acknowledges the browser UI;
+    the actual SIP endpoint must answer in Linphone. Decline/End hangs up the
+    configured local demo SIP leg."""
     token = authorization.removeprefix("Bearer ") if authorization else None
     _check_token(token)
     if req.action == "decline":
-        _CALL_DECLINED = True
         sip = await _hangup_demo_call()
         return {"status": "declined", "sip": sip}
     if req.action == "end":
@@ -416,14 +416,14 @@ _PHONE_PAGE = r'''<!doctype html>
 header{max-width:460px;margin:0 auto 14px;color:#94a3b8;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
 .phone{max-width:460px;min-height:75vh;margin:auto;border:8px solid #334155;border-radius:32px;background:#020617;overflow:hidden;box-shadow:0 20px 60px #0008;display:flex;flex-direction:column}
 .status{padding:13px 18px;background:#0f172a;display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1}.screen{padding:18px;flex:1}.card{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:16px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.sms{border-radius:18px 18px 18px 4px;background:#1e293b}.label{color:var(--yellow);font-size:12px;font-weight:800;margin-bottom:8px}.call{text-align:center;padding:30px 16px}.avatar{font-size:42px;margin:12px}.warning{border:1px solid #ef4444;background:#450a0a;padding:16px;border-radius:14px;margin-top:16px;color:#fff}
+.sms{border-radius:18px 18px 18px 4px;background:#1e293b}.label{color:var(--yellow);font-size:12px;font-weight:800;margin-bottom:8px}.call{text-align:center;padding:30px 16px}.avatar{font-size:42px;margin:12px}.warning{border:1px solid #ef4444;background:#450a0a;padding:16px;border-radius:14px;margin-top:16px;color:#fff}.warning.medium{border-color:#f59e0b;background:#451a03}.warning.medium .label{color:#fbbf24}
 .warning.large{font-size:1.3rem;line-height:1.6}.warning.large .label{font-size:1rem}.warning .actions{flex-wrap:wrap}.warning .actions button{min-height:48px}
 .call.ended{border-color:#475569;opacity:.86}.call.ended .label{color:#fca5a5}
 .actions{display:flex;gap:10px;margin-top:20px}.actions button,#connect{flex:1;border:0;border-radius:12px;padding:14px;font-weight:800;background:#15803d;color:white}.actions button:last-child{background:#b91c1c}#connect{display:block;width:100%;max-width:460px;margin:16px auto;background:#1d4ed8}.quiet{font-size:12px;color:#94a3b8;text-align:center;padding:12px}.connection{color:#facc15;font-size:13px;text-align:center}
 </style></head><body><header>MoMo Shield · synthetic demo handset</header>
 <main class="phone"><div class="status"><span>DEMO DEVICE</span><span id="clock">● Standby</span></div><section class="screen" id="screen"><div class="card" data-placeholder="waiting">Waiting for a scenario from the FraudOps dashboard.</div></section></main>
 <button id="connect">Connect this demo handset and enable sound</button><div class="connection" id="connection">Not connected</div>
-<div class="quiet">Synthetic simulation only. No cellular SMS or PSTN call is made. Browser answer buttons change only this screen; answer a separate SIP softphone to accept the local Asterisk call.</div>
+<div class="quiet">Synthetic simulation only. Calls ring for up to 60 seconds; answered calls have a 5-minute failsafe. No cellular SMS or PSTN call is made. Answer in Linphone; browser Answer only changes this screen.</div>
 <script>
 const token=location.hash.startsWith('#token=')?decodeURIComponent(location.hash.slice(7)):'';
 const screen=document.getElementById('screen'),status=document.getElementById('clock'),info=document.getElementById('connection'),button=document.getElementById('connect');
@@ -513,15 +513,16 @@ async function draw(event){
     return;
   }
   if(event.type==='warning'){
-    for(const activeCall of screen.querySelectorAll('.call[data-event-key]')){
+    if(event.sip_hangup){for(const activeCall of screen.querySelectorAll('.call[data-event-key]')){
       const priorStatus=(activeCall.dataset.callStatus||activeCall.querySelector('.quiet')?.textContent||'').toLowerCase();
       if(/missed|ended|declined/.test(priorStatus)||!/(incoming|ringing|on call|connected|answered)/.test(priorStatus))continue;
       activeCall.classList.add('ended');const callLabel=activeCall.querySelector('.label');if(callLabel)callLabel.textContent='CALL ENDED · FRAUD INTERVENTION';
-      const callStatus=activeCall.querySelector('.quiet');if(callStatus)callStatus.textContent='Disconnected at simulated transaction hold';
+      const callStatus=activeCall.querySelector('.quiet');      if(callStatus)callStatus.textContent='Call disconnected by demo intervention; no transaction was blocked';
+
       const actions=activeCall.querySelector('.actions');if(actions)actions.remove();
-    }
-    const card=node('article','warning','');card.setAttribute('role','alert');card.setAttribute('aria-live','assertive');card.setAttribute('aria-atomic','true');
-    card.append(node('div','label','SAFETY GUIDANCE · SYNTHETIC DEMO'));
+    }}
+    const isMedium=event.level==='MEDIUM';const card=node('article',isMedium?'warning medium':'warning','');card.setAttribute('role','alert');card.setAttribute('aria-live','assertive');card.setAttribute('aria-atomic','true');
+    card.append(node('div','label',isMedium?'CAUTION · VERIFY':'FRAUD ALERT · SYNTHETIC DEMO'));
     const warningText=event.warning_english||event.warning||event.message||'Pause and verify through official support. Do not share a PIN or code.';
     card.append(node('div','',warningText));
     const controls=node('div','actions',''),read=node('button','','Read warning aloud'),stop=node('button','','Stop speech'),large=node('button','','Larger text');

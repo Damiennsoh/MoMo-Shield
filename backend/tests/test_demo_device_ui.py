@@ -25,13 +25,13 @@ def test_second_device_replaces_existing_keyed_cards_and_only_rings_for_new_call
     assert "/missed|ended|declined/" in _PHONE_PAGE
     assert "/(incoming|ringing|on call|connected|answered)/" in _PHONE_PAGE
     assert "CALL ENDED · FRAUD INTERVENTION" in _PHONE_PAGE
-    assert "Disconnected at simulated transaction hold" in _PHONE_PAGE
+    assert "no transaction was blocked" in _PHONE_PAGE
     assert "if(actions)actions.remove()" in _PHONE_PAGE
 
 
 def test_second_device_audio_is_authenticated_sequential_and_sip_aware():
     assert "audioFiles={sms:['sms.mp3','sms.wav'],call:['ring.mp3','ring.wav']" in _PHONE_PAGE
-    assert "audioLimits={sms:1.8,call:6,alert:1.2,warning:8}" in _PHONE_PAGE
+    assert "audioLimits={sms:1.8,call:6,alert:1.2,warning:15}" in _PHONE_PAGE
     assert "'/api/v1/demo-device/audio/'" in _PHONE_PAGE
     assert "Authorization:'Bearer '+token" in _PHONE_PAGE
     assert "event.sip_managed&&!event.force_browser_ring" in _PHONE_PAGE

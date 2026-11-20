@@ -104,6 +104,7 @@ export interface HandsetEvent {
   timestamp?: string;
   scenario?: string;
   event_key?: string;
+  call_event_key?: string;
   /** SIP control flags passed through to the backend publish schema. */
   trigger_sip?: boolean;
   sip_message?: boolean;

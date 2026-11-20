@@ -32,6 +32,50 @@ def test_each_live_sample_gets_a_fresh_synthetic_identity_and_score_state():
     assert len(accumulator) == 2
 
 
+def test_live_lab_uses_event_caller_id_without_a_global_widget_variable(monkeypatch):
+    from types import SimpleNamespace
+    import components.live_lab as live_lab
+
+    published = []
+    monkeypatch.setattr(live_lab, "_publish_live_event", lambda _url, payload: published.append(payload))
+    monkeypatch.setattr(live_lab.st, "session_state", SimpleNamespace())
+    event = {
+        "event_type": "communication",
+        "event_id": "evt-live-call",
+        "channel": "VOICE",
+        "counterparty_msisdn": "+233700000101",
+        "text_or_transcript": "Synthetic call transcript",
+    }
+
+    live_lab._publish_incoming_signal(event, "http://backend", True, False)
+
+    assert published[0]["caller"] == "+233700000101"
+    assert published[0]["trigger_sip"] is True
+
+
+def test_reported_number_alone_does_not_immediately_hang_up(monkeypatch):
+    from types import SimpleNamespace
+    import components.live_lab as live_lab
+
+    published = []
+    monkeypatch.setattr(live_lab, "_publish_live_event", lambda _url, payload: published.append(payload))
+    monkeypatch.setattr(live_lab.st, "session_state", SimpleNamespace(phone={}))
+
+    live_lab._publish_intervention(
+        {"channel": "VOICE", "event_id": "evt-reported", "counterparty_msisdn": "+233700000101"},
+        {
+            "recommended_action": "COOLING_OFF_PROMPT",
+            "risk_tier": "MEDIUM",
+            "reported_number_match": True,
+        },
+        "http://backend",
+    )
+
+    assert published[0]["sip_hangup"] is False
+    assert published[0]["interrupt_now"] is False
+    assert live_lab.st.session_state.phone["warning"]["call_ended"] is False
+
+
 def test_sensitive_phone_and_numeric_credential_values_are_blocked():
     assert any("phone number" in issue.casefold() for issue in validate_synthetic_text("Call 0241234567"))
     assert any("pin/otp/code" in issue.casefold() for issue in validate_synthetic_text("Send your OTP 123456"))

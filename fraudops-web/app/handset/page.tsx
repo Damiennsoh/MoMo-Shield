@@ -109,8 +109,15 @@ export default function HandsetPage() {
       <div className="mt-4 w-full max-w-sm flex-1 rounded-[2.2rem] border border-white/10 bg-gradient-to-b from-ink-700 to-ink-900 p-2 shadow-panel">
         <div ref={listRef} className="flex h-[70vh] min-h-[420px] flex-col gap-3 overflow-y-auto scroll-slim rounded-[1.8rem] bg-black px-4 py-5">
           {smsList.length === 0 && !call && !warning && (
-            <div className="flex flex-1 items-center justify-center text-center text-xs text-slate-600">
-              Customer handset — awaiting incoming alerts…
+            <div role="status" aria-live="polite" className="flex flex-1 flex-col items-center justify-center px-5 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-accent">MoMo Shield · Demo</p>
+              <h1 className="mt-3 text-xl font-semibold text-white">Standing by</h1>
+              <p className="mt-2 max-w-[240px] text-xs leading-relaxed text-slate-400">
+                Simulated calls and messages from the lab will appear here.
+              </p>
+              <p className="mt-5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] text-slate-500">
+                SIP audio is handled by Linphone
+              </p>
             </div>
           )}
 
@@ -154,8 +161,8 @@ export default function HandsetPage() {
         </div>
       </div>
 
-      <p className="mt-4 max-w-sm text-center text-[11px] leading-relaxed text-slate-600">
-        Customer-facing alert preview. This view does not place calls or control mobile money transactions.
+      <p className="mt-4 max-w-sm text-center text-[11px] leading-relaxed text-slate-500">
+        Demo only: calls ring for up to 60 seconds, with a 5-minute cap after pickup. Answer the actual SIP call in Linphone; browser Answer only updates this screen, while Decline/End can hang up the local test call. This view cannot hear live calls, send carrier SMS, or control transactions.
       </p>
     </div>
   );
