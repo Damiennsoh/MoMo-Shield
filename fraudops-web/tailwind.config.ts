@@ -6,16 +6,16 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          950: "#06090F",
-          900: "#0A0F1A",
-          800: "#101828",
-          700: "#16213A",
-          600: "#1F2D4A",
-          500: "#2B3D61",
+          950: "rgb(var(--ink-950) / <alpha-value>)",
+          900: "rgb(var(--ink-900) / <alpha-value>)",
+          800: "rgb(var(--ink-800) / <alpha-value>)",
+          700: "rgb(var(--ink-700) / <alpha-value>)",
+          600: "rgb(var(--ink-600) / <alpha-value>)",
+          500: "rgb(var(--ink-500) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#FACC15",
-          dim: "#C9A40E",
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          dim: "rgb(var(--accent-dim) / <alpha-value>)",
         },
         risk: {
           high: "#EF4444",

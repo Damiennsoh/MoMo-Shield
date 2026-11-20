@@ -190,7 +190,7 @@ export function fromBackendEvent(raw: Record<string, unknown>): HandsetEvent | n
     case "warning":
       return {
         type: "warning",
-        title: "SAFETY GUIDANCE · SYNTHETIC DEMO",
+        title: "SAFETY GUIDANCE · FRAUD ASSESSMENT",
         text: String(raw.warning_english || raw.warning || raw.message || ""),
         text_twi: raw.warning && raw.warning !== raw.warning_english ? String(raw.warning) : undefined,
         level: "HIGH",

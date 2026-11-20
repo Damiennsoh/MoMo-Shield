@@ -94,8 +94,8 @@ export default function HandsetMock({ externalEvents }: Props) {
 
           <div ref={listRef} className="h-[340px] space-y-2 overflow-y-auto scroll-slim px-3 py-3">
             {smsList.length === 0 && !call && !warning && (
-              <div className="flex h-full items-center justify-center text-center text-xs text-slate-600">
-                Awaiting sandbox events…
+                <div className="flex h-full items-center justify-center text-center text-xs text-slate-600">
+                Awaiting incoming alerts…
               </div>
             )}
 
@@ -140,7 +140,7 @@ export default function HandsetMock({ externalEvents }: Props) {
         </div>
       </div>
       <p className="mt-3 text-center text-[11px] text-slate-600">
-        Victim handset (simulated — what the customer sees, in real time)
+        Customer handset · alert preview
       </p>
     </div>
   );

@@ -110,7 +110,7 @@ export default function HandsetPage() {
         <div ref={listRef} className="flex h-[70vh] min-h-[420px] flex-col gap-3 overflow-y-auto scroll-slim rounded-[1.8rem] bg-black px-4 py-5">
           {smsList.length === 0 && !call && !warning && (
             <div className="flex flex-1 items-center justify-center text-center text-xs text-slate-600">
-              Victim handset — awaiting sandbox events…
+              Customer handset — awaiting incoming alerts…
             </div>
           )}
 
@@ -155,8 +155,7 @@ export default function HandsetPage() {
       </div>
 
       <p className="mt-4 max-w-sm text-center text-[11px] leading-relaxed text-slate-600">
-        Simulated victim handset — no real transaction is held, no cellular SMS or PSTN call is made.
-        Synthetic demo data only, per Act 843.
+        Customer-facing alert preview. This view does not place calls or control mobile money transactions.
       </p>
     </div>
   );

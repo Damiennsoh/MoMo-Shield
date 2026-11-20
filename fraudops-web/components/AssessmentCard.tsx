@@ -72,7 +72,7 @@ export default function AssessmentCard({ a, title }: { a: Assessment; title?: st
       {a.guidance && (
         <div className="mt-4 rounded-lg border border-accent/20 bg-accent/[0.06] p-3 text-xs leading-relaxed text-slate-300">
           <span className="font-semibold text-accent">Victim-facing guidance · </span>{a.guidance}
-          <p className="mt-1.5 text-[11px] text-slate-500">Context-aware prototype guidance; no provider alert or real transaction control is connected.</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">Guidance only. No provider alert or transaction control is connected to this workspace.</p>
         </div>
       )}
     </div>
