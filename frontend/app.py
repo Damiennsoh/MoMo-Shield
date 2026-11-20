@@ -115,10 +115,14 @@ init_state()
 
 st.markdown("""
 <div class="app-header">
-  <div class="app-title">🛡️ MoMo Shield
-    <span class="app-subtitle">FraudOps Command Center</span>
+  <div class="brand-lockup">
+    <div class="brand-mark" aria-hidden="true">M</div>
+    <div>
+      <div class="app-title">MoMo Shield <span class="app-subtitle">Fraud detection</span></div>
+      <div class="app-tagline">Ghana mobile money protection · Synthetic demonstration</div>
+    </div>
   </div>
-  <div class="app-tagline">GHANA MOBILE MONEY · SOCIAL-ENGINEERING EARLY WARNING · SYNTHETIC DEMO</div>
+  <div class="header-context"><span class="status-dot"></span> GHANA OPERATIONS <span class="context-divider">/</span> SYNTHETIC DEMO</div>
 </div>
 """, unsafe_allow_html=True)
 

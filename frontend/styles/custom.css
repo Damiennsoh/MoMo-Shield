@@ -150,3 +150,120 @@ section[data-testid="stSidebar"] [data-testid="stTextInput"] { margin-bottom: .2
   .phone-warning { padding: 10px 12px 14px; }
   .rule-chip { font-size: 11px; }
 }
+
+/* FraudOps web dashboard visual language */
+:root {
+  color-scheme: dark;
+  --page: #080d17;
+  --surface: #0d1523;
+  --surface-raised: #121e30;
+  --surface-hover: #19283c;
+  --line: rgba(148, 163, 184, .16);
+  --line-accent: rgba(250, 204, 21, .24);
+  --gold: #facc15;
+  --muted: #8c9bb0;
+}
+
+.stApp {
+  background:
+    radial-gradient(ellipse 900px 420px at 78% -14%, rgba(250, 204, 21, .075), transparent 65%),
+    var(--page);
+  color: #dbe4ef;
+}
+[data-testid="stAppViewContainer"] > .main .block-container {
+  max-width: 1540px;
+  padding: 1.5rem clamp(1rem, 2.2vw, 2rem) 3rem;
+}
+section[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0c1422 0%, #0a111e 100%);
+  border-right: 1px solid var(--line);
+}
+section[data-testid="stSidebar"] > div { padding-top: 1.25rem; }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: .55rem .25rem 1.2rem;
+  margin: 0 0 1.4rem;
+  border-bottom: 1px solid var(--line);
+}
+.brand-lockup { display: flex; align-items: center; gap: .85rem; min-width: 0; }
+.brand-mark {
+  display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center;
+  border: 1px solid rgba(250, 204, 21, .32); border-radius: 14px;
+  background: rgba(250, 204, 21, .09); color: var(--gold);
+  font-size: 18px; font-weight: 850; letter-spacing: -.06em;
+}
+.app-title { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; font-size: 16px; line-height: 1.3; letter-spacing: -.02em; }
+.app-subtitle {
+  display: inline-flex; margin: 0; padding: .2rem .5rem; border: 1px solid rgba(250, 204, 21, .28);
+  border-radius: 6px; background: rgba(250, 204, 21, .08); color: var(--gold);
+  font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+}
+.app-tagline { margin-top: .22rem; color: var(--muted); font-size: 11px; letter-spacing: .01em; }
+.header-context { display: flex; align-items: center; gap: .55rem; color: #8290a5; font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #facc15; box-shadow: 0 0 12px rgba(250, 204, 21, .45); }
+.context-divider { color: #46566d; }
+
+/* Streamlit controls styled to match the web workspace navigation and controls. */
+section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #f1f5f9; letter-spacing: -.02em; }
+section[data-testid="stSidebar"] [data-testid="stRadio"] > label,
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] > label,
+section[data-testid="stSidebar"] [data-testid="stTextInput"] > label,
+section[data-testid="stSidebar"] [data-testid="stCheckbox"] label {
+  color: #c5d0df !important; font-size: 12px; font-weight: 700;
+}
+section[data-testid="stSidebar"] [role="radiogroup"] { gap: .35rem; }
+section[data-testid="stSidebar"] [role="radiogroup"] > label {
+  min-height: 42px; padding: .58rem .7rem; border: 1px solid transparent; border-radius: 11px;
+  background: rgba(18, 30, 48, .62); transition: border-color .15s, background .15s;
+}
+section[data-testid="stSidebar"] [role="radiogroup"] > label:hover {
+  border-color: rgba(148, 163, 184, .2); background: var(--surface-hover);
+}
+section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+  border-color: var(--line-accent); background: rgba(250, 204, 21, .075);
+}
+section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) p { color: #f8df77; font-weight: 750; }
+.stButton > button {
+  min-height: 2.65rem; border: 1px solid rgba(148, 163, 184, .2); border-radius: 11px;
+  background: #172438; color: #e5edf7; font-size: 12px; transition: all .15s ease;
+}
+.stButton > button:hover { border-color: rgba(250, 204, 21, .55); background: #1c2b40; color: #facc15; }
+.stButton > button:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
+section[data-testid="stSidebar"] [data-testid="stTextInput"] input,
+.stTextArea textarea {
+  border-color: rgba(148, 163, 184, .2); border-radius: 11px; background: #111c2d; color: #e2e8f0;
+}
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div:focus-within,
+section[data-testid="stSidebar"] [data-testid="stTextInput"] input:focus,
+.stTextArea textarea:focus { border-color: rgba(250, 204, 21, .6); box-shadow: 0 0 0 2px rgba(250, 204, 21, .12); }
+
+/* Unified cards, metric tiles, tabs, and status panels. */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  border: 1px solid var(--line) !important; border-radius: 16px !important;
+  background: linear-gradient(145deg, rgba(18, 30, 48, .92), rgba(12, 20, 33, .96)) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .12);
+}
+[data-testid="stMetric"] { padding: .85rem .9rem; border: 1px solid var(--line); border-radius: 13px; background: rgba(18, 30, 48, .72); }
+[data-testid="stMetricLabel"] { color: #94a3b8 !important; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+[data-testid="stMetricValue"] { color: #f8fafc; font-weight: 800; letter-spacing: -.04em; }
+[data-testid="stTabs"] [role="tablist"] { gap: .35rem; border-bottom: 1px solid var(--line); }
+[data-testid="stTabs"] button[role="tab"] { min-height: 42px; color: #91a0b4; font-size: 12px; font-weight: 700; }
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { color: #facc15; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background-color: #facc15; }
+[data-testid="stAlert"] { border: 1px solid var(--line); border-radius: 13px; background: #111c2d; }
+[data-testid="stExpander"] { border: 1px solid var(--line); border-radius: 13px; background: rgba(13, 21, 35, .72); }
+hr { border-color: var(--line) !important; }
+[data-testid="stCaptionContainer"] { color: #8493a8; }
+
+@media (max-width: 760px) {
+  .app-header { align-items: flex-start; }
+  .header-context { display: none; }
+  .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+  .app-title { font-size: 15px; }
+  [data-testid="stAppViewContainer"] > .main .block-container { padding-top: 1rem; }
+}
