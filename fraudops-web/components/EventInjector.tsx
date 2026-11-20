@@ -44,7 +44,7 @@ export default function EventInjector() {
             title: "FRAUD ALERT — EVENT INJECTOR",
             text: a.english_warning_message ?? a.guidance ?? "Verify through the official app before proceeding.",
             text_twi: a.twi_warning_message ?? undefined,
-            scenario: "Synthetic Event Injector",
+            scenario: "Event assessment",
             sip_hangup: a.recommended_action === "SIMULATED_HOLD" || a.recommended_action === "FRAUDOPS_ALERT",
           })
           .catch(() => {});
@@ -59,9 +59,9 @@ export default function EventInjector() {
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="panel p-5">
-        <p className="label">Synthetic Event Injector</p>
+        <p className="label">Event assessment</p>
         <p className="mt-1 text-sm text-slate-400">
-          Validate one transaction or device-binding event at a time, using an isolated synthetic identity.
+          Evaluate transaction and device-binding signals against the fraud rules engine and review the recommended response.
         </p>
 
         <div className="mt-4 flex gap-2">
@@ -117,8 +117,8 @@ export default function EventInjector() {
           )}
         </div>
 
-        <p className="mt-4 rounded-lg bg-ink-800/60 px-3 py-2 font-mono text-[11px] text-slate-500">
-          msisdn: 233240000001 (synthetic) · isolated per event
+        <p className="mt-4 rounded-lg bg-ink-800/60 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+          Each assessment is isolated to one event and does not modify a customer account.
         </p>
 
         <button className="btn btn-accent mt-5" onClick={submit} disabled={busy}>

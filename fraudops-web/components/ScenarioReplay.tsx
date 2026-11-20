@@ -49,10 +49,10 @@ export default function ScenarioReplay() {
       log(`assess → ${event.event_type} · score ${a.risk_score} (${a.risk_tier}) · ${a.latency_ms}ms [${a.source}]`);
       // Mirror to victim handset
       if (event.event_type === "communication" && event.channel === "SMS") {
-        publish({ type: "sms", from: "Sandbox SMS", body: event.text_or_transcript, scenario: scenario.name });
+        publish({ type: "sms", from: "MoMo Shield signal", body: event.text_or_transcript, scenario: scenario.name });
       }
       if (event.event_type === "communication" && event.channel === "VOICE") {
-        publish({ type: "call", from: "Sandbox caller", status: "Incoming call", transcript: event.text_or_transcript, scenario: scenario.name });
+        publish({ type: "call", from: "Unknown caller", status: "Incoming call", transcript: event.text_or_transcript, scenario: scenario.name });
       }
       if (a.risk_tier === "HIGH" || a.risk_tier === "MEDIUM") {
         const kill = a.recommended_action === "SIMULATED_HOLD" || a.recommended_action === "FRAUDOPS_ALERT";
@@ -82,7 +82,7 @@ export default function ScenarioReplay() {
     setEventLog([]);
     setLastAssessment(null);
     setRun({ running: true, scenarioId: scenario.id, progress: 0 });
-    log(`▶ replay started · ${scenario.name} (${scenario.steps.length} steps)`);
+    log(`▶ assessment started · ${scenario.name} (${scenario.steps.length} steps)`);
     publish({ type: "reset" });
 
     const total = scenario.steps.reduce((s, st) => s + st.delay_ms, 0) + 100;
@@ -108,7 +108,7 @@ export default function ScenarioReplay() {
         clearInterval(tick);
         if (!cancelled.current) {
           setRun({ running: false, scenarioId: scenario.id, progress: 1 });
-          log("✓ replay complete");
+          log("✓ assessment workflow complete");
         }
       }, acc + 800)
     );
@@ -137,9 +137,9 @@ export default function ScenarioReplay() {
       {/* scenario list */}
       <div className="panel flex max-h-[560px] flex-col p-4">
         <div className="flex items-center justify-between">
-          <p className="label">Scenarios</p>
+          <p className="label">Case library</p>
           <div className="flex gap-2">
-            <button className="btn btn-accent !px-3 !py-1.5 !text-xs" onClick={runAll} disabled={run.running}>Run all 7</button>
+            <button className="btn btn-accent !px-3 !py-1.5 !text-xs" onClick={runAll} disabled={run.running}>Assess all 7</button>
             {run.running && <button className="btn btn-danger !px-3 !py-1.5 !text-xs" onClick={stop}>Stop</button>}
           </div>
         </div>
@@ -185,8 +185,8 @@ export default function ScenarioReplay() {
         ) : (
           <div className="panel flex min-h-[220px] items-center justify-center p-8 text-center">
             <div>
-              <p className="text-sm font-semibold text-slate-300">Standing by — choose a scenario and start a replay.</p>
-              <p className="mt-1 text-xs text-slate-500">The engine correlates cross-channel telemetry in under 5 seconds per event.</p>
+              <p className="text-sm font-semibold text-slate-300">Select a case to begin a detection review.</p>
+              <p className="mt-1 text-xs text-slate-500">Review correlated signals, risk indicators, and recommended customer guidance.</p>
             </div>
           </div>
         )}
@@ -203,7 +203,7 @@ export default function ScenarioReplay() {
 
         {/* scenario run results */}
         <div className="panel p-4">
-          <p className="label mb-3">Scenario run results</p>
+          <p className="label mb-3">Assessment results</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {Object.values(results).map((r) => (
               <div key={r.scenarioId} className="rounded-xl border border-white/[0.06] bg-ink-800/60 p-3.5">

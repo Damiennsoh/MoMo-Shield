@@ -12,7 +12,7 @@ export default function LiveSignalLab() {
   const [language, setLanguage] = useState("twi-en");
   const [text, setText] = useState("");
   const [consent, setConsent] = useState(false);
-  const [syntheticConfirmed, setSyntheticConfirmed] = useState(false);
+  const [authorizedToAssess, setAuthorizedToAssess] = useState(false);
   const [ringLinphone, setRingLinphone] = useState(false);
   const [smsToLinphone, setSmsToLinphone] = useState(false);
   const [assessing, setAssessing] = useState(false);
@@ -26,7 +26,7 @@ export default function LiveSignalLab() {
 
   const msisdn = "233240000001";
 
-  const canAssess = text.trim().length > 3 && syntheticConfirmed && !assessing;
+  const canAssess = text.trim().length > 3 && authorizedToAssess && !assessing;
 
   const assess = async () => {
     if (!canAssess) return;
@@ -163,10 +163,9 @@ export default function LiveSignalLab() {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="panel p-5">
-        <p className="label">Live Signal Lab</p>
+        <p className="label">Signal assessment</p>
         <p className="mt-1 text-sm text-slate-400">
-          Assess a synthetic SMS or voice transcript against the FastAPI scoring engine. Each sample uses a fresh
-          synthetic identity — prior samples do not affect its score.
+          Assess an SMS or voice signal against the detection engine, review the evidence, and surface customer guidance.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -193,14 +192,14 @@ export default function LiveSignalLab() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={5}
-          placeholder={channel === "SMS" ? "Paste or type the synthetic SMS content…" : "Paste a transcript, or record below and edit the draft…"}
+          placeholder={channel === "SMS" ? "Enter SMS signal content…" : "Enter a transcript, or record and review a draft…"}
           className="input mt-4 resize-y font-mono text-[13px] leading-relaxed"
         />
         {channel === "VOICE" && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-slate-400">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="accent-[#FACC15]" />
-              I consent to microphone recording (Act 843)
+              I consent to voice recording and transcription (Act 843)
             </label>
             {!recording ? (
               <button className="btn !py-1.5 !text-xs" onClick={startRecording} disabled={!consent || transcribing}>
@@ -226,8 +225,8 @@ export default function LiveSignalLab() {
 
         <div className="mt-5 space-y-2 border-t border-white/[0.06] pt-4 text-xs text-slate-400">
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={syntheticConfirmed} onChange={(e) => setSyntheticConfirmed(e.target.checked)} className="accent-[#FACC15]" />
-            I confirm this content is synthetic / fictional (required)
+            <input type="checkbox" checked={authorizedToAssess} onChange={(e) => setAuthorizedToAssess(e.target.checked)} className="accent-[#FACC15]" />
+            I am authorized to submit this signal and it contains no PIN, OTP, or authentication secret (required)
           </label>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={ringLinphone} onChange={(e) => setRingLinphone(e.target.checked)} className="accent-[#FACC15]" />
@@ -262,9 +261,9 @@ export default function LiveSignalLab() {
         <div className="panel p-4">
           <p className="label mb-2">Advisory case-reference</p>
           {cases === null ? (
-            <p className="text-xs text-slate-500">Submit a signal to retrieve similar synthetic cases. Retrieval similarity is not a fraud probability.</p>
+            <p className="text-xs text-slate-500">Submit a signal to retrieve related case references. Similarity is not a fraud probability.</p>
           ) : cases.length === 0 ? (
-            <p className="text-xs text-slate-500">No similar cases in the synthetic library.</p>
+            <p className="text-xs text-slate-500">No related case references found.</p>
           ) : (
             <ul className="space-y-2">
               {cases.map((c, i) => (

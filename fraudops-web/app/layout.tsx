@@ -6,9 +6,9 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
-  title: "FraudOps Command Center — MoMo Shield",
+  title: "Fraud Detection Centre — MoMo Shield",
   description:
-    "Early detection of social-engineering fraud in mobile money ecosystems. Synthetic demonstration prototype.",
+    "Assess mobile money risk signals, review fraud indicators, and coordinate customer protection workflows.",
 };
 
 export const viewport: Viewport = {
