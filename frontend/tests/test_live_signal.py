@@ -64,6 +64,7 @@ def test_reported_number_alone_does_not_immediately_hang_up(monkeypatch):
     live_lab._publish_intervention(
         {"channel": "VOICE", "event_id": "evt-reported", "counterparty_msisdn": "+233700000101"},
         {
+            "source": "backend",
             "recommended_action": "COOLING_OFF_PROMPT",
             "risk_tier": "MEDIUM",
             "reported_number_match": True,
@@ -74,6 +75,29 @@ def test_reported_number_alone_does_not_immediately_hang_up(monkeypatch):
     assert published[0]["sip_hangup"] is False
     assert published[0]["interrupt_now"] is False
     assert live_lab.st.session_state.phone["warning"]["call_ended"] is False
+
+
+def test_local_fallback_never_controls_a_sip_call(monkeypatch):
+    from types import SimpleNamespace
+    import components.live_lab as live_lab
+
+    published = []
+    monkeypatch.setattr(live_lab, "_publish_live_event", lambda _url, payload: published.append(payload))
+    monkeypatch.setattr(live_lab.st, "session_state", SimpleNamespace(phone={}))
+
+    live_lab._publish_intervention(
+        {"channel": "VOICE", "event_id": "evt-local", "counterparty_msisdn": "+233700000101"},
+        {
+            "source": "local",
+            "recommended_action": "FRAUDOPS_ALERT",
+            "risk_tier": "HIGH",
+            "reported_number_match": True,
+        },
+        "http://backend",
+    )
+
+    assert published == []
+    assert live_lab.st.session_state.phone == {}
 
 
 def test_sensitive_phone_and_numeric_credential_values_are_blocked():

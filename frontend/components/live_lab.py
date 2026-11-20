@@ -98,7 +98,7 @@ def _publish_intervention(event: dict, assessment: dict, backend_url: str) -> No
     """Show the assessment warning; only HIGH-risk voice can control the SIP leg.
     SMS warnings never disconnect an unrelated call."""
     action = assessment.get("recommended_action")
-    if action not in _WARNING_ACTIONS:
+    if assessment.get("source") != "backend" or action not in _WARNING_ACTIONS:
         return
     _publish_live_event(backend_url, {
         "type": "warning", "scenario": "Live Signal Lab",
@@ -122,10 +122,12 @@ def _publish_intervention(event: dict, assessment: dict, backend_url: str) -> No
         # can be spoofed; require corroborating high-risk evidence as well.
         "sip_hangup": (
             event.get("channel") == "VOICE"
+            and assessment.get("source") == "backend"
             and action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT")
         ),
         "interrupt_now": (
             event.get("channel") == "VOICE"
+            and assessment.get("source") == "backend"
             and assessment.get("risk_tier") == "HIGH"
             and bool(assessment.get("reported_number_match"))
         ),
@@ -136,6 +138,7 @@ def _publish_intervention(event: dict, assessment: dict, backend_url: str) -> No
                  or "Suspected scam activity. Do NOT share your PIN. Call 100."),
         "call_ended": (
             event.get("channel") == "VOICE"
+            and assessment.get("source") == "backend"
             and assessment.get("risk_tier") == "HIGH"
             and bool(assessment.get("reported_number_match"))
         ),
@@ -291,7 +294,7 @@ def render_live_signal_lab(backend_url: str) -> None:
         key="live_caller_id",
         placeholder="e.g. +233700000101 — try a reported demo scam number",
         help="For voice calls this is the caller's number; for SMS it is the sender. "
-             "Reported demo numbers (+233700000101–105) trigger an immediate blocklist interrupt.",
+             "A demo report match adds risk but is not proof; immediate interruption requires HIGH voice risk too.",
     )
     language_hint = st.selectbox(
         "Input language / evaluation label",
@@ -396,32 +399,40 @@ def render_live_signal_lab(backend_url: str) -> None:
                         input_source,
                         counterparty_msisdn=caller_id,
                     )
-                    _publish_incoming_signal(event, backend_url, sip_voice_enabled, sip_sms_enabled)
                     identity = identity_label_for_event(event)
                     assessment = _assess(event, backend_url, identity)
+                    backend_assessment = assessment.get("source") == "backend"
+                    _publish_incoming_signal(
+                        event,
+                        backend_url,
+                        sip_voice_enabled and backend_assessment,
+                        sip_sms_enabled and backend_assessment,
+                    )
                     _publish_intervention(event, assessment, backend_url)
                     if event.get("channel") == "VOICE":
                         action = assessment.get("recommended_action")
-                        if action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT"):
+                        high_backend_assessment = (
+                            assessment.get("source") == "backend"
+                            and action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT")
+                        )
+                        if high_backend_assessment:
                             call_status = (
-                                "Call ended · confirmed reported-number match"
+                                "Call ended · corroborated reported-number match"
                                 if assessment.get("risk_tier") == "HIGH"
                                 and assessment.get("reported_number_match")
                                 else "Call in progress · high-risk warning pending pickup"
                             )
-                            sip_hangup = True
+                        elif action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT"):
+                            call_status = "Call in progress · local estimate only; no SIP control"
                         elif action == "COOLING_OFF_PROMPT":
                             call_status = "Call in progress · cooling-off notice"
-                            sip_hangup = False
                         else:
                             call_status = "Call in progress · no intervention"
-                            sip_hangup = False
                         _publish_live_event(backend_url, {
                             "type": "call", "scenario": "Live Signal Lab",
                             "event_key": demo_device_event_key("Live Signal Lab", "call",
                                 str(event.get("event_id", "live"))),
                             "caller": caller_id or "Unknown caller", "status": call_status,
-                            "sip_hangup": sip_hangup,
                         })
                         st.session_state.phone["call_status"] = call_status
                     assessment["intervention"] = build_intervention(event, assessment)

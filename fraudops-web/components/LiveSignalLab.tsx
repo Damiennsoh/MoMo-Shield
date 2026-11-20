@@ -39,22 +39,6 @@ export default function LiveSignalLab() {
     const eventId = `lab-${Date.now()}`;
     const handsetEventKey = `live-signal|${channel.toLowerCase()}|${eventId}`;
     try {
-      if (channel === "SMS") {
-        await api.publishHandset({
-          type: "sms", from: callerId || "Live Signal Lab", body: text,
-          scenario: "Live Signal Lab", sip_message: smsToLinphone,
-          event_key: handsetEventKey,
-        }).catch(() => {});
-      } else {
-        await api.publishHandset({
-          type: "call", from: callerId || "Unknown caller", status: "Incoming call",
-            transcript: text, scenario: "Live Signal Lab",
-            trigger_sip: ringLinphone,
-            event_key: handsetEventKey,
-
-        }).catch(() => {});
-      }
-
       const a = await api.assess({
         event_id: eventId,
         msisdn,
@@ -69,6 +53,21 @@ export default function LiveSignalLab() {
       // fallback local scoring if backend unreachable
       if (!a || typeof a.risk_score !== "number") throw new Error("invalid assessment");
       setAssessment(a);
+
+      if (channel === "SMS") {
+        await api.publishHandset({
+          type: "sms", from: callerId || "Live Signal Lab", body: text,
+          scenario: "Live Signal Lab", sip_message: smsToLinphone,
+          event_key: handsetEventKey,
+        }).catch(() => {});
+      } else {
+        await api.publishHandset({
+          type: "call", from: callerId || "Unknown caller", status: "Incoming call",
+          transcript: text, scenario: "Live Signal Lab",
+          trigger_sip: ringLinphone,
+          event_key: handsetEventKey,
+        }).catch(() => {});
+      }
 
       const killCall = a.recommended_action === "SIMULATED_HOLD" || a.recommended_action === "FRAUDOPS_ALERT";
       if (a.risk_tier === "HIGH" || a.risk_tier === "MEDIUM") {
@@ -212,7 +211,7 @@ export default function LiveSignalLab() {
         <input
           value={callerId}
           onChange={(e) => setCallerId(e.target.value)}
-          placeholder="e.g. +233700000101 — reported demo scam numbers interrupt immediately"
+          placeholder="e.g. +233700000101 — report match adds risk; caller ID alone never auto-blocks"
           className="input mt-1.5 font-mono text-[13px]"
         />
         <textarea
