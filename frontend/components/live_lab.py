@@ -67,7 +67,7 @@ def _publish_incoming_signal(event: dict, backend_url: str, sip_voice: bool, sip
         _publish_live_event(backend_url, {
             "type": "call", "scenario": "Live Signal Lab",
             "event_key": demo_device_event_key("Live Signal Lab", "call", label),
-            "caller": "Unknown caller", "status": "Incoming call",
+            "caller": caller_id or "Unknown caller", "status": "Incoming call",
             "transcript": event.get("text_or_transcript", ""),
             "trigger_sip": bool(sip_voice),
         })
@@ -80,7 +80,7 @@ def _publish_incoming_signal(event: dict, backend_url: str, sip_voice: bool, sip
         _publish_live_event(backend_url, {
             "type": "sms", "scenario": "Live Signal Lab",
             "event_key": demo_device_event_key("Live Signal Lab", "sms", label),
-            "caller": "Unknown sender", "message": text,
+            "caller": caller_id or "Unknown sender", "message": text,
             "sip_message": bool(sip_sms),
         })
         st.session_state.phone = {
@@ -105,6 +105,7 @@ def _publish_intervention(event: dict, assessment: dict, backend_url: str) -> No
         # HIGH-tier interventions end the call without consent; MEDIUM cooling-off
         # warns but lets the call continue until the victim ends it manually.
         "sip_hangup": action in ("SIMULATED_HOLD", "FRAUDOPS_ALERT"),
+        "interrupt_now": bool(assessment.get("reported_number_match")),
     })
     st.session_state.phone["warning"] = {
         "title": "FRAUD ALERT — LIVE SIGNAL",
@@ -258,6 +259,13 @@ def render_live_signal_lab(backend_url: str) -> None:
         key="live_signal_channel",
         help="Voice-call input is a transcript; this dashboard does not listen to or intercept live calls.",
     )
+    caller_id = st.text_input(
+        "Caller ID / sender number (optional, synthetic only)",
+        key="live_caller_id",
+        placeholder="e.g. +233700000101 — try a reported demo scam number",
+        help="For voice calls this is the caller's number; for SMS it is the sender. "
+             "Reported demo numbers (+233700000101–105) trigger an immediate blocklist interrupt.",
+    )
     language_hint = st.selectbox(
         "Input language / evaluation label",
         LANGUAGE_OPTIONS,
@@ -359,6 +367,7 @@ def render_live_signal_lab(backend_url: str) -> None:
                         "SMS" if channel_label == "SMS text" else "VOICE",
                         language_hint,
                         input_source,
+                        counterparty_msisdn=caller_id,
                     )
                     _publish_incoming_signal(event, backend_url, sip_voice_enabled, sip_sms_enabled)
                     identity = identity_label_for_event(event)
@@ -379,7 +388,7 @@ def render_live_signal_lab(backend_url: str) -> None:
                             "type": "call", "scenario": "Live Signal Lab",
                             "event_key": demo_device_event_key("Live Signal Lab", "call",
                                 str(event.get("event_id", "live"))),
-                            "caller": "Unknown caller", "status": call_status,
+                            "caller": caller_id or "Unknown caller", "status": call_status,
                             "sip_hangup": sip_hangup,
                         })
                         st.session_state.phone["call_status"] = call_status

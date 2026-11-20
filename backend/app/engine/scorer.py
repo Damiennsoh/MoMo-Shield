@@ -4,6 +4,7 @@ from app.models.events import parse_event, CommunicationEvent
 from app.models.responses import AssessResponse, TriggeredRule, LLMIntent
 from app.engine.state import global_window
 from app.engine.rules import run_rules_for_event
+from app.knowledge.reported_numbers import is_reported_number
 from app.engine.interventions import build_intervention
 from app.ai.gemini_client import extract_intent
 from app.ai.fallback import keyword_intent
@@ -77,5 +78,9 @@ async def assess(raw_event: dict) -> AssessResponse:
         intervention_category=intervention["category"],
         intervention_title=intervention["title"],
         intervention_message=intervention["message"],
+        reported_number_match=(
+            isinstance(event, CommunicationEvent)
+            and is_reported_number(getattr(event, "counterparty_msisdn", None))
+        ),
         event_id=event.event_id, timestamp=datetime.utcnow()
     )

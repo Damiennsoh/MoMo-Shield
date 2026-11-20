@@ -73,6 +73,7 @@ def build_communication_event(
     channel: str,
     language_hint: str = "English",
     input_source: str = "typed",
+    counterparty_msisdn: str = "",
 ) -> dict[str, Any]:
     problems = validate_synthetic_text(text)
     if problems:
@@ -92,6 +93,8 @@ def build_communication_event(
         "language_hint": language_hint,
         "input_source": input_source,
     })
+    if counterparty_msisdn:
+        event["counterparty_msisdn"] = str(counterparty_msisdn).strip()
     return event
 
 

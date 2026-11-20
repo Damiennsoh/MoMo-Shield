@@ -148,6 +148,7 @@ export function toBackendEvent(evt: HandsetEvent): Record<string, unknown> {
         event_key: evt.event_key,
         suppress_audio: evt.suppress_audio,
         sip_hangup: evt.sip_hangup,
+        interrupt_now: evt.interrupt_now,
       };
     case "reset":
       return { type: "reset", scenario: evt.scenario ?? "Live Signal Lab" };

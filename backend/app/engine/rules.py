@@ -21,6 +21,7 @@ def rule_gh01_active_call(event: TransactionEvent, window: EventWindow) -> Tuple
     return 0, None
 
 from app.engine.credential_requests import has_explicit_credential_request as _requests_secret
+from app.knowledge.reported_numbers import is_reported_number as _is_reported
 
 def rule_gh18_new_device(event: DeviceBindingEvent, window: EventWindow) -> Tuple[int, Optional[str]]:
     if event.action in (DeviceAction.APP_INSTALL, DeviceAction.NEW_DEVICE_LOGIN, DeviceAction.WALLET_ENROLMENT, DeviceAction.SIM_SWAP):
@@ -39,6 +40,12 @@ def rule_gh18_otp_activity(event: DeviceBindingEvent, window: EventWindow) -> Tu
 def rule_communication_pin_request(event: CommunicationEvent, llm_secret: Optional[str]) -> Tuple[int, Optional[str]]:
     if _requests_secret(event.text_or_transcript or ""):
         return 45, "Credential request detected in communication"
+    return 0, None
+
+
+def rule_reported_number(event: CommunicationEvent) -> Tuple[int, Optional[str]]:
+    if _is_reported(getattr(event, "counterparty_msisdn", None)):
+        return 60, "Caller ID matches the reported-scam-number blocklist"
     return 0, None
 
 
@@ -147,6 +154,7 @@ def run_rules_for_event(event, window: EventWindow, llm_intent: dict = None) -> 
             if pts > 0 and desc: results.append((pts, desc))
     elif isinstance(event, CommunicationEvent):
         comm_window_rules = [
+            (rule_reported_number, (event,)),
             (rule_communication_impersonation, (event,)),
             (rule_communication_urgency, (event,)),
             (rule_gh02_reversal_pretext, (event,)),

@@ -10,6 +10,7 @@ import AssessmentCard from "./AssessmentCard";
 export default function LiveSignalLab() {
   const [channel, setChannel] = useState<"SMS" | "VOICE">("SMS");
   const [language, setLanguage] = useState("twi-en");
+  const [callerId, setCallerId] = useState("");
   const [text, setText] = useState("");
   const [consent, setConsent] = useState(false);
   const [authorizedToAssess, setAuthorizedToAssess] = useState(false);
@@ -38,12 +39,12 @@ export default function LiveSignalLab() {
     try {
       if (channel === "SMS") {
         await api.publishHandset({
-          type: "sms", from: "Live Signal Lab", body: text,
+          type: "sms", from: callerId || "Live Signal Lab", body: text,
           scenario: "Live Signal Lab", sip_message: smsToLinphone,
         }).catch(() => {});
       } else {
         await api.publishHandset({
-          type: "call", from: "Unknown caller", status: "Incoming call",
+          type: "call", from: callerId || "Unknown caller", status: "Incoming call",
           transcript: text, scenario: "Live Signal Lab",
           trigger_sip: ringLinphone,
         }).catch(() => {});
@@ -58,6 +59,7 @@ export default function LiveSignalLab() {
         timestamp: new Date().toISOString(),
         language_hint: language,
         input_source: "live_signal_lab",
+        ...(callerId.trim() ? { counterparty_msisdn: callerId.trim() } : {}),
       });
       // fallback local scoring if backend unreachable
       if (!a || typeof a.risk_score !== "number") throw new Error("invalid assessment");
@@ -76,6 +78,7 @@ export default function LiveSignalLab() {
             // HIGH kills the call only after the victim answers; MEDIUM warns
             // but lets the call continue until the user ends it manually.
             sip_hangup: killCall,
+            interrupt_now: Boolean(a.reported_number_match),
           })
           .catch(() => {});
       }
@@ -188,6 +191,13 @@ export default function LiveSignalLab() {
           </select>
         </div>
 
+        <label className="label mt-4 block">Caller ID / sender number (optional, synthetic)</label>
+        <input
+          value={callerId}
+          onChange={(e) => setCallerId(e.target.value)}
+          placeholder="e.g. +233700000101 — reported demo scam numbers interrupt immediately"
+          className="input mt-1.5 font-mono text-[13px]"
+        />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

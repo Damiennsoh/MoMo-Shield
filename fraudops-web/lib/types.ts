@@ -63,6 +63,7 @@ export interface Assessment {
   english_warning_message?: string | null;
   intervention_title?: string | null;
   intervention_message?: string | null;
+  reported_number_match?: boolean;
   /** Convenience: intervention_message ?? english_warning_message ?? twi. */
   guidance?: string;
   source: "backend" | "local";
@@ -107,6 +108,7 @@ export interface HandsetEvent {
   trigger_sip?: boolean;
   sip_message?: boolean;
   sip_hangup?: boolean;
+  interrupt_now?: boolean;
   suppress_audio?: boolean;
   sip_managed?: boolean;
   force_browser_ring?: boolean;

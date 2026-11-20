@@ -28,5 +28,6 @@ class AssessResponse(BaseModel):
     intervention_category: Optional[str] = None
     intervention_title: Optional[str] = None
     intervention_message: Optional[str] = None
+    reported_number_match: bool = False
     event_id: str
     timestamp: datetime

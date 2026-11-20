@@ -159,6 +159,7 @@ class DemoDeviceEvent(BaseModel):
     trigger_sip: bool = False
     sip_message: bool = False
     sip_hangup: bool = False
+    interrupt_now: bool = False
 
 
 def _check_token(value: Optional[str]) -> None:
@@ -365,7 +366,10 @@ async def publish_demo_device_event(event: DemoDeviceEvent,
     elif event.type == "call" and event.sip_hangup:
         sip = _schedule_hangup_after_answer()
     elif event.type == "warning":
-        if event.sip_hangup:
+        if event.sip_hangup and event.interrupt_now:
+            # Known-bad caller: end the ring immediately, no answer wait.
+            sip = await _hangup_demo_call()
+        elif event.sip_hangup:
             sip = _schedule_hangup_after_answer()
         warn_text = event.warning_english or event.warning
         if warn_text and await _endpoint_registered():
