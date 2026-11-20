@@ -61,7 +61,12 @@ async def assess(raw_event: dict) -> AssessResponse:
             llm_intent = LLMIntent(**raw_intent)
 
     rule_results = run_rules_for_event(event, global_window, llm_intent.dict() if llm_intent else {})
-    risk_score = global_window.add_risk(event.msisdn, sum(pts for pts, _ in rule_results))
+    risk_score = global_window.add_risk(
+        event.msisdn,
+        sum(pts for pts, _ in rule_results),
+        timestamp=event.timestamp,
+        event_id=event.event_id,
+    )
     risk_tier = _tier_from_score(risk_score)
     action = _action_from_tier(risk_tier, event)
     

@@ -1,10 +1,23 @@
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from app.engine.scorer import assess
-from app.engine.state import global_window
+from app.engine.state import EventWindow, global_window
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
+
+
+def test_risk_score_expires_and_assessments_are_idempotent():
+    window = EventWindow(retention_minutes=30)
+    start = datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc)
+
+    assert window.add_risk("+233240000001", 60, start, "event-1") == 60
+    assert window.add_risk("+233240000001", 60, start, "event-1") == 60
+    assert window.add_risk(
+        "+233240000001", 20, start + timedelta(minutes=31), "event-2"
+    ) == 20
+
 
 def _load(name: str) -> dict:
     return json.loads((FIXTURES_DIR / name).read_text())

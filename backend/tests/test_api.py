@@ -103,6 +103,40 @@ def test_sip_bridge_is_only_requested_by_explicit_call_event(monkeypatch):
     assert calls == ["originated"]
     assert result.json()["sip"]["status"] == "requested"
 
+def test_idle_registered_softphone_is_detected_from_endpoint_state(monkeypatch):
+    import asyncio
+    from app.api import demo_device
+    from types import SimpleNamespace
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {"state": "online", "channel_ids": []}
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url):
+            return Response()
+
+    monkeypatch.setattr(demo_device, "settings", SimpleNamespace(
+        asterisk_ari_url="http://asterisk:8088/ari",
+        asterisk_ari_username="demo-user",
+        asterisk_ari_password="demo-password",
+    ))
+    monkeypatch.setattr(demo_device.httpx, "AsyncClient", Client)
+
+    assert asyncio.run(demo_device._endpoint_registered()) is True
+
+
 def test_asterisk_ari_uses_only_fixed_local_endpoint(monkeypatch):
     import asyncio
     from app.api import demo_device
@@ -134,24 +168,30 @@ def test_asterisk_ari_uses_only_fixed_local_endpoint(monkeypatch):
         asterisk_ari_password="demo-password",
     ))
     monkeypatch.setattr(demo_device.httpx, "AsyncClient", Client)
+
+    async def registered():
+        return True
+
+    monkeypatch.setattr(demo_device, "_endpoint_registered", registered)
     result = asyncio.run(demo_device._originate_demo_call())
     assert result["status"] == "requested"
     assert result["channel_id"] == captured["params"]["channelId"]
     assert captured["url"] == "http://asterisk:8088/ari/channels"
     assert captured["params"]["endpoint"] == "PJSIP/200"
     assert captured["params"]["context"] == "momo-demo-outbound"
-    assert captured["params"]["timeout"] == 3
+    assert captured["params"]["timeout"] == demo_device.DEMO_SIP_RING_SECONDS == 60
 
 
-def test_dashboard_and_sip_ring_windows_are_synchronized():
+def test_dashboard_and_sip_call_timeouts_are_explicit():
     from app.api import demo_device
     root = Path(__file__).resolve().parents[2]
     dashboard = (root / "frontend" / "app.py").read_text(encoding="utf-8")
     dialplan = (root / "demo" / "asterisk" / "extensions.conf").read_text(encoding="utf-8")
     match = re.search(r"CALL_RING_MIN_SECONDS\s*=\s*([0-9.]+)", dashboard)
-    assert match and float(match.group(1)) == demo_device.DEMO_SIP_RING_SECONDS == 3
-    assert 'Set(TIMEOUT(absolute)=12)' in dialplan
-    assert 'Wait(12)' in dialplan
+    assert match and float(match.group(1)) == 3
+    assert demo_device.DEMO_SIP_RING_SECONDS == 60
+    assert 'Set(TIMEOUT(absolute)=300)' in dialplan
+    assert 'Wait(300)' in dialplan
 
 
 def test_sip_call_is_hung_up_on_intervention(monkeypatch):
@@ -184,12 +224,103 @@ def test_sip_call_is_hung_up_on_intervention(monkeypatch):
     response = client.post(
         "/api/v1/demo-device/publish",
         headers={"Authorization": "Bearer demo-test-token"},
-        json={"type": "warning", "scenario": "GH01", "warning": "Synthetic fraud warning"},
+        json={
+            "type": "warning", "scenario": "GH01", "warning": "Synthetic fraud warning",
+            "sip_hangup": True, "interrupt_now": True,
+        },
     )
     assert response.status_code == 200
     assert response.json()["sip"]["status"] == "hangup_requested"
     assert deleted == ["http://asterisk:8088/ari/channels/momo-demo-fixed1234"]
     assert demo_device._ACTIVE_SIP_CHANNEL_ID is None
+
+
+def test_reported_high_risk_call_interrupts_before_answer(monkeypatch):
+    from app.api import demo_device
+    from types import SimpleNamespace
+    hangups = []
+    queued = []
+
+    async def hangup():
+        hangups.append(True)
+        demo_device._ACTIVE_SIP_CHANNEL_ID = None
+        return {"status": "hangup_requested"}
+
+    monkeypatch.setattr(demo_device, "settings", SimpleNamespace(demo_device_token="demo-test-token"))
+    monkeypatch.setattr(demo_device, "_ACTIVE_SIP_CHANNEL_ID", "momo-demo-known123")
+    monkeypatch.setattr(demo_device, "_hangup_demo_call", hangup)
+    monkeypatch.setattr(demo_device, "_schedule_warning_after_answer", lambda payload: queued.append(payload))
+    async def not_registered():
+        return False
+
+    monkeypatch.setattr(demo_device, "_endpoint_registered", not_registered)
+
+    response = client.post(
+        "/api/v1/demo-device/publish",
+        headers={"Authorization": "Bearer demo-test-token"},
+        json={"type": "warning", "sip_hangup": True, "interrupt_now": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["sip"]["status"] == "hangup_requested"
+    assert hangups == [True]
+    assert queued == []
+
+
+def test_sms_warning_does_not_disconnect_an_active_call(monkeypatch):
+    from app.api import demo_device
+    from types import SimpleNamespace
+    monkeypatch.setattr(demo_device, "settings", SimpleNamespace(demo_device_token="demo-test-token"))
+    monkeypatch.setattr(demo_device, "_ACTIVE_SIP_CHANNEL_ID", "momo-demo-active123")
+
+    async def not_registered():
+        return False
+
+    monkeypatch.setattr(demo_device, "_endpoint_registered", not_registered)
+
+    response = client.post(
+        "/api/v1/demo-device/publish",
+        headers={"Authorization": "Bearer demo-test-token"},
+        json={"type": "warning", "sip_hangup": False, "warning_english": "Check this SMS"},
+    )
+
+    assert response.status_code == 200
+    assert demo_device._ACTIVE_SIP_CHANNEL_ID == "momo-demo-active123"
+
+
+def test_unanswered_high_risk_call_reports_timeout_not_intervention(monkeypatch):
+    import asyncio
+    from app.api import demo_device
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(demo_device, "settings", SimpleNamespace(
+        asterisk_ari_url="http://asterisk:8088/ari",
+        asterisk_ari_username="demo-user",
+        asterisk_ari_password="demo-password",
+    ))
+    monkeypatch.setattr(demo_device, "_ACTIVE_SIP_CHANNEL_ID", "momo-demo-noanswer")
+
+    async def not_registered():
+        return False
+
+    monkeypatch.setattr(demo_device, "_endpoint_registered", not_registered)
+    before = demo_device._NEXT_ID
+    result = asyncio.run(demo_device._deliver_warning_after_answer(
+        "momo-demo-noanswer",
+        {
+            "type": "warning",
+            "scenario": "Live Signal Lab",
+            "event_key": "warning-1",
+            "call_event_key": "call-1",
+            "warning_english": "Pause and verify.",
+        },
+        timeout=0,
+    ))
+
+    _cursor, published = demo_device._events_after(before - 1)
+    assert result["answered"] is False
+    assert published[0]["event"]["status"] == "Call ended before pickup"
+    assert published[1]["event"]["sip_hangup"] is False
 
 
 def test_sip_failure_emits_browser_ringtone_fallback(monkeypatch):

@@ -6,19 +6,33 @@ import threading
 class EventWindow:
     def __init__(self, retention_minutes: int = 30):
         self._events: Dict[str, List[Any]] = defaultdict(list)
-        self._scores: Dict[str, int] = defaultdict(int)
+        self._risk_points: Dict[str, List[tuple[datetime, int, str | None]]] = defaultdict(list)
         self._lock = threading.Lock()
         self._retention = timedelta(minutes=retention_minutes)
 
-    def add_risk(self, msisdn: str, points: int) -> int:
+    def add_risk(
+        self,
+        msisdn: str,
+        points: int,
+        timestamp: datetime | None = None,
+        event_id: str | None = None,
+    ) -> int:
         with self._lock:
-            self._scores[msisdn] = min(100, self._scores[msisdn] + points)
-            return self._scores[msisdn]
+            observed_at = self._ts(timestamp or datetime.now(timezone.utc))
+            entries = self._risk_points[msisdn]
+            watermark = max([observed_at, *(entry[0] for entry in entries)])
+            cutoff = watermark - self._retention
+            entries = [entry for entry in entries if entry[0] >= cutoff]
+            already_counted = event_id is not None and any(entry[2] == event_id for entry in entries)
+            if not already_counted and points > 0:
+                entries.append((observed_at, points, event_id))
+            self._risk_points[msisdn] = entries
+            return min(100, sum(entry[1] for entry in entries))
 
     def reset(self) -> None:
         with self._lock:
             self._events.clear()
-            self._scores.clear()
+            self._risk_points.clear()
 
     @staticmethod
     def _ts(value: Any) -> datetime:
