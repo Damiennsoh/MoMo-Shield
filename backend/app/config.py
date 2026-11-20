@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     asterisk_ari_password: str = ""
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
-    cors_origins: List[str] = ["http://localhost:8501", "http://127.0.0.1:8501"]
+    cors_origins: List[str] = ["http://localhost:8501", "http://127.0.0.1:8501", "http://localhost:3000", "http://127.0.0.1:3000"]
     risk_threshold_medium: int = 40
     risk_threshold_high: int = 75
 

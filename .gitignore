@@ -17,3 +17,5 @@ Thumbs.db
 
 # Build artifacts
 *.zip
+node_modules/
+.env.local
