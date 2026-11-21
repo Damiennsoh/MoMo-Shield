@@ -137,14 +137,14 @@ def test_structuring_detection(make_event):
         {"payload": {"type": "transfer_out", "amount": 920}},
     ]
     pts, desc = check_structuring(event, history)
-    assert pts == 35
+    assert pts == 40
     assert "GH22" in desc
 
 
 def test_approve_to_receive_detection(make_event):
     event = make_event(EventType.SMS, {"text": "Please approve the prompt on your phone to receive your reversal refund of GHS 500"})
     pts, desc = check_approve_to_receive(event, [])
-    assert pts == 35
+    assert pts == 40
     assert "GH16" in desc
 
 

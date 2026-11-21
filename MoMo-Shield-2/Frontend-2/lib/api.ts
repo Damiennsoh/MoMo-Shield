@@ -71,3 +71,44 @@ export async function fetchRecentEvents(limit = 50): Promise<AssessmentResult[]>
 export async function resetDemoSession(): Promise<void> {
   await fetch(`${API_BASE}/api/v1/demo/reset`, { method: 'POST' }).catch(() => {});
 }
+
+export interface BenchmarkSummary {
+  total_incidents: number;
+  fraud_scenarios: number;
+  legitimate_scenarios: number;
+  stopped_count: number;
+  held_before_cashout: number;
+  got_through: number;
+  false_positives: number;
+  precision: string;
+  recall: string;
+  avg_latency_ms: number;
+  ghc_protected: number;
+  benchmark_time_ms: number;
+  status: string;
+}
+
+export interface BenchmarkIncident {
+  id: string;
+  name: string;
+  typology: string;
+  msisdn: string;
+  is_fraud: boolean;
+  score: number;
+  tier: 'LOW' | 'MEDIUM' | 'HIGH';
+  decision: 'BLOCKED' | 'WARNED' | 'ALLOWED';
+  rules_fired: string[];
+  latency_ms: number;
+  estimated_loss_ghc: number;
+}
+
+export interface BenchmarkResponse {
+  summary: BenchmarkSummary;
+  results: BenchmarkIncident[];
+}
+
+export async function runFraudBenchmark(): Promise<BenchmarkResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/demo/benchmark`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Benchmark run failed: ${res.status}`);
+  return res.json() as Promise<BenchmarkResponse>;
+}

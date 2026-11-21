@@ -59,6 +59,81 @@ const example =
 const safeExample =
   'You received GH₵ 50.00 from Ama Mensah. Your new balance is GH₵ 1,247.80. Thank you for using MTN MoMo.';
 
+const CASE_STUDY_PRESETS = [
+  {
+    id: 'GH01',
+    label: 'GH01: Reversal Scam',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000310',
+    text: 'Payment received: GH₵ 800.00 from Kofi Mensah. Current balance GH₵ 2,150.00. (Followed by call: Please send back the GH₵ 800 sent by mistake)',
+    tag: 'Reversal Trick',
+  },
+  {
+    id: 'GH15',
+    label: 'GH15: Phishing Link',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000311',
+    text: 'MTN Ghana Alert: Your MoMo account has pending verification. Visit http://mtn-gh-update.net/login and enter your secret PIN to reactivate immediately.',
+    tag: 'PIN Harvesting',
+  },
+  {
+    id: 'GH18',
+    label: 'GH18: SIM Swap Drain',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000312',
+    text: 'New SIM registration notice: Your MSISDN is being paired with replacement SIM. Reply with PIN to authorize wallet transfer of GH₵ 3,500.',
+    tag: 'Device Takeover',
+  },
+  {
+    id: 'GH19',
+    label: 'GH19: Authority Helper',
+    channel: 'voice',
+    voice: true,
+    msisdn: '+233240000313',
+    text: 'Hello, this is the official MTN head office security department calling to assist on your behalf. We detected an unauthorized login, reply with your PIN to protect your float.',
+    tag: 'Nuisance Preconditioning',
+  },
+  {
+    id: 'GH16',
+    label: 'GH16: Approve-to-Receive',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000316',
+    text: 'You have a pending refund of GH₵ 450.00 from Telecel. Please approve the prompt on your phone right now to receive your refund credit.',
+    tag: 'RTP Abuse',
+  },
+  {
+    id: 'GH19B',
+    label: 'GH19B: Relative Emergency',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000317',
+    text: 'Mum, this is Kwame on my new number. I had an accident near Kumasi and am in hospital, please send emergency money and PIN immediately.',
+    tag: 'Distress Coercion',
+  },
+  {
+    id: 'GH22',
+    label: 'GH22: Structuring',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000318',
+    text: 'Transfer GH₵ 950.00 to agent float wallet 0551122334. Reference: split payment 1 of 4.',
+    tag: 'Sub-limit Evading',
+  },
+  {
+    id: 'SAFE',
+    label: 'Safe: School Fees',
+    channel: 'sms',
+    voice: false,
+    msisdn: '+233240000350',
+    text: 'You sent GH₵ 1,200.00 to Achimota School Accounts. Fee GH₵ 0.00. Balance GH₵ 4,820.00. Reference: Term 1 Fees Kwesi.',
+    tag: '0% Friction Control',
+  },
+];
+
 const twiWarningDefault =
   'Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!';
 const englishWarningDefault =
@@ -122,15 +197,15 @@ export default function SignalLabPage() {
         res.action_taken === 'BLOCKED'
           ? 'Transaction blocked. This request may be a scam. Never share your MoMo PIN. Call 100 for help.'
           : mode === 'medium'
-          ? 'Take a moment before you act. We noticed unusual pressure. Never share your PIN.'
-          : 'This message looks safe. Remember: MoMo will never ask for your PIN.';
+            ? 'Take a moment before you act. We noticed unusual pressure. Never share your PIN.'
+            : 'This message looks safe. Remember: MoMo will never ask for your PIN.';
 
       const twiMsg =
         res.action_taken === 'BLOCKED'
           ? 'Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!'
           : mode === 'medium'
-          ? 'Mepa wo kyɛw, twɛn kakra ansa. Mfa wo PIN mma obiara.'
-          : 'Wo MoMo sika bɔne biara nni ho. MoMo remmisa wo PIN da.';
+            ? 'Mepa wo kyɛw, twɛn kakra ansa. Mfa wo PIN mma obiara.'
+            : 'Wo MoMo sika bɔne biara nni ho. MoMo remmisa wo PIN da.';
 
       setResult({
         score: res.risk_score,
@@ -140,8 +215,8 @@ export default function SignalLabPage() {
           res.action_taken === 'BLOCKED'
             ? 'SIMULATED HOLD'
             : res.action_taken === 'WARNED'
-            ? 'COOLING-OFF PROMPT'
-            : 'ALLOW - LOW RISK',
+              ? 'COOLING-OFF PROMPT'
+              : 'ALLOW - LOW RISK',
         mode,
         message: englishMsg,
         twiMessage: twiMsg,
@@ -168,7 +243,7 @@ export default function SignalLabPage() {
 
         // Bridge to real phone (Asterisk SIP Linphone) if present
         try {
-          void fetch(`${apiBase()}/api/v1/demo/real-phone-action?action=ring`, { method: 'POST' }).catch(() => {});
+          void fetch(`${apiBase()}/api/v1/demo/real-phone-action?action=ring`, { method: 'POST' }).catch(() => { });
         } catch {
           // ignore
         }
@@ -269,29 +344,43 @@ export default function SignalLabPage() {
                 placeholder="Paste or type an SMS or voice transcript…"
                 className="min-h-[160px] font-mono text-xs leading-relaxed"
               />
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setText(example)}
-                  className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20"
-                >
-                  Load Scam Sample
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setText(safeExample)}
-                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
-                >
-                  Load Safe Sample
-                </button>
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="ml-auto flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/[.06] hover:text-white"
-                >
-                  <RotateCcw size={12} />
-                  Clear
-                </button>
+              {/* Case Study Library Preset Selector */}
+              <div className="mt-3.5 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                  <span>Track 1 Case Study Dossiers (InnoFemme Library):</span>
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white"
+                  >
+                    <RotateCcw size={11} />
+                    Reset
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {CASE_STUDY_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setText(preset.text);
+                        setMsisdn(preset.msisdn);
+                        setVoice(preset.voice);
+                      }}
+                      className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${
+                        text === preset.text
+                          ? 'border-[#ffcc00] bg-[#ffcc00]/15 text-[#ffcc00]'
+                          : preset.id === 'SAFE'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+                            : 'border-white/[.1] bg-white/[.03] text-slate-300 hover:bg-white/[.08] hover:text-white'
+                      }`}
+                      title={preset.tag}
+                    >
+                      <span className="block truncate font-bold">{preset.label}</span>
+                      <span className="block text-[9px] text-slate-400 truncate">{preset.tag}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -345,9 +434,8 @@ export default function SignalLabPage() {
 
             {voice && (
               <div
-                className={`flex items-center gap-3.5 rounded-xl border border-amber-400/25 bg-amber-400/[.07] p-3.5 ${
-                  isRinging ? 'ringing' : ''
-                }`}
+                className={`flex items-center gap-3.5 rounded-xl border border-amber-400/25 bg-amber-400/[.07] p-3.5 ${isRinging ? 'ringing' : ''
+                  }`}
               >
                 <div className="grid h-9 w-9 place-items-center rounded-full bg-amber-400/20 text-amber-300">
                   <AudioLines size={18} />
@@ -361,6 +449,17 @@ export default function SignalLabPage() {
                 <Waves size={18} className="text-amber-400 animate-pulse" />
               </div>
             )}
+
+            {/* Active InnoFemme Network Interception Hook Info */}
+            <div className="flex items-center justify-between rounded-lg border border-white/[.08] bg-white/[.02] px-3.5 py-2 text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1.5 text-slate-300 font-sans font-medium">
+                <Radio size={12} className="text-[#ffcc00]" />
+                <span>Interception Gateway:</span>
+              </span>
+              <span className="text-emerald-300 font-semibold bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded">
+                {voice ? 'Hook 13: call.connect (Pre-ring)' : 'Hook 12: sms.deliver (Pre-delivery)'}
+              </span>
+            </div>
 
             {/* Action Button */}
             <Button
@@ -404,8 +503,8 @@ export default function SignalLabPage() {
                     ? result.mode === 'high'
                       ? 'HIGH RISK'
                       : result.mode === 'medium'
-                      ? 'MEDIUM RISK'
-                      : 'LOW RISK'
+                        ? 'MEDIUM RISK'
+                        : 'LOW RISK'
                     : 'STANDBY'}
                 </Badge>
               </div>
@@ -422,15 +521,14 @@ export default function SignalLabPage() {
               </motion.div>
 
               <div
-                className={`flex items-center gap-2.5 rounded-lg border px-4 py-2 text-xs font-bold tracking-wide ${
-                  result?.mode === 'high'
-                    ? 'border-rose-500/40 bg-rose-500/15 text-rose-200'
-                    : result?.mode === 'medium'
+                className={`flex items-center gap-2.5 rounded-lg border px-4 py-2 text-xs font-bold tracking-wide ${result?.mode === 'high'
+                  ? 'border-rose-500/40 bg-rose-500/15 text-rose-200'
+                  : result?.mode === 'medium'
                     ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
                     : result?.mode === 'low'
-                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
-                    : 'border-white/10 bg-white/[.03] text-slate-400'
-                }`}
+                      ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
+                      : 'border-white/10 bg-white/[.03] text-slate-400'
+                  }`}
               >
                 {result?.mode === 'low' ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
                 <span>{result?.decision ?? 'AWAITING INPUT'}</span>
@@ -592,15 +690,14 @@ export default function SignalLabPage() {
                     <div className="space-y-3.5">
                       {/* Primary Intent Card */}
                       <div
-                        className={`rounded-xl border p-3.5 transition-all ${
-                          result?.mode === 'high'
-                            ? 'border-rose-500/30 bg-rose-500/[0.07]'
-                            : result?.mode === 'medium'
+                        className={`rounded-xl border p-3.5 transition-all ${result?.mode === 'high'
+                          ? 'border-rose-500/30 bg-rose-500/[0.07]'
+                          : result?.mode === 'medium'
                             ? 'border-amber-500/30 bg-amber-500/[0.07]'
                             : result
-                            ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
-                            : 'border-white/10 bg-slate-900/40'
-                        }`}
+                              ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
+                              : 'border-white/10 bg-slate-900/40'
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
@@ -616,22 +713,21 @@ export default function SignalLabPage() {
                               {result?.intent && result.intent !== 'pending'
                                 ? result.intent
                                 : busy
-                                ? 'Evaluating semantic threat vectors...'
-                                : 'Awaiting signal - click "Analyze signal" to assess'}
+                                  ? 'Evaluating semantic threat vectors...'
+                                  : 'Awaiting signal - click "Analyze signal" to assess'}
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
                             <span className="block text-[10px] font-mono uppercase text-slate-400">Intervention</span>
                             <span
-                              className={`mt-0.5 inline-block rounded px-2 py-0.5 text-[11px] font-black uppercase tracking-wider ${
-                                result?.mode === 'high'
-                                  ? 'border border-rose-500/30 bg-rose-500/20 text-rose-300'
-                                  : result?.mode === 'medium'
+                              className={`mt-0.5 inline-block rounded px-2 py-0.5 text-[11px] font-black uppercase tracking-wider ${result?.mode === 'high'
+                                ? 'border border-rose-500/30 bg-rose-500/20 text-rose-300'
+                                : result?.mode === 'medium'
                                   ? 'border border-amber-500/30 bg-amber-500/20 text-amber-300'
                                   : result
-                                  ? 'border border-emerald-500/30 bg-emerald-500/20 text-emerald-300'
-                                  : 'border border-white/5 bg-slate-800 text-slate-400'
-                              }`}
+                                    ? 'border border-emerald-500/30 bg-emerald-500/20 text-emerald-300'
+                                    : 'border border-white/5 bg-slate-800 text-slate-400'
+                                }`}
                             >
                               {result?.decision ?? 'STANDBY'}
                             </span>
@@ -643,18 +739,16 @@ export default function SignalLabPage() {
                       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                         {/* Lever 1: Credential Solicitation */}
                         <div
-                          className={`rounded-lg border p-2.5 transition-all ${
-                            hasSecretSolicitation
-                              ? 'border-rose-500/30 bg-rose-500/10'
-                              : 'border-white/[0.07] bg-slate-900/40'
-                          }`}
+                          className={`rounded-lg border p-2.5 transition-all ${hasSecretSolicitation
+                            ? 'border-rose-500/30 bg-rose-500/10'
+                            : 'border-white/[0.07] bg-slate-900/40'
+                            }`}
                         >
                           <div className="mb-1 flex items-center justify-between">
                             <KeyRound size={13} className={hasSecretSolicitation ? 'text-rose-400' : 'text-slate-400'} />
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                hasSecretSolicitation ? 'bg-rose-500/25 text-rose-300' : 'bg-slate-800 text-slate-400'
-                              }`}
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${hasSecretSolicitation ? 'bg-rose-500/25 text-rose-300' : 'bg-slate-800 text-slate-400'
+                                }`}
                             >
                               {hasSecretSolicitation ? 'EXPLOIT' : 'CLEAR'}
                             </span>
@@ -667,18 +761,16 @@ export default function SignalLabPage() {
 
                         {/* Lever 2: Authority Impersonation */}
                         <div
-                          className={`rounded-lg border p-2.5 transition-all ${
-                            hasAuthorityImpersonation
-                              ? 'border-amber-500/30 bg-amber-500/10'
-                              : 'border-white/[0.07] bg-slate-900/40'
-                          }`}
+                          className={`rounded-lg border p-2.5 transition-all ${hasAuthorityImpersonation
+                            ? 'border-amber-500/30 bg-amber-500/10'
+                            : 'border-white/[0.07] bg-slate-900/40'
+                            }`}
                         >
                           <div className="mb-1 flex items-center justify-between">
                             <Shield size={13} className={hasAuthorityImpersonation ? 'text-amber-400' : 'text-slate-400'} />
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                hasAuthorityImpersonation ? 'bg-amber-500/25 text-amber-300' : 'bg-slate-800 text-slate-400'
-                              }`}
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${hasAuthorityImpersonation ? 'bg-amber-500/25 text-amber-300' : 'bg-slate-800 text-slate-400'
+                                }`}
                             >
                               {hasAuthorityImpersonation ? 'SPOOFED' : 'CLEAR'}
                             </span>
@@ -691,18 +783,16 @@ export default function SignalLabPage() {
 
                         {/* Lever 3: Urgency & Loss Aversion */}
                         <div
-                          className={`rounded-lg border p-2.5 transition-all ${
-                            hasUrgencyCoercion
-                              ? 'border-rose-500/30 bg-rose-500/10'
-                              : 'border-white/[0.07] bg-slate-900/40'
-                          }`}
+                          className={`rounded-lg border p-2.5 transition-all ${hasUrgencyCoercion
+                            ? 'border-rose-500/30 bg-rose-500/10'
+                            : 'border-white/[0.07] bg-slate-900/40'
+                            }`}
                         >
                           <div className="mb-1 flex items-center justify-between">
                             <Zap size={13} className={hasUrgencyCoercion ? 'text-rose-400' : 'text-slate-400'} />
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                hasUrgencyCoercion ? 'bg-rose-500/25 text-rose-300' : 'bg-slate-800 text-slate-400'
-                              }`}
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${hasUrgencyCoercion ? 'bg-rose-500/25 text-rose-300' : 'bg-slate-800 text-slate-400'
+                                }`}
                             >
                               {hasUrgencyCoercion ? 'PRESSURE' : 'CALM'}
                             </span>
@@ -715,18 +805,16 @@ export default function SignalLabPage() {
 
                         {/* Lever 4: Financial Bait */}
                         <div
-                          className={`rounded-lg border p-2.5 transition-all ${
-                            hasFinancialBait
-                              ? 'border-indigo-500/30 bg-indigo-500/10'
-                              : 'border-white/[0.07] bg-slate-900/40'
-                          }`}
+                          className={`rounded-lg border p-2.5 transition-all ${hasFinancialBait
+                            ? 'border-indigo-500/30 bg-indigo-500/10'
+                            : 'border-white/[0.07] bg-slate-900/40'
+                            }`}
                         >
                           <div className="mb-1 flex items-center justify-between">
                             <Flame size={13} className={hasFinancialBait ? 'text-indigo-400' : 'text-slate-400'} />
                             <span
-                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                hasFinancialBait ? 'bg-indigo-500/25 text-indigo-300' : 'bg-slate-800 text-slate-400'
-                              }`}
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${hasFinancialBait ? 'bg-indigo-500/25 text-indigo-300' : 'bg-slate-800 text-slate-400'
+                                }`}
                             >
                               {hasFinancialBait ? 'BAIT' : 'NONE'}
                             </span>

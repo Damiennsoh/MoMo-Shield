@@ -167,6 +167,19 @@ def test_innofemme_plugin_blocks_credential_harvesting_sms():
     assert resp.status_code == 200
     data = resp.json()
     assert data["decision"] in ("reject", "warn")
+
+
+def test_fraud_benchmark_endpoint():
+    resp = client.post("/api/v1/demo/benchmark")
+    assert resp.status_code == 200
+    data = resp.json()
+    summary = data["summary"]
+    assert summary["total_incidents"] == 14
+    assert summary["stopped_count"] == 11
+    assert summary["false_positives"] == 0
+    assert summary["ghc_protected"] > 20000
+    assert len(data["results"]) == 14
+
     assert "MoMo Shield" in data["message"]
 
 
@@ -187,4 +200,17 @@ def test_innofemme_plugin_detects_call_payment_cooccurrence():
     assert resp.status_code == 200
     data = resp.json()
     assert data["decision"] in ("reject", "warn")
+
+
+def test_fraud_benchmark_endpoint():
+    resp = client.post("/api/v1/demo/benchmark")
+    assert resp.status_code == 200
+    data = resp.json()
+    summary = data["summary"]
+    assert summary["total_incidents"] == 14
+    assert summary["stopped_count"] == 11
+    assert summary["false_positives"] == 0
+    assert summary["ghc_protected"] > 20000
+    assert len(data["results"]) == 14
+
 

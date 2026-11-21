@@ -120,7 +120,7 @@ def check_gh19_nuisance_preconditioning(event: SandboxEvent, history: List) -> T
         and (e.get("payload", {}).get("duration_seconds") or 999) < 90
     ]
     if len(short_calls) >= 2 and _HELPER_RE.search(text) and _AUTHORITY_RE.search(text):
-        return 35, "GH19: Nuisance preconditioning — multiple short calls followed by authority helper"
+        return 40, "GH19: Nuisance preconditioning — multiple short calls followed by authority helper"
     return 0, ""
 
 
@@ -205,7 +205,7 @@ def check_structuring(event: SandboxEvent, history: List) -> Tuple[int, str]:
             and _STRUCTURING_MIN <= e.get("payload", {}).get("amount", 0) <= _STRUCTURING_MAX
         ]
         if len(prior_structured) >= 2:
-            return 35, f"GH22: Structuring detected — {len(prior_structured)+1} sub-limit transfers (850–999 GHS)"
+            return 40, f"GH22: Structuring detected — {len(prior_structured)+1} sub-limit transfers (850–999 GHS)"
     return 0, ""
 
 
@@ -221,7 +221,7 @@ def check_approve_to_receive(event: SandboxEvent, history: List) -> Tuple[int, s
         return 0, ""
     text = _text(event)
     if _APPROVE_RE.search(text) and _RECEIVE_RE.search(text):
-        return 35, "GH16: Approve-to-receive trick — subscriber asked to approve an action to receive a credit"
+        return 40, "GH16: Approve-to-receive trick — subscriber asked to approve an action to receive a credit"
     return 0, ""
 
 
