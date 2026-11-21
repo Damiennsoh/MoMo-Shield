@@ -16,6 +16,7 @@ from app.engine.rules import RULES
 from app.engine.state import global_window
 from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
+from app.integrations.infofemme import infofemme_client
 from app.integrations.sandbox import intervene_sandbox
 from app.integrations import mtn_momo
 from app.models.schemas import AssessmentResult, RiskTier, SandboxEvent
@@ -148,10 +149,16 @@ async def receive_sandbox_event(
     # External lookups run concurrently to keep decision latency low.
     glance_task = asyncio.create_task(check_glance_risk(event.msisdn))
     intent_task = asyncio.create_task(analyze_intent(text_payload))
-    glance_data, llm_intent = await asyncio.gather(glance_task, intent_task)
+    sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(event.msisdn))
+    glance_data, llm_intent, sim_data = await asyncio.gather(glance_task, intent_task, sim_task)
 
     if glance_data.risk_level == "HIGH":
         score += 40
+        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} prior reports)")
+
+    if sim_data.get("risk_boost", 0) > 0:
+        score += sim_data["risk_boost"]
+        rules_fired.append(f"Network Edge: SIM swapped {sim_data.get('days_since_swap')}d ago ({sim_data.get('status')})")
 
     tier = (
         RiskTier.HIGH
@@ -167,9 +174,21 @@ async def receive_sandbox_event(
         await intervene_sandbox(event.event_id, "BLOCK_USSD")
         await report_fraud(event.msisdn, "Social Engineering")
         asyncio.create_task(trigger_real_phone_bridge("warn"))
+        asyncio.create_task(
+            infofemme_client.send_ussd_push(
+                event.msisdn,
+                "FRAUD ALERT: Session blocked by MoMo Shield. Never share your MoMo PIN with anyone."
+            )
+        )
     elif tier == RiskTier.MEDIUM:
         action = "WARNED"
         await intervene_sandbox(event.event_id, "PUSH_WARNING")
+        asyncio.create_task(
+            infofemme_client.send_ussd_push(
+                event.msisdn,
+                "WARNING: Suspicious prompt detected. Official agents will never request credentials."
+            )
+        )
 
     result = AssessmentResult(
         event_id=event.event_id,
@@ -235,4 +254,12 @@ async def trigger_real_phone_bridge(action: str = "warn") -> dict:
 @router.post("/demo/real-phone-action")
 async def real_phone_action(action: str = Query("ring", description="ring | hangup | warn")):
     return await trigger_real_phone_bridge(action)
+
+
+@router.post("/demo/reset")
+async def reset_demo_state():
+    """Reset assessment history and in-memory rate-limiting windows for clean demo runs."""
+    ASSESSMENT_HISTORY.clear()
+    global_window.events.clear()
+    return {"status": "reset", "history_count": 0, "active_sessions": 0}
 

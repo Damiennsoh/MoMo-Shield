@@ -67,3 +67,7 @@ export async function fetchRecentEvents(limit = 50): Promise<AssessmentResult[]>
   const data = (await res.json()) as EventsResponse;
   return data.events ?? [];
 }
+
+export async function resetDemoSession(): Promise<void> {
+  await fetch(`${API_BASE}/api/v1/demo/reset`, { method: 'POST' }).catch(() => {});
+}

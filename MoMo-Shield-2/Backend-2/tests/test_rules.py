@@ -6,6 +6,14 @@ from app.engine.rules import (
     check_gh01_fake_credit,
     check_gh18_device_takeover,
     check_velocity,
+    check_gh15_phishing_link,
+    check_gh19_nuisance_preconditioning,
+    check_call_ussd_cooccurrence,
+    check_task_momentum,
+    check_money_mule,
+    check_structuring,
+    check_approve_to_receive,
+    check_relative_new_number,
 )
 from app.models.schemas import EventType
 
@@ -65,7 +73,7 @@ def test_velocity_quiet_below_threshold(make_event):
 
 
 def test_rules_registry_has_descriptions():
-    assert len(RULES) == 6
+    assert len(RULES) == 14
 
 
 def test_credential_request_sms_scores_high(make_event):
@@ -97,3 +105,52 @@ def test_impersonation_plus_secret(make_event):
 def test_transaction_events_skip_content_rules(make_event):
     event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 500, "text": "send PIN now"})
     assert check_content_credential_request(event, []) == (0, "")
+
+
+def test_gh15_phishing_link_detection(make_event):
+    event = make_event(EventType.SMS, {"text": "Click http://momo-gh-update.net/login to confirm your account PIN immediately"})
+    pts, desc = check_gh15_phishing_link(event, [])
+    assert pts == 45
+    assert "GH15" in desc
+
+
+def test_composite_call_ussd_cooccurrence(make_event):
+    event = make_event(EventType.USSD, {"ussd_input": "*170#"})
+    history = [{"event_type": "voice", "payload": {"status": "active"}}]
+    pts, desc = check_call_ussd_cooccurrence(event, history)
+    assert pts == 50
+    assert "Composite" in desc
+
+
+def test_money_mule_detection(make_event):
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 1000})
+    history = [{"payload": {"type": "credit", "amount": 1000}}]
+    pts, desc = check_money_mule(event, history)
+    assert pts == 40
+    assert "GH02" in desc
+
+
+def test_structuring_detection(make_event):
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 950})
+    history = [
+        {"payload": {"type": "transfer_out", "amount": 900}},
+        {"payload": {"type": "transfer_out", "amount": 920}},
+    ]
+    pts, desc = check_structuring(event, history)
+    assert pts == 35
+    assert "GH22" in desc
+
+
+def test_approve_to_receive_detection(make_event):
+    event = make_event(EventType.SMS, {"text": "Please approve the prompt on your phone to receive your reversal refund of GHS 500"})
+    pts, desc = check_approve_to_receive(event, [])
+    assert pts == 35
+    assert "GH16" in desc
+
+
+def test_relative_new_number_detection(make_event):
+    event = make_event(EventType.SMS, {"text": "Mum, this is my new number, I had an accident and need help urgently, please reply with your PIN"})
+    pts, desc = check_relative_new_number(event, [])
+    assert pts == 25
+    assert "GH19B" in desc
+

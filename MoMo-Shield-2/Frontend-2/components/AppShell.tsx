@@ -16,6 +16,7 @@ import {
   Moon,
   Network,
   Radio,
+  RotateCcw,
   Settings2,
   Shield,
   Smartphone,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/lib/useStore';
+import { resetDemoSession } from '@/lib/api';
 
 const navItems = [
   { href: '/', label: 'Command Center', icon: LayoutDashboard },
@@ -52,6 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const avgLatencyMs = useStore((state) => state.avgLatencyMs);
   const soundEnabled = useStore((state) => state.soundEnabled);
   const toggleSound = useStore((state) => state.toggleSound);
+  const resetDemo = useStore((state) => state.resetDemo);
 
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -82,6 +85,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const next = !soundEnabled;
     setNotice(next ? 'Internal demo sound enabled' : 'Internal demo sound muted (ideal for real phone demo)');
     window.setTimeout(() => setNotice(''), 3000);
+  };
+
+  const handleResetDemo = async () => {
+    resetDemo();
+    await resetDemoSession();
+    setNotice('Session reset — Ready for new demo run');
+    window.setTimeout(() => setNotice(''), 2400);
   };
 
   const title =
@@ -256,6 +266,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            {/* Demo Reset button */}
+            <button
+              onClick={handleResetDemo}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[.14] bg-white/[.04] px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[.1] hover:text-white"
+              title="Reset session state for clean demo run"
+              aria-label="Reset demo session"
+            >
+              <RotateCcw size={13} className="text-[#ffcc00]" />
+              <span className="hidden xl:inline">Reset Demo</span>
+            </button>
+
             {/* Real phone / Sound mute option */}
             <button
               onClick={handleSoundToggle}

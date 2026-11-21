@@ -40,6 +40,7 @@ interface ShieldStore {
   setAnalysis: (score: number, message: string, twiMessage?: string) => void;
   resolveAlert: (id: string, status: NonNullable<FraudAlert['status']>) => void;
   toggleSound: () => void;
+  resetDemo: () => void;
 }
 
 const getInitialSoundPreference = (): boolean => {
@@ -122,4 +123,13 @@ export const useStore = create<ShieldStore>((set) => ({
       ...(twiMessage ? { twiWarningMessage: twiMessage } : {}),
     }),
   resolveAlert: (id, status) => set((state) => ({ alerts: state.alerts.map((alert) => alert.id === id ? { ...alert, status } : alert) })),
+  resetDemo: () =>
+    set({
+      events: [],
+      alerts: [],
+      currentRisk: 0,
+      handsetMode: 'low',
+      handsetMessage: 'Your MoMo account is protected. Never share your PIN with anyone.',
+      avgLatencyMs: null,
+    }),
 }));
