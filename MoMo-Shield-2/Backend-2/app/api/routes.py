@@ -19,7 +19,7 @@ from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.infofemme import infofemme_client
 from app.integrations.sandbox import intervene_sandbox
 from app.integrations import mtn_momo
-from app.models.schemas import AssessmentResult, RiskTier, SandboxEvent
+from app.models.schemas import AssessmentResult, EventType, RiskTier, SandboxEvent
 from app.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -262,4 +262,161 @@ async def reset_demo_state():
     ASSESSMENT_HISTORY.clear()
     global_window.events.clear()
     return {"status": "reset", "history_count": 0, "active_sessions": 0}
+
+
+@router.post("/plugin")
+async def receive_innofemme_plugin(payload: dict):
+    """
+    Direct Plug-in handler for InnoFemme Sandbox (via bridge://laptop/api/v1/plugin).
+    Adheres to InnoFemme Section 7 specification:
+      Inbound:  { "point": "...", "institution": "...", "world": "...", "at": "...", "data": { ... } }
+      Outbound: { "decision": "allow" | "warn" | "reject" | "delay", "message": "..." }
+    """
+    started = time.perf_counter()
+    point = payload.get("point", "unknown")
+    institution = payload.get("institution", "mtn")
+    data = payload.get("data") or {}
+
+    # Map InnoFemme plug-in point into a SandboxEvent
+    msisdn = ""
+    event_type = EventType.SMS
+    ev_payload = {}
+
+    if point == "sms.deliver":
+        msisdn = str(data.get("to") or "")
+        event_type = EventType.SMS
+        ev_payload = {
+            "text": data.get("text", ""),
+            "from": data.get("from", ""),
+            "textsBetweenThemBefore": data.get("textsBetweenThemBefore", 0),
+        }
+    elif point == "call.connect":
+        msisdn = str(data.get("to") or "")
+        event_type = EventType.VOICE
+        ev_payload = {
+            "from": data.get("from", ""),
+            "callerSimRegisteredAt": data.get("callerSimRegisteredAt"),
+            "numbersTheCallerHasRungToday": data.get("numbersTheCallerHasRungToday", 0),
+            "callsBetweenThemBefore": data.get("callsBetweenThemBefore", 0),
+        }
+    elif point == "payment.authorize":
+        payer = data.get("payer") or {}
+        msisdn = str(payer.get("msisdn") or "")
+        event_type = EventType.TRANSACTION
+        ev_payload = {
+            "type": "transfer_out",
+            "amount": data.get("amount", 0),
+            "fee": data.get("fee", 0),
+            "payee": data.get("payee"),
+            "onCallWith": payer.get("onCallWith"),
+            "lastSimSwapAt": payer.get("lastSimSwapAt"),
+        }
+    elif point == "menu.open":
+        msisdn = str(data.get("msisdn") or "")
+        event_type = EventType.USSD
+        ev_payload = {
+            "ussd_input": "*170#",
+            "onCallWith": data.get("onCallWith"),
+            "lastSimSwapAt": data.get("lastSimSwapAt"),
+        }
+    elif point == "sim.swap":
+        msisdn = str(data.get("msisdn") or "")
+        event_type = EventType.TRANSACTION
+        ev_payload = {
+            "type": "new_device_binding",
+            "swapsOnThisNumberBefore": data.get("swapsOnThisNumberBefore", 0),
+        }
+    else:
+        msisdn = str(data.get("msisdn") or data.get("to") or "+233240000000")
+        event_type = EventType.TRANSACTION
+        ev_payload = data
+
+    if not msisdn:
+        msisdn = "+233240000000"
+
+    sandbox_event = SandboxEvent(
+        event_id=f"inno_{int(time.time()*1000)}",
+        msisdn=msisdn,
+        event_type=event_type,
+        timestamp=datetime.utcnow(),
+        payload=ev_payload,
+    )
+
+    history = global_window.get_history(sandbox_event.msisdn)
+    global_window.add(sandbox_event.msisdn, sandbox_event.model_dump())
+
+    # Evaluate against rules
+    score = 0
+    rules_fired: List[str] = []
+
+    # Extra carrier metadata checks available in InnoFemme plug-in data:
+    if ev_payload.get("onCallWith"):
+        score += 50
+        rules_fired.append("Active Call Co-occurrence: Subscriber is on active call during financial operation")
+
+    if ev_payload.get("numbersTheCallerHasRungToday", 0) > 25 and ev_payload.get("callsBetweenThemBefore", 0) == 0:
+        score += 35
+        rules_fired.append("Robocall Sweep: Inbound call from high-frequency outreach line (unfamiliar caller)")
+
+    for rule in RULES:
+        pts, desc = rule(sandbox_event, history)
+        if pts > 0 and desc:
+            score += pts
+            rules_fired.append(desc)
+
+    text_content = str(ev_payload.get("text") or "")
+    glance_task = asyncio.create_task(check_glance_risk(sandbox_event.msisdn))
+    intent_task = asyncio.create_task(analyze_intent(text_content))
+    sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(sandbox_event.msisdn))
+    glance_data, llm_intent, sim_data = await asyncio.gather(glance_task, intent_task, sim_task)
+
+    if glance_data.risk_level == "HIGH":
+        score += 40
+        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} reports)")
+
+    if sim_data.get("risk_boost", 0) > 0:
+        score += sim_data["risk_boost"]
+        rules_fired.append(f"Network Edge: SIM swapped {sim_data.get('days_since_swap')}d ago")
+
+    tier = (
+        RiskTier.HIGH
+        if score >= settings.risk_threshold_high
+        else RiskTier.MEDIUM
+        if score >= settings.risk_threshold_medium
+        else RiskTier.LOW
+    )
+
+    # Determine InnoFemme decision: allow | warn | reject | delay
+    if tier == RiskTier.HIGH:
+        decision = "reject"
+        message = "MoMo Shield Alert: High-risk fraudulent activity detected. Transaction blocked."
+        asyncio.create_task(trigger_real_phone_bridge("warn"))
+    elif tier == RiskTier.MEDIUM:
+        decision = "warn"
+        message = "MoMo Shield Warning: Suspicious prompt detected. Never share your MoMo PIN with anyone."
+    else:
+        decision = "allow"
+        message = ""
+
+    result = AssessmentResult(
+        event_id=sandbox_event.event_id,
+        msisdn=sandbox_event.msisdn,
+        event_type=sandbox_event.event_type,
+        risk_score=min(100, score),
+        risk_tier=tier,
+        triggered_rules=rules_fired,
+        glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports)",
+        llm_intent=llm_intent,
+        action_taken=decision.upper(),
+        latency_ms=round((time.perf_counter() - started) * 1000, 1),
+        timestamp=datetime.utcnow(),
+    )
+
+    payload_dict = result.model_dump(mode="json")
+    ASSESSMENT_HISTORY.append(payload_dict)
+    await manager.broadcast(payload_dict)
+
+    if decision == "allow":
+        return {"decision": "allow"}
+    return {"decision": decision, "message": message}
 
