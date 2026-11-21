@@ -6,7 +6,7 @@ log = get_logger(__name__)
 
 async def intervene_sandbox(event_id: str, action: str):
     # Calls Sandbox API to block transaction or push USSD warning.
-    if "your_" in settings.sandbox_api_key:
+    if not settings.sandbox_api_key or "your_" in settings.sandbox_api_key:
         log.info(f"[MOCK] Sandbox Intervention: {event_id} -> {action}")
         return
         

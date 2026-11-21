@@ -4,9 +4,12 @@ import time
 from uuid import UUID
 from collections import deque
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Deque, List
 
-from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
+import httpx
+from fastapi import APIRouter, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 
 from app.config import settings
 from app.engine.rules import RULES
@@ -186,3 +189,45 @@ async def receive_sandbox_event(
     await manager.broadcast(payload)
 
     return result
+
+
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+
+
+@router.get("/audio/{asset_name}")
+async def get_audio_asset(asset_name: str):
+    """Serve ring, sms, alert, and momo-warning audio files to handsets/clients."""
+    file_path = ASSETS_DIR / Path(asset_name).name
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Audio asset not found")
+    media_type = "audio/wav" if file_path.suffix.lower() == ".wav" else "audio/mpeg" if file_path.suffix.lower() == ".mp3" else "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)
+
+
+@router.post("/demo/real-phone-action")
+async def real_phone_action(action: str = Query("ring", description="ring | hangup | warn")):
+    """Bridge action for local Asterisk PBX ringing/warning the judge's real phone (Linphone)."""
+    ari_url = "http://asterisk:8088/ari"
+    try:
+        async with httpx.AsyncClient(timeout=1.2) as client:
+            resp = await client.get(f"{ari_url}/asterisk/info", auth=("asterisk", "asterisk"))
+            if resp.status_code == 200:
+                if action == "ring":
+                    originate = await client.post(
+                        f"{ari_url}/channels",
+                        params={"endpoint": "PJSIP/200", "extension": "200", "context": "from-internal", "priority": "1"},
+                        auth=("asterisk", "asterisk"),
+                    )
+                    return {"status": "dispatched", "carrier": "Asterisk PJSIP", "endpoint": "PJSIP/200", "code": originate.status_code}
+                elif action in ("hangup", "warn"):
+                    channels = await client.get(f"{ari_url}/channels", auth=("asterisk", "asterisk"))
+                    for ch in channels.json():
+                        try:
+                            await client.delete(f"{ari_url}/channels/{ch['id']}", auth=("asterisk", "asterisk"))
+                        except Exception:
+                            pass
+                    return {"status": "hangup_executed", "action": action}
+    except Exception as exc:
+        log.info(f"Asterisk PBX offline or simulated: {exc}")
+    return {"status": "simulated", "action": action, "detail": "Asterisk PBX offline; simulated fallback active."}
+
