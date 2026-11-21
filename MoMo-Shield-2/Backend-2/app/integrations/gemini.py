@@ -46,7 +46,7 @@ async def analyze_intent(text: str) -> str:
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.1)
             )
 
-        resp = await asyncio.wait_for(asyncio.to_thread(_call), timeout=2.0)
+        resp = await asyncio.wait_for(asyncio.to_thread(_call), timeout=settings.gemini_timeout_seconds)
         data = json.loads(resp.text)
         return data.get('pattern') or _keyword_intent_fallback(text)
     except Exception as e:

@@ -9,10 +9,16 @@ import {
   CheckCircle2,
   Clipboard,
   Code2,
+  Cpu,
+  Flame,
+  KeyRound,
   Languages,
+  Layers,
+  Lock,
   Mic,
   Radio,
   RotateCcw,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
@@ -21,6 +27,7 @@ import {
   Volume2,
   VolumeX,
   Waves,
+  Zap,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/AppShell';
@@ -77,6 +84,7 @@ export default function SignalLabPage() {
   const [busy, setBusy] = useState(false);
   const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [error, setError] = useState('');
+  const [showRawJson, setShowRawJson] = useState(false);
 
   const addEvent = useStore((state) => state.addEvent);
   const setAnalysis = useStore((state) => state.setAnalysis);
@@ -476,45 +484,293 @@ export default function SignalLabPage() {
               )}
             </div>
 
-            {/* Triggered Rules & Intent Analysis */}
-            <div className="border-t border-white/[.08] px-6 py-4">
-              <div className="mb-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Code2 size={15} className="text-[#ffcc00]" />
-                  <span className="text-xs font-bold text-slate-200">Intent &amp; Rule Provenance</span>
-                </div>
-                <Badge variant="outline">HYBRID DECISION</Badge>
-              </div>
+            {/* Behavioral Threat & Intent Analysis */}
+            {(() => {
+              const lowerText = text.toLowerCase();
+              const hasSecretSolicitation =
+                lowerText.includes('pin') ||
+                lowerText.includes('otp') ||
+                lowerText.includes('password') ||
+                lowerText.includes('code') ||
+                lowerText.includes('secret') ||
+                lowerText.includes('wo pin') ||
+                (result?.rules.some((r) => r.toLowerCase().includes('secret') || r.toLowerCase().includes('pin')) ?? false);
 
-              {result && result.rules.length > 0 && (
-                <div className="mb-3 space-y-1.5">
-                  {result.rules.map((rule) => (
-                    <div
-                      key={rule}
-                      className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-1.5 text-xs text-rose-200"
-                    >
-                      <ShieldAlert size={13} className="shrink-0 text-rose-400" />
-                      <span>{rule}</span>
+              const hasAuthorityImpersonation =
+                lowerText.includes('mtn') ||
+                lowerText.includes('momo') ||
+                lowerText.includes('bank') ||
+                lowerText.includes('police') ||
+                lowerText.includes('agent') ||
+                lowerText.includes('official') ||
+                lowerText.includes('head office') ||
+                (result?.rules.some((r) => r.toLowerCase().includes('authority') || r.toLowerCase().includes('impersonat')) ?? false);
+
+              const hasUrgencyCoercion =
+                lowerText.includes('suspend') ||
+                lowerText.includes('immediately') ||
+                lowerText.includes('urgent') ||
+                lowerText.includes('block') ||
+                lowerText.includes('right now') ||
+                lowerText.includes('losing') ||
+                lowerText.includes('within') ||
+                (result?.rules.some((r) => r.toLowerCase().includes('urgency') || r.toLowerCase().includes('loss')) ?? false);
+
+              const hasFinancialBait =
+                lowerText.includes('congratulations') ||
+                lowerText.includes('won') ||
+                lowerText.includes('prize') ||
+                lowerText.includes('reward') ||
+                lowerText.includes('gh₵') ||
+                lowerText.includes('ghc') ||
+                lowerText.includes('bonus') ||
+                lowerText.includes('credit');
+
+              return (
+                <div className="border-t border-white/[.08] px-6 py-5">
+                  <div className="mb-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#ffcc00]/25 bg-[#ffcc00]/10">
+                        <Cpu size={14} className="text-[#ffcc00]" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-100">Behavioral Threat &amp; Intent Analysis</span>
+                        <span className="ml-2 font-mono text-[10px] text-slate-400">Gemini 3.5 + Rules Core</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="flex items-center gap-2">
+                      <Badge variant={result?.mode === 'high' ? 'high' : result?.mode === 'medium' ? 'medium' : 'outline'}>
+                        {result ? `${result.mode.toUpperCase()} THREAT` : 'STANDBY'}
+                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() => setShowRawJson(!showRawJson)}
+                        className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      >
+                        {showRawJson ? (
+                          <>
+                            <Layers size={12} className="text-[#ffcc00]" />
+                            <span>Executive View</span>
+                          </>
+                        ) : (
+                          <>
+                            <Code2 size={12} className="text-slate-400" />
+                            <span>Raw JSON</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-              <pre className="scrollbar-thin overflow-x-auto rounded-lg border border-white/[.08] bg-[#070b10] p-3.5 font-mono text-[11px] leading-relaxed text-slate-300">
-                {JSON.stringify(
-                  {
-                    intent_pattern: result?.intent ?? 'pending',
-                    triggered_rules: result?.rules ?? [],
-                    language,
-                    channel: voice ? 'voice' : 'sms',
-                    intervention: result?.decision ?? 'pending',
-                    engine: 'MoMo Shield Hybrid v2.0 (Rules + Gemini)',
-                  },
-                  null,
-                  2
-                )}
-              </pre>
-            </div>
+                  {showRawJson ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Underlying Engine Telemetry (JSON)</span>
+                        <span className="font-mono text-[10px] text-slate-500">FastAPI / InnoFemme Schema</span>
+                      </div>
+                      <pre className="scrollbar-thin overflow-x-auto rounded-lg border border-white/[.08] bg-[#070b10] p-3.5 font-mono text-[11px] leading-relaxed text-slate-300">
+                        {JSON.stringify(
+                          {
+                            intent_pattern: result?.intent ?? 'pending',
+                            triggered_rules: result?.rules ?? [],
+                            language,
+                            channel: voice ? 'voice' : 'sms',
+                            intervention: result?.decision ?? 'pending',
+                            engine: 'MoMo Shield Hybrid v2.0 (Rules + Gemini 3.5 Flash-Lite)',
+                            psychological_levers: {
+                              credential_solicitation: hasSecretSolicitation,
+                              authority_impersonation: hasAuthorityImpersonation,
+                              urgency_coercion: hasUrgencyCoercion,
+                              financial_bait: hasFinancialBait,
+                            },
+                          },
+                          null,
+                          2
+                        )}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="space-y-3.5">
+                      {/* Primary Intent Card */}
+                      <div
+                        className={`rounded-xl border p-3.5 transition-all ${
+                          result?.mode === 'high'
+                            ? 'border-rose-500/30 bg-rose-500/[0.07]'
+                            : result?.mode === 'medium'
+                            ? 'border-amber-500/30 bg-amber-500/[0.07]'
+                            : result
+                            ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
+                            : 'border-white/10 bg-slate-900/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Classified Behavioral Intent
+                              </span>
+                              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-semibold text-slate-300">
+                                {voice ? 'Voice Coercion' : 'Inbound SMS'}
+                              </span>
+                            </div>
+                            <p className="text-sm font-bold text-white">
+                              {result?.intent && result.intent !== 'pending'
+                                ? result.intent
+                                : busy
+                                ? 'Evaluating semantic threat vectors...'
+                                : 'Awaiting signal - click "Analyze signal" to assess'}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className="block text-[10px] font-mono uppercase text-slate-400">Intervention</span>
+                            <span
+                              className={`mt-0.5 inline-block rounded px-2 py-0.5 text-[11px] font-black uppercase tracking-wider ${
+                                result?.mode === 'high'
+                                  ? 'border border-rose-500/30 bg-rose-500/20 text-rose-300'
+                                  : result?.mode === 'medium'
+                                  ? 'border border-amber-500/30 bg-amber-500/20 text-amber-300'
+                                  : result
+                                  ? 'border border-emerald-500/30 bg-emerald-500/20 text-emerald-300'
+                                  : 'border border-white/5 bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {result?.decision ?? 'STANDBY'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 4 Psychological Threat Levers Grid */}
+                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                        {/* Lever 1: Credential Solicitation */}
+                        <div
+                          className={`rounded-lg border p-2.5 transition-all ${
+                            hasSecretSolicitation
+                              ? 'border-rose-500/30 bg-rose-500/10'
+                              : 'border-white/[0.07] bg-slate-900/40'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center justify-between">
+                            <KeyRound size={13} className={hasSecretSolicitation ? 'text-rose-400' : 'text-slate-400'} />
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                hasSecretSolicitation ? 'bg-rose-500/25 text-rose-300' : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {hasSecretSolicitation ? 'EXPLOIT' : 'CLEAR'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-200">PIN / Secret</p>
+                          <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
+                            {hasSecretSolicitation ? 'Harvests wallet PIN/OTP' : 'No credentials requested'}
+                          </p>
+                        </div>
+
+                        {/* Lever 2: Authority Impersonation */}
+                        <div
+                          className={`rounded-lg border p-2.5 transition-all ${
+                            hasAuthorityImpersonation
+                              ? 'border-amber-500/30 bg-amber-500/10'
+                              : 'border-white/[0.07] bg-slate-900/40'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center justify-between">
+                            <Shield size={13} className={hasAuthorityImpersonation ? 'text-amber-400' : 'text-slate-400'} />
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                hasAuthorityImpersonation ? 'bg-amber-500/25 text-amber-300' : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {hasAuthorityImpersonation ? 'SPOOFED' : 'CLEAR'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-200">Authority</p>
+                          <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
+                            {hasAuthorityImpersonation ? 'Poses as MTN/MoMo official' : 'No brand impersonation'}
+                          </p>
+                        </div>
+
+                        {/* Lever 3: Urgency & Loss Aversion */}
+                        <div
+                          className={`rounded-lg border p-2.5 transition-all ${
+                            hasUrgencyCoercion
+                              ? 'border-rose-500/30 bg-rose-500/10'
+                              : 'border-white/[0.07] bg-slate-900/40'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center justify-between">
+                            <Zap size={13} className={hasUrgencyCoercion ? 'text-rose-400' : 'text-slate-400'} />
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                hasUrgencyCoercion ? 'bg-rose-500/25 text-rose-300' : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {hasUrgencyCoercion ? 'PRESSURE' : 'CALM'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-200">Urgency</p>
+                          <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
+                            {hasUrgencyCoercion ? 'Account freeze panic tactic' : 'Standard conversational tone'}
+                          </p>
+                        </div>
+
+                        {/* Lever 4: Financial Bait */}
+                        <div
+                          className={`rounded-lg border p-2.5 transition-all ${
+                            hasFinancialBait
+                              ? 'border-indigo-500/30 bg-indigo-500/10'
+                              : 'border-white/[0.07] bg-slate-900/40'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center justify-between">
+                            <Flame size={13} className={hasFinancialBait ? 'text-indigo-400' : 'text-slate-400'} />
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                hasFinancialBait ? 'bg-indigo-500/25 text-indigo-300' : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {hasFinancialBait ? 'BAIT' : 'NONE'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-200">Financial Hook</p>
+                          <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
+                            {hasFinancialBait ? 'Lottery / reversal lure' : 'No advance fee hook'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Triggered Deterministic Heuristic Rules */}
+                      {result && result.rules.length > 0 ? (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Triggered Deterministic Rules ({result.rules.length})
+                          </span>
+                          {result.rules.map((rule) => (
+                            <div
+                              key={rule}
+                              className="flex items-center justify-between rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 shadow-sm"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ShieldAlert size={14} className="shrink-0 text-rose-400" />
+                                <span className="font-medium">{rule}</span>
+                              </div>
+                              <span className="rounded bg-rose-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
+                                HIGH RISK
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : result ? (
+                        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-300">
+                          <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+                          <span>Zero fraud heuristic rules triggered. Low-risk baseline behavior.</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </Card>
 
           {/* Victim Handset Preview */}

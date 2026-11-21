@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     glance_base_url: str = "https://api.glance.rancardmobility.com/v1"
     
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash-exp"
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_timeout_seconds: float = 15.0
     
     sandbox_api_key: str = ""
     sandbox_base_url: str = "https://api.innofemme-sandbox.com/v1"
