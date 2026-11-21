@@ -1,21 +1,66 @@
 'use client';
 
-import { useState } from 'react';
-import { Activity, Check, Copy, Eye, EyeOff, Fingerprint, KeyRound, RotateCcw, ShieldCheck, ToggleLeft } from 'lucide-react';
+import { Activity, CircleCheck, CircleHelp, ShieldCheck } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
-import { Badge, Button, Card, Input } from '@/components/ui/primitives';
+import { MtnMomoStatusCard } from '@/components/MtnMomoStatusCard';
+import { Badge, Card } from '@/components/ui/primitives';
+import { useStore } from '@/lib/useStore';
 
 export default function SettingsPage() {
-  const [showKey, setShowKey] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [threshold, setThreshold] = useState(75);
-  const [autoHold, setAutoHold] = useState(true);
-  const key = 'mms_sandbox_••••••••••••••••_4d81';
-  const copy = async () => { await navigator.clipboard?.writeText('mms_sandbox_demo_not_a_real_key'); setCopied(true); window.setTimeout(() => setCopied(false), 1500); };
-  return <AppShell><div className="mb-7"><div className="mb-2 flex items-center gap-2"><span className="text-[9px] font-semibold uppercase tracking-[.18em] text-slate-600">Workspace configuration</span><Badge variant="outline">DEMO</Badge></div><h1 className="text-[25px] font-semibold tracking-tight text-white">Settings <span className="text-slate-500">& API Keys</span></h1><p className="mt-1.5 text-[11px] text-slate-500">Sandbox connectors, simulated policy controls, and workspace preferences.</p></div>
-  <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(290px,.8fr)]"><div className="space-y-5"><Card className="overflow-hidden"><div className="flex items-center justify-between border-b border-white/[.06] px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg bg-[#ffcc00]/[.09] text-[#ffcc00]"><KeyRound size={15}/></div><div><p className="text-[11px] font-semibold text-slate-200">Sandbox API key</p><p className="mt-1 text-[9px] text-slate-600">Demo key · never accepted by a live service</p></div></div><Badge variant="success">SANDBOX</Badge></div><div className="p-5"><label htmlFor="api-key" className="mb-2 block text-[9px] font-semibold uppercase tracking-[.15em] text-slate-500">Client key</label><div className="flex gap-2"><Input id="api-key" readOnly value={showKey ? 'mms_sandbox_demo_not_a_real_key' : key} className="font-mono text-[10px] tracking-wide"/><Button variant="secondary" size="icon" onClick={() => setShowKey(!showKey)} aria-label={showKey ? 'Hide demo key' : 'Show demo key'}>{showKey ? <EyeOff size={14}/> : <Eye size={14}/>}</Button><Button variant="secondary" size="icon" onClick={copy} aria-label="Copy placeholder demo key">{copied ? <Check size={14} className="text-emerald-300"/> : <Copy size={14}/>}</Button></div><p className="mt-2 text-[9px] leading-relaxed text-slate-600">The displayed value is a nonfunctional placeholder. No credentials or API calls are configured in this project.</p></div></Card>
-  <Card className="overflow-hidden"><div className="border-b border-white/[.06] px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg bg-sky-300/[.08] text-sky-300"><Fingerprint size={15}/></div><div><p className="text-[11px] font-semibold text-slate-200">Connected intelligence</p><p className="mt-1 text-[9px] text-slate-600">Demo status indicators only</p></div></div></div><div className="divide-y divide-white/[.05] px-5">{[{ name: 'Rancard Glance', desc: 'Threat intelligence feed', status: 'Mock sync · 4m ago', tone: 'emerald' }, { name: 'Hybrid AI engine', desc: 'Rules + intent classifier', status: 'Local heuristic demo', tone: 'emerald' }, { name: 'Telecom event stream', desc: 'SMS · USSD · Voice sandbox', status: 'Synthetic events only', tone: 'amber' }].map((item) => <div key={item.name} className="flex items-center gap-3 py-4"><div className={`h-2 w-2 rounded-full ${item.tone === 'emerald' ? 'bg-emerald-400' : 'bg-amber-300'}`}/><div className="flex-1"><p className="text-[10px] font-semibold text-slate-300">{item.name}</p><p className="mt-1 text-[9px] text-slate-600">{item.desc}</p></div><span className="text-right text-[9px] text-slate-500">{item.status}</span></div>)}</div></Card>
-  <Card className="overflow-hidden"><div className="border-b border-white/[.06] px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg bg-rose-300/[.07] text-rose-300"><ShieldCheck size={15}/></div><div><p className="text-[11px] font-semibold text-slate-200">Intervention policy</p><p className="mt-1 text-[9px] text-slate-600">Adjust local simulator behavior</p></div></div></div><div className="space-y-5 p-5"><div><div className="flex items-center justify-between"><label htmlFor="threshold" className="text-[10px] font-medium text-slate-300">Auto-hold risk threshold</label><span className="font-mono text-[11px] font-semibold text-[#ffcc00]">{threshold}/100</span></div><input id="threshold" type="range" min="40" max="95" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} className="mt-3 w-full accent-[#ffcc00]"/><div className="mt-1 flex justify-between text-[8px] text-slate-700"><span>40 · review</span><span>95 · strict</span></div></div><button onClick={() => setAutoHold(!autoHold)} className="flex w-full items-center gap-3 rounded-xl border border-white/[.06] bg-white/[.018] p-3 text-left"><span className={`grid h-7 w-7 place-items-center rounded-lg ${autoHold ? 'bg-emerald-400/[.09] text-emerald-300' : 'bg-white/[.05] text-slate-500'}`}><ToggleLeft size={14}/></span><span className="flex-1"><span className="block text-[10px] font-medium text-slate-300">Simulate automatic holds</span><span className="mt-1 block text-[9px] text-slate-600">Threshold applies to signal lab mock output</span></span><span className={`rounded-full px-2 py-1 text-[8px] font-semibold ${autoHold ? 'bg-emerald-400/[.09] text-emerald-300' : 'bg-white/[.06] text-slate-500'}`}>{autoHold ? 'ON' : 'OFF'}</span></button></div></Card></div>
-  <div className="space-y-5"><Card className="p-5"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-400/[.08] text-emerald-300"><Activity size={16}/></div><div><p className="text-[11px] font-semibold text-slate-200">Environment status</p><p className="mt-1 text-[9px] text-slate-600">Sandbox · Accra region</p></div></div><div className="mt-5 space-y-3">{[{ label: 'Detection service', value: 'Healthy' }, { label: 'Response latency', value: '42ms' }, { label: 'Threat feed', value: 'Mock connected' }, { label: 'Last policy update', value: 'Just now' }].map((item) => <div key={item.label} className="flex items-center justify-between border-b border-white/[.05] pb-2.5 text-[9px]"><span className="text-slate-500">{item.label}</span><span className="flex items-center gap-1.5 text-slate-300"><i className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>{item.value}</span></div>)}</div><Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => setThreshold(75)}><RotateCcw size={11}/>Reset demo defaults</Button></Card><Card className="p-5"><div className="flex items-center gap-2"><span className="text-[11px] font-semibold text-slate-200">Workspace details</span><Badge variant="outline">READ-ONLY</Badge></div><div className="mt-4 space-y-3 text-[9px]"><div className="flex justify-between"><span className="text-slate-600">Organization</span><span className="text-slate-300">MoMo Shield Sandbox</span></div><div className="flex justify-between"><span className="text-slate-600">Operator</span><span className="text-slate-300">Ayine Damien</span></div><div className="flex justify-between"><span className="text-slate-600">Timezone</span><span className="font-mono text-slate-300">Africa/Accra</span></div><div className="flex justify-between"><span className="text-slate-600">Build</span><span className="font-mono text-slate-300">demo-v1.8.0</span></div></div></Card><div className="rounded-xl border border-amber-300/10 bg-amber-300/[.025] p-4"><p className="text-[9px] font-semibold text-amber-100">Security note</p><p className="mt-1.5 text-[9px] leading-relaxed text-slate-500">This frontend intentionally contains no production API keys. Connectors and policy controls on this page are simulated UI only.</p></div></div></div>
-  </AppShell>;
+  const connected = useStore((state) => state.connected);
+  const backendReachable = useStore((state) => state.backendReachable);
+  const avgLatencyMs = useStore((state) => state.avgLatencyMs);
+  const serviceStatus = connected ? 'Streaming' : backendReachable ? 'Reachable · reconnecting' : 'Unavailable';
+
+  return (
+    <AppShell>
+      <div className="mb-7">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-[9px] font-semibold uppercase tracking-[.18em] text-slate-600">Workspace configuration</span>
+          <Badge variant="outline">SANDBOX</Badge>
+        </div>
+        <h1 className="text-[25px] font-semibold tracking-tight text-white">Settings <span className="text-slate-500">&amp; integrations</span></h1>
+        <p className="mt-1.5 text-[11px] text-slate-500">Live backend readiness and provider configuration. Credentials remain server-side.</p>
+      </div>
+
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(290px,.8fr)]">
+        <div className="space-y-5">
+          <MtnMomoStatusCard />
+          <Card className="overflow-hidden">
+            <div className="border-b border-white/[.06] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-sky-300/[.08] text-sky-300"><Activity size={15} /></div>
+                <div><p className="text-[11px] font-semibold text-slate-200">Intelligence Core</p><p className="mt-1 text-[9px] text-slate-600">Current REST and WebSocket telemetry connection</p></div>
+              </div>
+            </div>
+            <div className="divide-y divide-white/[.05] px-5">
+              <div className="flex items-center gap-3 py-4">
+                {connected ? <CircleCheck size={14} className="text-emerald-400" /> : <CircleHelp size={14} className="text-amber-400" />}
+                <div className="flex-1"><p className="text-[10px] font-semibold text-slate-300">Telemetry stream</p><p className="mt-1 text-[9px] text-slate-600">Status is read from the active browser connection</p></div>
+                <span className="text-right text-[9px] text-slate-400">{serviceStatus}</span>
+              </div>
+              <div className="flex items-center gap-3 py-4">
+                <ShieldCheck size={14} className="text-slate-500" />
+                <div className="flex-1"><p className="text-[10px] font-semibold text-slate-300">MNO fraud signals</p><p className="mt-1 text-[9px] text-slate-600">SMS, USSD, and voice streams require a separate authorized network feed.</p></div>
+                <Badge variant="outline">NOT CONFIGURED</Badge>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-400/[.08] text-emerald-300"><Activity size={16} /></div>
+            <div><p className="text-[11px] font-semibold text-slate-200">Backend connection</p><p className="mt-1 text-[9px] text-slate-600">Measured from live telemetry</p></div>
+          </div>
+          <dl className="mt-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-white/[.05] pb-2.5 text-[9px]"><dt className="text-slate-500">WebSocket</dt><dd className="text-slate-300">{serviceStatus}</dd></div>
+            <div className="flex items-center justify-between border-b border-white/[.05] pb-2.5 text-[9px]"><dt className="text-slate-500">Backend reachability</dt><dd className="text-slate-300">{backendReachable ? 'Reachable' : 'Unavailable'}</dd></div>
+            <div className="flex items-center justify-between border-b border-white/[.05] pb-2.5 text-[9px]"><dt className="text-slate-500">Recent measured latency</dt><dd className="font-mono text-slate-300">{avgLatencyMs == null ? 'Not available' : `${avgLatencyMs} ms`}</dd></div>
+          </dl>
+          <p className="mt-4 text-[9px] leading-relaxed text-slate-500">No API keys are displayed or copied from this page. Configure provider secrets in the backend environment, not in browser storage.</p>
+        </Card>
+      </div>
+    </AppShell>
+  );
 }

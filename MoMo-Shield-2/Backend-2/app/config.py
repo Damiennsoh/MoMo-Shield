@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     sandbox_api_key: str = ""
     sandbox_base_url: str = "https://api.innofemme-sandbox.com/v1"
 
+    # MTN MoMo Collection API: keep credentials on the backend only.
+    mtn_momo_base_url: str = "https://sandbox.momodeveloper.mtn.com"
+    mtn_momo_api_user: str = ""
+    mtn_momo_api_key: str = ""
+    mtn_momo_subscription_key: str = ""
+    mtn_momo_callback_url: str = ""
+    mtn_momo_request_api_key: str = ""
+
     # Inbound webhook auth: when set, POST /webhook/sandbox requires
     # "Authorization: Bearer <webhook_api_key>". Empty = open (dev sandbox).
     webhook_api_key: str = ""

@@ -7,5 +7,11 @@ Enterprise Fraud Middleware integrating InnoFemme Sandbox & Rancard Glance.
 3. `python main.py`
 
 ## Endpoints
-- `POST /api/v1/webhook/sandbox`: Ingest events from Sandbox.
-- `WS /api/v1/ws/telemetry`: Real-time feed for Next.js SOC Dashboard.
+- `POST /api/v1/webhook/sandbox`: Ingest events from the configured sandbox.
+- `WS /api/v1/ws/telemetry`: Real-time feed for the Next.js SOC dashboard.
+- `GET /api/v1/integrations/mtn-momo/status`: Reports whether MTN sandbox credentials are configured.
+- `POST /api/v1/integrations/mtn-momo/collection/request-to-pay`: Explicitly initiates a sandbox RequestToPay. Requires `Authorization: Bearer <MTN_MOMO_REQUEST_API_KEY>` and a client-generated UUID `Idempotency-Key`.
+- `GET /api/v1/integrations/mtn-momo/collection/request-to-pay/{reference_id}`: Checks the provider's authoritative transaction status; requires the same API key.
+- `POST /api/v1/integrations/mtn-momo/callback`: Receives the provider callback and verifies final state with MTN before acknowledging it. Configure this public HTTPS URL in the MTN sandbox portal.
+
+MTN MoMo Collection is a payment API, not an SMS/USSD/voice event feed. It is kept separate from fraud-signal ingestion. Configure `MTN_MOMO_API_USER`, `MTN_MOMO_API_KEY`, `MTN_MOMO_SUBSCRIPTION_KEY` and `MTN_MOMO_REQUEST_API_KEY` on the backend; never put these values in the browser or commit them. The adapter pins the target environment to `sandbox`. Callback delivery should be treated as a notification only: the backend checks the transaction status with MTN before accepting it. Actual MNO network signals still require a separate authorized signal-feed product/API.
