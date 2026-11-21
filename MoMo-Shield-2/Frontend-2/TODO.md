@@ -1,0 +1,22 @@
+# MoMo Shield delivery outcomes
+
+- [x] Responsive FraudOps Command Center
+  - Create a responsive 3-column desktop dashboard with fixed, collapsible desktop sidebar and mobile navigation; include Command Center, Live Signal Lab, Campaign Intelligence, Glance Threat Feed, and Settings & API Keys destinations.
+  - Show sandbox connectivity, API latency and user profile in the topbar; provide bottom tabs on narrow/mobile view.
+  - Show a scrolling mock feed of SMS/USSD/Voice events with timestamp, masked +233 MSISDN and risk badge.
+  - Show four KPI cards: Frauds Stopped, False Positives, Avg Latency and Active Alerts.
+  - Show a node-link fraud graph with red-highlighted rings and active/green victim nodes.
+  - Show flagged transactions; clicking an alert opens a slide-over with 0–100 risk score, triggered rules, mock Glance intelligence status and Release, Block and Escalate actions.
+- [x] Live Signal Lab
+  - Provide synthetic SMS or transcript textarea, English/Twi/Pidgin selector, voice-call simulation checkbox and prominent Analyze Synthetic Signal button.
+  - Analyze with local mock heuristics; update risk gauge, engine decision, intent JSON and victim handset intervention preview. Voice simulation also produces a short demo audio ring when browser audio is available.
+- [x] Victim handset simulator at `/handset`
+  - Provide a mobile-first native-style MTN MoMo view with a normal state, amber cooling-off state and red transaction-blocked state.
+  - Include Read Aloud and Larger Text accessibility controls; provide manifest/service-worker setup instructions in code comments and README.
+- [x] Settings & API Keys route
+  - Provide a Settings destination with mock sandbox key display, demo connector status and adjustable local policy settings; do not expose or require real credentials.
+- [x] Typed shared state and reusable components
+  - Use Zustand for mock event stream, current risk score and active alerts; strictly type the reusable RiskGauge, EventRow, HandsetFrame and AlertCard components.
+- [x] Build, source documentation and download package
+  - Include Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui-style Radix primitives, lucide-react, Recharts, Framer Motion and Zustand; include realistic Ghanaian mock data and route manifest.
+  - Package the complete source and project configuration into a ZIP, excluding generated dependencies and build output.

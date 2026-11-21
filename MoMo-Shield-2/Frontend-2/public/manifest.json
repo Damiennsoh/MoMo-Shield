@@ -1,0 +1,12 @@
+{
+  "name": "MoMo Shield · FraudOps",
+  "short_name": "MoMo Shield",
+  "description": "Protecting every MoMo transaction.",
+  "start_url": "/handset",
+  "display": "standalone",
+  "background_color": "#090d12",
+  "theme_color": "#090d12",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
