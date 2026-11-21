@@ -166,6 +166,7 @@ async def receive_sandbox_event(
         action = "BLOCKED"
         await intervene_sandbox(event.event_id, "BLOCK_USSD")
         await report_fraud(event.msisdn, "Social Engineering")
+        asyncio.create_task(trigger_real_phone_bridge("warn"))
     elif tier == RiskTier.MEDIUM:
         action = "WARNED"
         await intervene_sandbox(event.event_id, "PUSH_WARNING")
@@ -204,8 +205,7 @@ async def get_audio_asset(asset_name: str):
     return FileResponse(file_path, media_type=media_type)
 
 
-@router.post("/demo/real-phone-action")
-async def real_phone_action(action: str = Query("ring", description="ring | hangup | warn")):
+async def trigger_real_phone_bridge(action: str = "warn") -> dict:
     """Bridge action for local Asterisk PBX ringing/warning the judge's real phone (Linphone)."""
     ari_url = "http://asterisk:8088/ari"
     try:
@@ -228,6 +228,11 @@ async def real_phone_action(action: str = Query("ring", description="ring | hang
                             pass
                     return {"status": "hangup_executed", "action": action}
     except Exception as exc:
-        log.info(f"Asterisk PBX offline or simulated: {exc}")
+        log.debug(f"Asterisk PBX offline or simulated: {exc}")
     return {"status": "simulated", "action": action, "detail": "Asterisk PBX offline; simulated fallback active."}
+
+
+@router.post("/demo/real-phone-action")
+async def real_phone_action(action: str = Query("ring", description="ring | hangup | warn")):
+    return await trigger_real_phone_bridge(action)
 

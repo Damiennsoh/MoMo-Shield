@@ -31,6 +31,7 @@ import { TrendChart } from '@/components/TrendChart';
 import { RiskGauge } from '@/components/RiskGauge';
 import { useStore, type FraudAlert, type SignalEvent } from '@/lib/useStore';
 import { useTelemetry } from '@/lib/useTelemetry';
+import { apiBase } from '@/lib/api';
 import {
   Badge,
   Button,
@@ -124,8 +125,7 @@ export default function DashboardPage() {
           });
         }
         try {
-          const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-          void fetch(`${backendUrl}/api/v1/demo/real-phone-action?action=warn`, { method: 'POST' }).catch(() => {});
+          void fetch(`${apiBase()}/api/v1/demo/real-phone-action?action=warn`, { method: 'POST' }).catch(() => {});
         } catch {
           // ignore
         }

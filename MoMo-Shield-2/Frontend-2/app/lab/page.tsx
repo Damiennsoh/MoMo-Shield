@@ -34,7 +34,7 @@ import { AppShell } from '@/components/AppShell';
 import { RiskGauge } from '@/components/RiskGauge';
 import { HandsetFrame } from '@/components/HandsetFrame';
 import { useStore, type RiskLevel } from '@/lib/useStore';
-import { submitSandboxEvent, type AssessmentResult } from '@/lib/api';
+import { apiBase, submitSandboxEvent, type AssessmentResult } from '@/lib/api';
 import { assessmentToAlert, assessmentToSignalEvent, buildLabEvent } from '@/lib/mappers';
 import {
   Badge,
@@ -168,8 +168,7 @@ export default function SignalLabPage() {
 
         // Bridge to real phone (Asterisk SIP Linphone) if present
         try {
-          const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-          void fetch(`${backendUrl}/api/v1/demo/real-phone-action?action=ring`, { method: 'POST' }).catch(() => {});
+          void fetch(`${apiBase()}/api/v1/demo/real-phone-action?action=ring`, { method: 'POST' }).catch(() => {});
         } catch {
           // ignore
         }
