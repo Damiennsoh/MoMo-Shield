@@ -1,5 +1,7 @@
 import asyncio
+import hmac
 import time
+from uuid import UUID
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Deque, List
@@ -12,6 +14,7 @@ from app.engine.state import global_window
 from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.sandbox import intervene_sandbox
+from app.integrations import mtn_momo
 from app.models.schemas import AssessmentResult, RiskTier, SandboxEvent
 from app.utils.logger import get_logger
 
@@ -58,6 +61,54 @@ async def websocket_endpoint(websocket: WebSocket):
 async def recent_events(limit: int = 50):
     """Recent assessments for dashboard hydration on connect."""
     return {"events": list(ASSESSMENT_HISTORY)[-min(limit, 200):]}
+
+
+@router.get("/integrations/mtn-momo/status")
+async def mtn_momo_status():
+    return mtn_momo.status()
+
+
+def _require_mtn_request_key(authorization: str | None) -> None:
+    configured_key = settings.mtn_momo_request_api_key
+    if not configured_key:
+        raise HTTPException(status_code=503, detail="MTN MoMo request API is not enabled")
+    supplied = (authorization or "").removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(supplied, configured_key):
+        raise HTTPException(status_code=401, detail="Invalid API credentials")
+
+
+@router.post("/integrations/mtn-momo/collection/request-to-pay", status_code=202)
+async def mtn_momo_request_to_pay(
+    payload: mtn_momo.RequestToPay,
+    authorization: str | None = Header(default=None),
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+):
+    _require_mtn_request_key(authorization)
+    return await mtn_momo.request_to_pay(payload, idempotency_key)
+
+
+@router.get("/integrations/mtn-momo/collection/request-to-pay/{reference_id}")
+async def mtn_momo_request_status(
+    reference_id: UUID,
+    authorization: str | None = Header(default=None),
+):
+    _require_mtn_request_key(authorization)
+    return await mtn_momo.get_request_status(reference_id)
+
+
+@router.post("/integrations/mtn-momo/callback")
+async def mtn_momo_callback(
+    payload: dict,
+    x_reference_id: str | None = Header(default=None, alias="X-Reference-Id"),
+):
+    """MTN callbacks are unauthenticated; verify the final state server-to-server."""
+    reference = x_reference_id or payload.get("referenceId") or payload.get("reference_id")
+    try:
+        reference_id = UUID(str(reference))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(status_code=400, detail="A valid referenceId is required")
+    transaction = await mtn_momo.get_request_status(reference_id)
+    return {"accepted": True, "status": transaction.get("status")}
 
 
 def _verify_webhook_key(authorization: str | None) -> None:

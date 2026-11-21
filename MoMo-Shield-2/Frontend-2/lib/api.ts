@@ -24,6 +24,16 @@ export interface EventsResponse {
   events: AssessmentResult[];
 }
 
+export interface MtnMomoStatus {
+  provider: string;
+  environment: 'sandbox';
+  configured: boolean;
+  requestApiEnabled: boolean;
+  ready: boolean;
+  operations: string[];
+  webhook: string;
+}
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:8000';
 

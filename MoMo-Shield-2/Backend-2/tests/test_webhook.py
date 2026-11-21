@@ -104,3 +104,33 @@ def test_webhook_auth_when_configured(_stub_integrations, monkeypatch):
 def test_invalid_event_rejected():
     resp = client.post("/api/v1/webhook/sandbox", json={"bad": "payload"})
     assert resp.status_code == 422
+
+
+def test_mtn_status_discloses_only_configuration_state(monkeypatch):
+    monkeypatch.setattr(settings, "mtn_momo_api_user", "")
+    resp = client.get("/api/v1/integrations/mtn-momo/status")
+    assert resp.status_code == 200
+    assert resp.json()["provider"] == "MTN MoMo"
+    assert resp.json()["environment"] == "sandbox"
+    assert resp.json()["configured"] is False
+
+
+def test_mtn_request_to_pay_requires_separate_operator_key(monkeypatch):
+    monkeypatch.setattr(settings, "mtn_momo_request_api_key", "operator-secret")
+    payload = {
+        "amount": "1.00",
+        "currency": "GHS",
+        "externalId": "order-123",
+        "payer": {"partyIdType": "MSISDN", "partyId": "233240000777"},
+        "payerMessage": "Sandbox test",
+        "payeeNote": "Sandbox test",
+    }
+    headers = {"Idempotency-Key": "34d1fa5e-1e1e-4679-aee2-2f4765359694"}
+    denied = client.post("/api/v1/integrations/mtn-momo/collection/request-to-pay", json=payload, headers=headers)
+    assert denied.status_code == 401
+    denied = client.post(
+        "/api/v1/integrations/mtn-momo/collection/request-to-pay",
+        json={**payload, "payer": {"partyIdType": "EMAIL", "partyId": "a@example.com"}},
+        headers={**headers, "Authorization": "Bearer operator-secret"},
+    )
+    assert denied.status_code == 422
