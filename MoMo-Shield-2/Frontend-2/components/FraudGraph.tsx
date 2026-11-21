@@ -11,6 +11,7 @@ interface Node {
   x: number;
   y: number;
   risk: number;
+  forensicNote: string;
 }
 
 interface Edge {
@@ -20,12 +21,60 @@ interface Edge {
 }
 
 const NODES: Node[] = [
-  { id: 'S1', label: 'Syndicate Hub (Kumasi)', type: 'syndicate', x: 260, y: 70, risk: 96 },
-  { id: 'M1', label: 'Mule Wallet · +23324***890', type: 'mule', x: 130, y: 150, risk: 88 },
-  { id: 'M2', label: 'Cash-out Agent · Circle', type: 'mule', x: 390, y: 140, risk: 82 },
-  { id: 'C1', label: 'Nuisance Caller · +23355***102', type: 'caller', x: 100, y: 250, risk: 78 },
-  { id: 'V1', label: 'Victim Subscriber (Sandbox)', type: 'victim', x: 260, y: 230, risk: 15 },
-  { id: 'M3', label: 'Secondary Wallet · +23320***441', type: 'mule', x: 410, y: 240, risk: 70 },
+  {
+    id: 'S1',
+    label: 'Syndicate Hub (Kumasi)',
+    type: 'syndicate',
+    x: 260,
+    y: 70,
+    risk: 96,
+    forensicNote: 'Orchestrator node: aggregated GH₵ 38,000 from 6 mule accounts; flagged cross-telco on Glance.',
+  },
+  {
+    id: 'M1',
+    label: 'Mule Wallet · +23324***890',
+    type: 'mule',
+    x: 130,
+    y: 150,
+    risk: 88,
+    forensicNote: 'Temporary Level-1 KYC wallet: receives coerced funds from victims, immediate outbound transfer.',
+  },
+  {
+    id: 'M2',
+    label: 'Cash-out Agent · Circle',
+    type: 'mule',
+    x: 390,
+    y: 140,
+    risk: 82,
+    forensicNote: 'Anomalous agent POS: cash-out frequency exceeds regional baseline by 480%.',
+  },
+  {
+    id: 'C1',
+    label: 'Nuisance Caller · +23355***102',
+    type: 'caller',
+    x: 100,
+    y: 250,
+    risk: 78,
+    forensicNote: 'Burner SIM: 62 cold calls dialed today; Hook 13 pre-ring interception triggered.',
+  },
+  {
+    id: 'V1',
+    label: 'Victim Subscriber (Sandbox)',
+    type: 'victim',
+    x: 260,
+    y: 230,
+    risk: 15,
+    forensicNote: 'Target subscriber: concurrent voice call + USSD transfer intercepted at Hook 15.',
+  },
+  {
+    id: 'M3',
+    label: 'Secondary Wallet · +23320***441',
+    type: 'mule',
+    x: 410,
+    y: 240,
+    risk: 70,
+    forensicNote: 'Structuring node: splits transfers into sub-threshold tranches (GH₵ 900–990) to avoid reporting.',
+  },
 ];
 
 const EDGES: Edge[] = [
@@ -142,24 +191,30 @@ export function FraudGraph() {
 
         {/* Selected Node Details Bar */}
         {selectedNode && (
-          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[.1] bg-white/[.03] p-3 text-xs">
-            <div className="flex items-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  selectedNode.type === 'victim' ? 'bg-emerald-400' : 'bg-rose-500'
-                }`}
-              />
-              <span className="font-bold text-white">{selectedNode.label}</span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                Type: {selectedNode.type.toUpperCase()}
-              </span>
+          <div className="mt-3.5 space-y-2 rounded-xl border border-white/[.1] bg-white/[.03] p-3.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[.08] pb-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    selectedNode.type === 'victim' ? 'bg-emerald-400' : 'bg-rose-500'
+                  }`}
+                />
+                <span className="font-bold text-white text-sm">{selectedNode.label}</span>
+                <span className="text-[10px] text-slate-400 font-mono uppercase bg-white/[.06] px-1.5 py-0.5 rounded">
+                  {selectedNode.type}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400">Risk Score:</span>
+                <Badge variant={selectedNode.risk >= 75 ? 'high' : 'low'}>
+                  {selectedNode.risk}/100
+                </Badge>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400">Risk Assessment:</span>
-              <Badge variant={selectedNode.risk >= 75 ? 'high' : 'low'}>
-                Score {selectedNode.risk}/100
-              </Badge>
-            </div>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              <strong className="text-[#ffcc00] font-semibold">Forensic Provenance: </strong>
+              {selectedNode.forensicNote}
+            </p>
           </div>
         )}
 

@@ -63,10 +63,10 @@ function MetricCard({
   tone: 'yellow' | 'green' | 'blue' | 'rose';
 }) {
   const tones = {
-    yellow: 'border-[#ffcc00]/30 bg-[#ffcc00]/15 text-[#ffcc00]',
-    green: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
-    blue: 'border-sky-500/30 bg-sky-500/15 text-sky-300',
-    rose: 'border-rose-500/30 bg-rose-500/15 text-rose-300',
+    yellow: 'border-[#ffcc00]/30 bg-[#ffcc00]/15 text-amber-600 dark:text-[#ffcc00]',
+    green: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
+    blue: 'border-sky-500/30 bg-sky-500/15 text-sky-600 dark:text-sky-300',
+    rose: 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-300',
   };
   return (
     <Card className="p-4 sm:p-5">
@@ -74,13 +74,13 @@ function MetricCard({
         <span className={`grid h-9 w-9 place-items-center rounded-xl border ${tones[tone]} shadow-sm`}>
           <Icon size={18} />
         </span>
-        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
+        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
           <ArrowDownRight size={13} />
           {delta}
         </span>
       </div>
-      <p className="mt-4 text-xs font-bold text-slate-400">{title}</p>
-      <p className="mt-1 font-mono text-2xl font-extrabold tracking-tight text-white">{value}</p>
+      <p className="mt-4 text-xs font-bold text-slate-500 dark:text-slate-400">{title}</p>
+      <p className="mt-1 font-mono text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{value}</p>
     </Card>
   );
 }
@@ -142,7 +142,17 @@ export default function DashboardPage() {
   const activeAlerts = alerts.filter((alert) => alert.status === 'active');
   const blockedCount = alerts.filter((alert) => alert.status === 'blocked').length;
   const reviewedCount = alerts.filter((alert) => alert.status !== 'active').length;
-  const ghcProtected = 52400 + blockedCount * 850;
+
+  // Calculate actual intercepted Cedi amount based on blocked alerts
+  const ghcProtected = useMemo(() => {
+    const blockedAlerts = alerts.filter((a) => a.status === 'blocked');
+    if (blockedAlerts.length === 0) return 0;
+    return blockedAlerts.reduce((sum, a) => {
+      const match = a.amount.match(/[0-9,.]+/);
+      const val = match ? parseFloat(match[0].replace(/,/g, '')) : 850;
+      return sum + (isNaN(val) ? 850 : val);
+    }, 0);
+  }, [alerts]);
 
   const handleAction = (action: NonNullable<FraudAlert['status']>) => {
     if (selected) {
@@ -278,8 +288,8 @@ export default function DashboardPage() {
       <div className="mb-6 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
         <MetricCard
           title="GH₵ Protected"
-          value={`GH₵ ${ghcProtected.toLocaleString()}`}
-          delta="Direct Loss Prevented"
+          value={ghcProtected > 0 ? `GH₵ ${ghcProtected.toLocaleString()}` : 'GH₵ 0.00'}
+          delta={ghcProtected > 0 ? 'Direct Loss Prevented' : 'Awaiting Interventions'}
           icon={ShieldCheck}
           tone="yellow"
         />
