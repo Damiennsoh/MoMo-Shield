@@ -129,9 +129,29 @@ button, input, textarea, select {
 }
 
 [data-theme="light"] header {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* The top bar intentionally stays dark in light mode, so counteract the
+   general light-theme text conversion within that dark navigation surface. */
+[data-theme="light"] header [class*="text-slate-400"],
+[data-theme="light"] header [class*="text-slate-300"] {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="light"] header [class*="text-slate-200"] {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="light"] header [class*="text-white"] {
+  color: #f8fafc !important;
+}
+
+[data-theme="light"] header [class*="text-emerald-300"],
+[data-theme="light"] header [class*="text-emerald-400"] {
+  color: #6ee7b7 !important;
 }
 
 [data-theme="light"] aside {
