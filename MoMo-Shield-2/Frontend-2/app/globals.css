@@ -151,7 +151,8 @@ button, input, textarea, select {
 [data-theme="light"] [class*="bg-[#090d12"],
 [data-theme="light"] [class*="bg-[#0a0f16"],
 [data-theme="light"] [class*="bg-[#090e14"],
-[data-theme="light"] [class*="bg-[#080d14"] {
+[data-theme="light"] [class*="bg-[#080d14"],
+[data-theme="light"] [class*="bg-[#080d14]/"] {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
   box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06);
@@ -173,7 +174,15 @@ button, input, textarea, select {
 
 [data-theme="light"] [class*="text-slate-200"],
 [data-theme="light"] [class*="text-slate-300"] {
-  color: #1e293b !important;
+  color: #334155 !important;
+}
+
+[data-theme="light"] aside nav a:not([aria-current="page"]) {
+  color: #334155 !important;
+}
+
+[data-theme="light"] aside nav a[aria-current="page"] {
+  color: #713f12 !important;
 }
 
 [data-theme="light"] [class*="text-slate-400"],
@@ -183,7 +192,41 @@ button, input, textarea, select {
 
 [data-theme="light"] [class*="text-slate-600"],
 [data-theme="light"] [class*="text-slate-700"] {
-  color: #64748b !important;
+  color: #475569 !important;
+}
+
+/* Keep dark utility text and muted status colors legible on white surfaces. */
+[data-theme="light"] [class*="text-slate-800"],
+[data-theme="light"] [class*="text-slate-900"],
+[data-theme="light"] [class*="text-slate-950"] {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] [class*="bg-slate-700"],
+[data-theme="light"] [class*="bg-slate-800"],
+[data-theme="light"] [class*="bg-slate-900"] {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] [class*="text-emerald-200"],
+[data-theme="light"] [class*="text-amber-200"],
+[data-theme="light"] [class*="text-rose-200"] {
+  color: #334155 !important;
+}
+
+[data-theme="light"] [class*="text-emerald-300"],
+[data-theme="light"] [class*="text-emerald-400"] {
+  color: #047857 !important;
+}
+
+[data-theme="light"] [class*="text-amber-300"],
+[data-theme="light"] [class*="text-amber-400"] {
+  color: #92400e !important;
+}
+
+[data-theme="light"] [class*="text-rose-300"],
+[data-theme="light"] [class*="text-rose-400"] {
+  color: #b91c1c !important;
 }
 
 /* Form inputs in light mode */
