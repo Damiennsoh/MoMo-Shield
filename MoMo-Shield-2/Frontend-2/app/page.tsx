@@ -63,10 +63,10 @@ function MetricCard({
   tone: 'yellow' | 'green' | 'blue' | 'rose';
 }) {
   const tones = {
-    yellow: 'border-[#ffcc00]/30 bg-[#ffcc00]/15 text-amber-600 dark:text-[#ffcc00]',
-    green: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
-    blue: 'border-sky-500/30 bg-sky-500/15 text-sky-600 dark:text-sky-300',
-    rose: 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-300',
+    yellow: 'border-[#ffcc00]/30 bg-[#ffcc00]/15 text-[#ffcc00]',
+    green: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
+    blue: 'border-sky-500/30 bg-sky-500/15 text-sky-300',
+    rose: 'border-rose-500/30 bg-rose-500/15 text-rose-300',
   };
   return (
     <Card className="p-4 sm:p-5">
@@ -74,13 +74,13 @@ function MetricCard({
         <span className={`grid h-9 w-9 place-items-center rounded-xl border ${tones[tone]} shadow-sm`}>
           <Icon size={18} />
         </span>
-        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
           <ArrowDownRight size={13} />
           {delta}
         </span>
       </div>
-      <p className="mt-4 text-xs font-bold text-slate-500 dark:text-slate-400">{title}</p>
-      <p className="mt-1 font-mono text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{value}</p>
+      <p className="mt-4 text-xs font-bold text-slate-400">{title}</p>
+      <p className="mt-1 font-mono text-2xl font-extrabold tracking-tight text-slate-100">{value}</p>
     </Card>
   );
 }
@@ -185,8 +185,9 @@ export default function DashboardPage() {
   const menuOptions = ['ALL SIGNALS', 'SMS', 'USSD', 'VOICE'];
 
   return (
-    <AppShell>
-      {/* Top Banner */}
+  <AppShell>
+  <div className="dashboard-content">
+  {/* Top Banner */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
@@ -204,17 +205,17 @@ export default function DashboardPage() {
             </Badge>
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-            FraudOps <span className="text-[#ffcc00]">Command Center</span>
+            FraudOps <span className="text-[#ffcc00]">Command Centre</span>
           </h1>
           <p className="mt-1 text-xs text-slate-300">
             Every transaction scored. Every subscriber protected in real-time.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            onClick={handleRunBenchmark}
+<div className="flex flex-wrap items-center gap-3">
+  <Button
+  size="sm"
+  onClick={handleRunBenchmark}
             className="border border-[#ffcc00]/40 bg-[#ffcc00]/15 text-[#ffcc00] hover:bg-[#ffcc00]/25 font-bold flex items-center gap-1.5"
           >
             <Award size={14} />
@@ -317,7 +318,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 3 Columns Layout */}
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(260px,1fr)_minmax(420px,1.65fr)_minmax(280px,1.05fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(240px,0.95fr)_minmax(390px,1.5fr)_minmax(245px,0.95fr)]">
         {/* Col 1: Live Telemetry Feed */}
         <Card className="min-w-0 overflow-hidden" id="telemetry">
           <div className="flex items-center justify-between border-b border-white/[.08] px-5 py-4">
@@ -437,8 +438,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Col 3: Active Alerts & Threat Feed */}
-        <div className="space-y-5">
-          <Card className="overflow-hidden" id="alerts">
+<div className="min-w-0 space-y-5">
+  <Card className="overflow-hidden" id="alerts">
             <div className="flex items-center justify-between border-b border-white/[.08] px-5 py-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -448,8 +449,7 @@ export default function DashboardPage() {
                 </div>
                 <p className="mt-0.5 text-[10px] text-slate-400">Priority security review queue</p>
               </div>
-              <span className="text-[10px] font-bold text-slate-400">Real-time</span>
-            </div>
+                        </div>
 
             <div className="space-y-3 p-4">
               {activeAlerts.slice(0, 4).map((alert) => (
@@ -728,7 +728,8 @@ export default function DashboardPage() {
             </div>
           </div>
         </DialogContent>
-      </Dialog>
-    </AppShell>
+  </Dialog>
+  </div>
+  </AppShell>
   );
 }

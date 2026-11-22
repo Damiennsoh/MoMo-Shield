@@ -280,3 +280,36 @@ button, input, textarea, select {
 [data-theme="light"] [class*="bg-[#17202a]"] {
   background-color: #ffffff !important;
 }
+
+.app-shell [class*="text-[8px]"] {
+  font-size: 0.625rem !important;
+  line-height: 1rem !important;
+}
+
+.app-shell [class*="text-[9px]"] {
+  font-size: 0.6875rem !important;
+  line-height: 1rem !important;
+}
+
+.app-shell [class*="text-[10px]"] {
+  font-size: 0.75rem !important;
+  line-height: 1.125rem !important;
+}
+
+.app-shell [class*="text-[11px]"] {
+  font-size: 0.8125rem !important;
+  line-height: 1.25rem !important;
+}
+
+.app-shell .font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"].app-shell [class*="text-slate-500"] {
+  color: #a3b0c0 !important;
+}
+
+[data-theme="dark"].app-shell [class*="text-slate-600"],
+[data-theme="dark"].app-shell [class*="text-slate-700"] {
+  color: #94a3b8 !important;
+}
