@@ -9,6 +9,7 @@ import {
   AudioLines,
   Award,
   Check,
+  ChevronDown,
   ChevronRight,
   CircleDot,
   Clock3,
@@ -234,33 +235,56 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* InnoFemme Network Edge Interception Status Strip */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-white/[.12] bg-[#0c131d]/90 px-4 py-2.5 shadow-sm text-xs backdrop-blur-md">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1.5 font-bold text-white">
-            <Server size={14} className="text-[#ffcc00]" />
-            <span>InnoFemme Interception Hooks:</span>
+      <details className="group mb-4 rounded-xl border border-white/[.12] bg-[#0c131d]/90 shadow-sm backdrop-blur-md">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3.5 outline-none transition hover:bg-white/[.03] focus-visible:ring-2 focus-visible:ring-[#ffcc00] [&::-webkit-details-marker]:hidden">
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-400">
+              <ShieldCheck size={17} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-white">Protection integrations</span>
+              <span className="mt-0.5 block text-xs text-slate-400">
+                Messages, calls, payments, and in-app actions are monitored.
+              </span>
+            </span>
           </span>
-          <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300 font-semibold">
-            Hook 12 (sms.deliver) • ACTIVE
+          <span className="flex shrink-0 items-center gap-3">
+            <span className="hidden items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 sm:inline-flex">
+              <span className="live-dot" />4 protections active
+            </span>
+            <span className="hidden text-xs font-semibold text-slate-300 sm:inline group-open:hidden">View details</span>
+            <span className="hidden text-xs font-semibold text-slate-300 sm:group-open:inline">Hide details</span>
+            <ChevronDown size={16} className="shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
           </span>
-          <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300 font-semibold">
-            Hook 13 (call.connect) • ACTIVE
-          </span>
-          <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300 font-semibold">
-            Hook 15 (payment.authorize) • ACTIVE
-          </span>
-          <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300 font-semibold">
-            Hook 7 (menu.open) • ACTIVE
-          </span>
+        </summary>
+
+        <div className="border-t border-white/[.08] px-4 pb-4 pt-3">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <Server size={13} />
+            InnoFemme integration details
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: 'SMS screening', hook: 'Hook 12 · sms.deliver' },
+              { label: 'Call screening', hook: 'Hook 13 · call.connect' },
+              { label: 'Payment checks', hook: 'Hook 15 · payment.authorize' },
+              { label: 'In-app actions', hook: 'Hook 7 · menu.open' },
+            ].map(({ label, hook }) => (
+              <div key={hook} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-white/[.08] bg-white/[.03] px-3 py-2">
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold text-slate-200">{label}</span>
+                  <code className="mt-0.5 block truncate text-[10px] text-slate-400">{hook}</code>
+                </span>
+                <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Active</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            <span>Bridge endpoint</span>
+            <code className="rounded border border-white/[.08] bg-white/[.04] px-2 py-1 font-mono text-[#ffcc00]">bridge://laptop/api/v1/plugin</code>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-          <span>Bridge Endpoint:</span>
-          <code className="text-[#ffcc00] font-bold bg-white/[.04] px-1.5 py-0.5 rounded border border-white/[.08]">
-            bridge://laptop/api/v1/plugin
-          </code>
-        </div>
-      </div>
+      </details>
 
       {/* Carrier Multi-Tenant Tabs */}
       <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-white/[.08] pb-3 text-xs">
