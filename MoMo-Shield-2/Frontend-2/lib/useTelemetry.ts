@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { fetchRecentEvents, telemetryWsUrl, type AssessmentResult } from './api';
 import { useStore } from './useStore';
+import { playAlertTone } from './sound';
 
 const RECONNECT_MS = 3000;
 const MAX_BACKOFF_MS = 15000;
@@ -45,6 +46,9 @@ export function useTelemetry(): void {
           const data = JSON.parse(event.data) as AssessmentResult;
           if (data && typeof data.risk_score === 'number') {
             ingestRef.current(data);
+            if (data.risk_tier === 'HIGH') {
+              void playAlertTone();
+            }
           }
         } catch {
           /* ignore malformed frames */

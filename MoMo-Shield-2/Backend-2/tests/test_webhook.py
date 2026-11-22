@@ -134,3 +134,83 @@ def test_mtn_request_to_pay_requires_separate_operator_key(monkeypatch):
         headers={**headers, "Authorization": "Bearer operator-secret"},
     )
     assert denied.status_code == 422
+
+
+def test_innofemme_plugin_allows_benign_sms():
+    payload = {
+        "point": "sms.deliver",
+        "institution": "mtn",
+        "data": {
+            "from": "0209876543",
+            "to": "0241234567",
+            "text": "Hello Ama, are we still having lunch tomorrow?",
+            "textsBetweenThemBefore": 5,
+        },
+    }
+    resp = client.post("/api/v1/plugin", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["decision"] == "allow"
+
+
+def test_innofemme_plugin_blocks_credential_harvesting_sms():
+    payload = {
+        "point": "sms.deliver",
+        "institution": "mtn",
+        "data": {
+            "from": "0590001122",
+            "to": "0241234567",
+            "text": "MTN Notice: Your MoMo wallet is blocked. Reply with your PIN immediately to unlock.",
+            "textsBetweenThemBefore": 0,
+        },
+    }
+    resp = client.post("/api/v1/plugin", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["decision"] in ("reject", "warn")
+
+
+def test_fraud_benchmark_endpoint():
+    resp = client.post("/api/v1/demo/benchmark")
+    assert resp.status_code == 200
+    data = resp.json()
+    summary = data["summary"]
+    assert summary["total_incidents"] == 14
+    assert summary["stopped_count"] == 11
+    assert summary["false_positives"] == 0
+    assert summary["ghc_protected"] > 20000
+    assert len(data["results"]) == 14
+
+    assert "MoMo Shield" in data["message"]
+
+
+def test_innofemme_plugin_detects_call_payment_cooccurrence():
+    payload = {
+        "point": "payment.authorize",
+        "institution": "mtn",
+        "data": {
+            "amount": 400,
+            "payer": {
+                "msisdn": "0241234567",
+                "onCallWith": "0559998877",
+            },
+            "payee": {"msisdn": "0559998877"},
+        },
+    }
+    resp = client.post("/api/v1/plugin", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["decision"] in ("reject", "warn")
+
+
+def test_fraud_benchmark_endpoint():
+    resp = client.post("/api/v1/demo/benchmark")
+    assert resp.status_code == 200
+    data = resp.json()
+    summary = data["summary"]
+    assert summary["total_incidents"] == 14
+    assert summary["stopped_count"] == 11
+    assert summary["false_positives"] == 0
+    assert summary["ghc_protected"] > 20000
+    assert len(data["results"]) == 14
+
+

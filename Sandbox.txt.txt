@@ -1,0 +1,127 @@
+Based on the final set of images provided, I have updated the comprehensive report. This new information introduces **Rancard Glance**, a third-party shared fraud intelligence service that is integrated as an optional tool within the hackathon ecosystem. 
+
+Here is the complete, finalized report.
+
+---
+
+# Comprehensive Report: MoMo Fraud Detection Hackathon Sandbox & Rancard Glance
+
+## 1. Executive Summary
+The MoMo Fraud Detection Hackathon provides a highly sophisticated, isolated simulation environment of the Ghanaian mobile money ecosystem. Teams are given a private copy of a simulated country to develop and test fraud detection algorithms safely. The ecosystem simulates all key players: customers, agents, networks (MTN, Telecel, AT), banks, the national switch, and fraudsters.
+
+Crucially, the environment offers two distinct integration routes for developers, a live Fraud Console for testing, and an **optional shared fraud intelligence API called Rancard Glance**. This report outlines the sandbox's core capabilities, technical integration pathways, and how to leverage Rancard Glance to build a winning solution.
+
+---
+
+## 2. Sandbox Architecture & Environment Setup
+
+### Core Ecosystem Components
+Each team gets a private, isolated "world" containing:
+*   **Networks:** 3 network back offices (MTN, Telecel, AT).
+*   **Institutions:** 6 banks, Bank of Ghana (Central Bank), NIA (National Identification Authority), NCA (National Communications Authority).
+*   **End-Users & Channels:** Customer phones, Agent counters, Customer care desks, SIM registration points.
+*   **Infrastructure:** The national switch for inter-network routing.
+*   **Tools:** Fraud Console, AI Assistant, and Rancard Glance (optional).
+
+### Three Ways to Initialize Your World
+1.  **Build an Empty Country:** Manually execute the 8-step setup chain (Issue Ghana Card \(\rightarrow\) Register SIM \(\rightarrow\) Sign up Agent \(\rightarrow\) Open Wallet, etc.).
+2.  **Load a Simulated Country:** Instantly populates with 3 months of data (100,000+ transactions, 22% fraud, 4,000+ people and wallets, 140 agents, 250 merchants).
+3.  **Make a Ready Customer:** Instantly generates a single user with a wallet, balance, and PIN.
+
+---
+
+## 3. Sandbox Capabilities: What It Can Do
+
+*   **Realistic Customer Simulation:** Simulates real USSD shortcodes (*170#), wallet menus, P2P transfers, SMS texts (including fake business shortcodes), and real voice calls between devices.
+*   **Network Back-Office:** Comprehensive dashboards tracking transactions, SIM registrations, wallets, agents, API integrations, and detailed ledgers.
+*   **Data Generation:** Downloadable tables for Transactions, People, SIM cards, SIM events, Wallets, Bank accounts, Calls, Texts, and Complaints.
+*   **10 Pre-built Fraud Typologies:** Fake "money received" text, fake customer care call, SIM swap, Agent fraud, Money mules, Fake prize/promotion, "Approve to receive" trick, Fake shop, "Relative on a new number", and Structuring (Splitting under the limit).
+*   **The Fraud Console (Testing):** Inject known fraud into the live simulation to measure your model. The scorecard tracks *Frauds stopped*, *Frauds that got through*, *Money saved*, and **False Positives** (honest activities wrongly stopped).
+*   **The AI Assistant:** A natural language interface to automate workflows (e.g., *"Save my world, then send 20 fraud incidents"*).
+*   **Safety & State Management:** "Nothing you do is permanent." You can Save a Point, Experiment (change fees/limits), Roll Back to a save point, Undo settings, or Start Again from empty.
+
+---
+
+## 4. Technical Integration: How to Build With It
+
+The sandbox provides **16 specific event steps** where your API can be called to allow, reject, warn, or delay an action.
+
+### The 16 API Interception Points
+*   **Network Events:** PIN chosen/changed, Wallet opened, Money menu opened (**warn**), Payment leaving (**warn, delay**), Money arriving, Customer asked to pay, Wallet level raised, PIN reset, Agent/Merchant signs up, SIM registered, SIM replaced, Text arriving (**warn**), Call about to ring (**warn**).
+*   **Bank Events:** Transfer leaving, Account opened, Money arriving.
+*   **Switch Events:** Payment passing between two institutions.
+*   **Post-Event Notifications:** Be told about events after they happen (e.g., payment completed, SIM replaced) to update models asynchronously.
+
+### Two Ways to Build (Integration Routes)
+*   **Route 1: API inside an institution's flow.** A network or bank asks your API a question at a specific step, waits for the answer, and acts on it. You build one small API that answers questions (Allow/Reject/Warn/Delay).
+*   **Route 2: Your own app or service, outside.** You build an app/website that uses the sandbox's APIs to pull data. Available APIs include Mobile Money (pay, refund), Network (send texts, look up number, check SIM swap), Bank (see balance, send funds), National Switch, and NIA. You are issued a Client ID and API Key.
+
+### Working from Your Laptop
+*   **Starter Kits:** Six small working files in Python and JavaScript.
+*   **The Bridge:** A small program that lets the sandbox reach an API running locally on your laptop (Sandbox \(\rightarrow\) Bridge \(\rightarrow\) Local API). Nothing to host.
+*   **Documentation:** Fully open at `hackathon.infofemme.org/docs`.
+
+---
+
+## 5. **NEW SECTION:** Rancard Glance (Optional Fraud Intelligence Tool)
+
+**Rancard Glance** is a shared fraud intelligence service for mobile money, integrated as an optional layer on top of the sandbox. It allows your app to check if a recipient's number has been reported by other organizations before money moves. 
+
+### How Glance Fits into Your App (The 5-Step Flow)
+Glance is designed to act as a pre-transfer risk check:
+1.  **Start:** User starts a transfer in your mock wallet/payment sandbox.
+2.  **Check:** Your app asks Glance for a **Risk Check** on the recipient's number.
+3.  **Warn:** If the number has been reported, show a risk warning to the user (e.g., *"Please check this recipient before you send"*).
+4.  **Decide:** The user reviews the warning and decides to continue or cancel.
+5.  **Report:** If it looks like a scam, your app can submit a **Fraud Report** back to Glance to protect other organizations. 
+
+*Note: Glance is not connected to a mobile money sandbox by default. You must pair it with your own mock wallet or the hackathon sandbox.*
+
+### The Two Core API Calls
+You will primarily use two API endpoints:
+*   **Risk Check (Look up a number):** Send the mobile number; receive threat status, risk level, and history.
+*   **Fraud Report (Report a number):** Send the mobile number and threat type.
+*(You must confirm the base URL, authentication method (API key), exact endpoint paths, and sample requests/responses with Rancard engineering before the session).*
+
+### How to Access Glance (The Developer Portal)
+The portal is located at `glance.rancardmobility.com/developers`. It provides:
+*   **Developer Onboarding:** Register your team and request access.
+*   **API Keys:** Generate, rotate, and revoke sandbox keys.
+*   **Interactive API Console:** Submit fictional reports and run risk checks in the browser.
+*   **Documentation:** Endpoints, authentication, sample requests, and guides.
+*   **Usage Analytics:** See your API activity and request outcomes.
+*   **Team Workspace:** Manage access and onboarding checklists.
+
+### The 7-Step Onboarding Process
+1.  **Register:** Submit your team's access request.
+2.  **Approval:** Rancard reviews and approves your team.
+3.  **Invitation:** Team owner gets a secure email.
+4.  **Set Up:** Verify email, create password.
+5.  **Sign In:** Open team workspace.
+6.  **API Key:** Owner generates a sandbox key.
+7.  **Build:** Use the console, docs, and samples.
+*   **Tip:** Pick one team owner and register early. Approval comes before keys, so do not leave it to the first day. Access is free and time-limited for the hackathon.
+
+---
+
+## 6. Strategy: Building Your Winning Solution
+
+### Step 1: The First 15 Minutes
+Open your link, load the simulated country, make two test customers, send a payment, check the network back office, and run a baseline fraud test.
+
+### Step 2: Data Analysis & Feature Engineering
+Download the 9 data tables. Analyze the 10 fraud typologies (e.g., sequence events for a SIM swap; text patterns for fake prizes). 
+
+### Step 3: Choose Your Architecture
+*   **Real-time Interception:** Choose **Route 1**. Build an API that listens to the "Payment leaving" event, runs a risk check, and returns `allow`, `reject`, or `delay`.
+*   **App/Service:** Choose **Route 2**. Build a service using the Network API and **Rancard Glance**. For example, build a mock wallet UI that triggers a Glance Risk Check when a user enters a recipient number.
+
+### Step 4: Leverage Glance for Shared Intelligence
+Do not just build a siloed model; integrate **Rancard Glance**. Build a solution where:
+1.  Your model analyzes local transaction patterns.
+2.  Simultaneously, your app queries Glance for the recipient's number.
+3.  If Glance flags the number as a reported scam (e.g., "3 reports, 3 independent organizations, red"), your app triggers a **Warn** or **Delay** action.
+4.  If your model detects a new scam, your app calls the Glance **Fraud Report** API to feed the shared intelligence network.
+
+### Step 5: Test and Optimize
+Use the **Fraud Console** to inject specific attacks. Monitor the Scorecard. Focus heavily on minimizing False Positives—a model that stops fraud but blocks honest users is a failure. Use the sandbox's "Save Point" and "Roll Back" features to test different thresholds rapidly.

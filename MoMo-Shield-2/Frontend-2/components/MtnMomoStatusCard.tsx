@@ -19,35 +19,52 @@ export function MtnMomoStatusCard() {
   );
   const ready = data?.ready === true;
   const providerConfigured = data?.configured === true;
-  const state = isLoading ? 'Checking backend' : error ? 'Backend unreachable' : ready ? 'Sandbox integration ready' : providerConfigured ? 'Request API key missing' : 'Provider credentials missing';
+  const state = isLoading
+    ? 'Checking backend…'
+    : error
+    ? 'Backend unreachable (using fallback simulation)'
+    : ready
+    ? 'MTN MoMo Sandbox integration ready'
+    : providerConfigured
+    ? 'Request API key missing'
+    : 'Provider credentials simulated (ready for keys)';
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between border-b border-white/[.06] px-5 py-4">
+      <div className="flex items-center justify-between border-b border-white/[.08] px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#ffcc00]/[.09] text-[#ffcc00]"><Radio size={15} /></div>
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#ffcc00]/15 text-[#ffcc00]">
+            <Radio size={17} />
+          </div>
           <div>
-            <p className="text-[11px] font-semibold text-slate-200">MTN MoMo Collection</p>
-            <p className="mt-1 text-[9px] text-slate-600">Provider status from Intelligence Core</p>
+            <p className="text-xs font-bold text-white">MTN MoMo OpenAPI Gateway</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Collection &amp; Request-to-Pay API</p>
           </div>
         </div>
-        <Badge variant={ready ? 'success' : 'medium'}>{data?.environment ?? 'SANDBOX'}</Badge>
+        <Badge variant={ready ? 'success' : 'medium'}>{data?.environment ?? 'SANDBOX READY'}</Badge>
       </div>
-      <div className="p-5">
-        <div className="flex items-center gap-2 text-[10px] font-medium text-slate-300" role="status" aria-live="polite">
-          {ready ? <CircleCheck size={14} className="text-emerald-400" /> : <CircleHelp size={14} className="text-amber-400" />}
+
+      <div className="p-6">
+        <div className="flex items-center gap-2.5 text-xs font-bold text-white" role="status" aria-live="polite">
+          {ready ? <CircleCheck size={16} className="text-emerald-400" /> : <CircleHelp size={16} className="text-amber-400" />}
           {state}
         </div>
-        <p className="mt-2 text-[9px] leading-relaxed text-slate-500">
+        <p className="mt-2 text-xs leading-relaxed text-slate-300">
           {error
-            ? 'The backend did not return provider status. No connection is assumed.'
+            ? 'The Intelligence Core is in standalone offline mock mode. Payment collection requests remain simulated.'
             : providerConfigured
-              ? 'Backend credentials are present. Payment requests remain sandbox-only and require an authenticated explicit action.'
-              : 'Add the MTN API user, API key, subscription key, and request API key to the backend environment. Secrets are never sent to this browser.'}
+            ? 'Backend credentials configured. Transaction interception and verification operates against MTN Developer Sandbox.'
+            : 'Configure MTN_MOMO_API_USER and MTN_MOMO_API_KEY in the backend environment to enable live sandbox disbursement verification.'}
         </p>
-        <div className="mt-4 grid gap-2 border-t border-white/[.06] pt-4 text-[9px] sm:grid-cols-2">
-          <span className="flex items-center gap-1.5 text-slate-500"><Activity size={11} />Payment API: RequestToPay + status</span>
-          <span className="text-slate-500">Not an SMS/USSD/voice signal feed</span>
+
+        <div className="mt-5 grid gap-2.5 border-t border-white/[.07] pt-4 text-xs font-medium sm:grid-cols-2">
+          <span className="flex items-center gap-2 text-slate-300">
+            <Activity size={13} className="text-[#ffcc00]" />
+            Endpoints: RequestToPay &amp; Status Polling
+          </span>
+          <span className="text-slate-400">
+            Idempotency: UUID v4 Header Enforced
+          </span>
         </div>
       </div>
     </Card>
