@@ -19,8 +19,11 @@ def _stub_integrations(monkeypatch):
             return GlanceRiskResponse(risk_level="HIGH", reports=7, threat_type="wallet_harvest")
         return GlanceRiskResponse(risk_level="UNKNOWN", reports=0)
 
-    async def fake_intent(text):
+    async def fake_intent(text, rag_context=None):
         return "test-intent"
+
+    async def fake_search_smart(query, top_k=1):
+        return []
 
     async def fake_intervene(event_id, action):
         calls["intervene"].append((event_id, action))
@@ -31,6 +34,10 @@ def _stub_integrations(monkeypatch):
     monkeypatch.setattr(routes, "check_glance_risk", fake_glance)
     monkeypatch.setattr(routes, "analyze_intent", fake_intent)
     monkeypatch.setattr(routes, "intervene_sandbox", fake_intervene)
+    monkeypatch.setattr(routes.knowledge_base, "search_smart", fake_search_smart)
+    async def fake_rag_context(q):
+        return None
+    monkeypatch.setattr(routes.knowledge_base, "get_rag_context_smart", fake_rag_context)
     monkeypatch.setattr(routes, "report_fraud", fake_report)
     routes.ASSESSMENT_HISTORY.clear()
     return calls

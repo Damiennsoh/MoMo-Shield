@@ -153,7 +153,7 @@ async def receive_sandbox_event(
     kb_match_data = None
     rag_context = None
     if text_payload.strip():
-        kb_matches = knowledge_base.search(text_payload, top_k=1)
+        kb_matches = await knowledge_base.search_smart(text_payload, top_k=1)
         if kb_matches:
             top_kb = kb_matches[0]
             kb_match_data = {
@@ -164,28 +164,34 @@ async def receive_sandbox_event(
                 "is_benign": top_kb.is_benign,
                 "psychological_levers": top_kb.psychological_levers,
                 "source": top_kb.source,
+                "engine": getattr(top_kb, "engine", "lexical"),
             }
-            if not top_kb.is_benign and top_kb.similarity >= 0.40:
-                score += int(top_kb.similarity * 50)
-                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} match): KNUST Dossier {top_kb.case_id} - {top_kb.title}")
-            elif top_kb.is_benign and top_kb.similarity >= 0.50:
-                score = max(0, score - 30)
-                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} match): {top_kb.title} (Legitimate Pattern)")
-        rag_context = knowledge_base.get_rag_context(text_payload)
+            kb_engine = getattr(top_kb, "engine", "lexical")
+            if kb_engine == "semantic":
+                fraud_floor, benign_floor = 0.72, 0.78
+            else:
+                fraud_floor, benign_floor = 0.40, 0.50
+            if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
+                score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
+                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} {kb_engine} match): KNUST Dossier {top_kb.case_id} - {top_kb.title}")
+            elif top_kb.is_benign and top_kb.similarity >= benign_floor:
+                score = max(0, score - (25 if kb_engine == "semantic" else 30))
+                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title} (Legitimate Pattern)")
+        rag_context = await knowledge_base.get_rag_context_smart(text_payload)
 
     # External lookups run concurrently to keep decision latency low.
     glance_task = asyncio.create_task(check_glance_risk(event.msisdn))
-    intent_task = asyncio.create_task(analyze_intent(text_payload))
+    intent_task = asyncio.create_task(analyze_intent(text_payload, rag_context))
     sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(event.msisdn))
     glance_data, llm_intent, sim_data = await asyncio.gather(glance_task, intent_task, sim_task)
 
     if glance_data.risk_level == "HIGH":
         score += 40
-        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} prior reports)")
+        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} prior reports){' [DEMO SEED]' if getattr(glance_data, 'simulated', False) else ''}")
 
     if sim_data.get("risk_boost", 0) > 0:
         score += sim_data["risk_boost"]
-        rules_fired.append(f"Network Edge: SIM swapped {sim_data.get('days_since_swap')}d ago ({sim_data.get('status')})")
+        rules_fired.append(f"Network Edge: SIM swapped {sim_data.get('days_since_swap')}d ago ({sim_data.get('status')}){' [DEMO SEED]' if sim_data.get('simulated') else ''}")
 
     tier = (
         RiskTier.HIGH
@@ -224,7 +230,7 @@ async def receive_sandbox_event(
         risk_score=min(100, score),
         risk_tier=tier,
         triggered_rules=rules_fired,
-        glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports)",
+        glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports){' · demo seed' if getattr(glance_data, 'simulated', False) else ''}",
         llm_intent=llm_intent,
         kb_match=kb_match_data,
         action_taken=action,
@@ -419,7 +425,7 @@ async def receive_innofemme_plugin(payload: dict):
     kb_match_data = None
     rag_context = None
     if text_content.strip():
-        kb_matches = knowledge_base.search(text_content, top_k=1)
+        kb_matches = await knowledge_base.search_smart(text_content, top_k=1)
         if kb_matches:
             top_kb = kb_matches[0]
             kb_match_data = {
@@ -430,23 +436,29 @@ async def receive_innofemme_plugin(payload: dict):
                 "is_benign": top_kb.is_benign,
                 "psychological_levers": top_kb.psychological_levers,
                 "source": top_kb.source,
+                "engine": getattr(top_kb, "engine", "lexical"),
             }
-            if not top_kb.is_benign and top_kb.similarity >= 0.40:
-                score += int(top_kb.similarity * 50)
-                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} match): InnoFemme Dossier {top_kb.case_id} - {top_kb.title}")
-            elif top_kb.is_benign and top_kb.similarity >= 0.50:
-                score = max(0, score - 30)
-                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} match): {top_kb.title} (Legitimate Pattern)")
-        rag_context = knowledge_base.get_rag_context(text_content)
+            kb_engine = getattr(top_kb, "engine", "lexical")
+            if kb_engine == "semantic":
+                fraud_floor, benign_floor = 0.72, 0.78
+            else:
+                fraud_floor, benign_floor = 0.40, 0.50
+            if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
+                score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
+                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} {kb_engine} match): InnoFemme Dossier {top_kb.case_id} - {top_kb.title}")
+            elif top_kb.is_benign and top_kb.similarity >= benign_floor:
+                score = max(0, score - (25 if kb_engine == "semantic" else 30))
+                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title} (Legitimate Pattern)")
+        rag_context = await knowledge_base.get_rag_context_smart(text_content)
 
     glance_task = asyncio.create_task(check_glance_risk(sandbox_event.msisdn))
-    intent_task = asyncio.create_task(analyze_intent(text_content))
+    intent_task = asyncio.create_task(analyze_intent(text_content, rag_context))
     sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(sandbox_event.msisdn))
     glance_data, llm_intent, sim_data = await asyncio.gather(glance_task, intent_task, sim_task)
 
     if glance_data.risk_level == "HIGH":
         score += 40
-        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} reports)")
+        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} reports){' [DEMO SEED]' if getattr(glance_data, 'simulated', False) else ''}")
 
     if sim_data.get("risk_boost", 0) > 0:
         score += sim_data["risk_boost"]
@@ -482,7 +494,7 @@ async def receive_innofemme_plugin(payload: dict):
         risk_score=min(100, score),
         risk_tier=tier,
         triggered_rules=rules_fired,
-        glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports)",
+        glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports){' · demo seed' if getattr(glance_data, 'simulated', False) else ''}",
         llm_intent=llm_intent,
         kb_match=kb_match_data,
         action_taken=decision.upper(),

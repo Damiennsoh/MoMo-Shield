@@ -13,7 +13,8 @@ async def check_glance_risk(msisdn: str) -> GlanceRiskResponse:
         return GlanceRiskResponse(
             risk_level="HIGH",
             reports=4,
-            threat_type="social_engineering_cross_mno"
+            threat_type="social_engineering_cross_mno",
+            simulated=True,
         )
 
     if not settings.glance_enabled:

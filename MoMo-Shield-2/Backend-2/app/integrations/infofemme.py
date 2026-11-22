@@ -43,6 +43,7 @@ class InnoFemmeNetworkClient:
                     "previous_imsi": "6200100998877",
                     "status": "SWAP_WITHIN_24H",
                     "risk_boost": 45,
+                    "simulated": True,
                 }
             return {
                 "msisdn": msisdn,

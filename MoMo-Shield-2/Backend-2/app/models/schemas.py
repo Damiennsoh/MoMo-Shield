@@ -25,6 +25,7 @@ class GlanceRiskResponse(BaseModel):
     risk_level: str = "UNKNOWN"
     reports: int = 0
     threat_type: Optional[str] = None
+    simulated: bool = False
 
 class AssessmentResult(BaseModel):
     event_id: str

@@ -156,7 +156,7 @@ export default function SignalLabPage() {
 
   const [isRinging, setIsRinging] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [msisdn, setMsisdn] = useState('+233240000310');
+  const [msisdn, setMsisdn] = useState('+233240000399');
   const [busy, setBusy] = useState(false);
   const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [error, setError] = useState('');
@@ -284,6 +284,8 @@ export default function SignalLabPage() {
 
   const mode = result?.mode ?? handsetMode;
   const score = result?.score ?? currentRisk;
+  // Only surface KB matches above the confidence floor; weaker hits are noise.
+  const kbMatch = result?.kbMatch && result.kbMatch.similarity >= 0.35 ? result.kbMatch : null;
 
   return (
     <AppShell>
@@ -828,27 +830,27 @@ export default function SignalLabPage() {
                         </div>
                       </div>
 
-                      {/* RAG Knowledge Base Forensic Precedent */}
-                      {result?.kbMatch && (
-                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs shadow-sm space-y-2">
+                      {/* RAG Knowledge Base Forensic Precedent (only above confidence floor) */}
+                      {kbMatch && (
+                        <div className={`rounded-xl border p-3.5 text-xs shadow-sm space-y-2 ${kbMatch.is_benign ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
                           <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 font-bold text-amber-300">
-                              <Sparkles size={14} className="text-[#ffcc00]" />
-                              RAG Precedent Match: InnoFemme Dossier {result.kbMatch.case_id}
+                            <span className={`flex items-center gap-1.5 font-bold ${kbMatch.is_benign ? 'text-emerald-300' : 'text-amber-300'}`}>
+                              <Sparkles size={14} className={kbMatch.is_benign ? 'text-emerald-400' : 'text-[#ffcc00]'} />
+                              {kbMatch.is_benign ? 'RAG Benign-Control Match' : 'RAG Precedent Match: InnoFemme Dossier'} {kbMatch.case_id}
                             </span>
-                            <span className="rounded-full bg-amber-500/25 px-2 py-0.5 font-mono text-[10px] font-bold text-[#ffcc00] border border-amber-500/30">
-                              {Math.round(result.kbMatch.similarity * 100)}% Similarity
+                            <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold border ${kbMatch.is_benign ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/25 text-[#ffcc00] border-amber-500/30'}`}>
+                              {Math.round(kbMatch.similarity * 100)}% Similarity
                             </span>
                           </div>
-                          <p className="font-semibold text-white leading-snug">{result.kbMatch.title}</p>
+                          <p className="font-semibold text-white leading-snug">{kbMatch.title}</p>
                           <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            {result.kbMatch.psychological_levers.map((lever) => (
-                              <span key={lever} className="rounded bg-black/40 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-amber-300 border border-amber-500/20">
+                            {kbMatch.psychological_levers.map((lever) => (
+                              <span key={lever} className={`rounded bg-black/40 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider border ${kbMatch.is_benign ? 'text-emerald-300 border-emerald-500/20' : 'text-amber-300 border-amber-500/20'}`}>
                                 {lever}
                               </span>
                             ))}
                             <span className="ml-auto text-[10px] text-slate-400 italic">
-                              {result.kbMatch.source}
+                              {kbMatch.source}
                             </span>
                           </div>
                         </div>
