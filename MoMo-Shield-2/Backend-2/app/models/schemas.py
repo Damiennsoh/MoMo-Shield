@@ -35,6 +35,7 @@ class AssessmentResult(BaseModel):
     triggered_rules: List[str]
     glance_status: Optional[str] = None
     llm_intent: Optional[str] = None
+    kb_match: Optional[Dict[str, Any]] = None
     action_taken: str
     latency_ms: float = 0.0
     timestamp: datetime

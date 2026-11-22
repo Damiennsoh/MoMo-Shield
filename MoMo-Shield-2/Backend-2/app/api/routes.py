@@ -14,9 +14,11 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.engine.rules import RULES
 from app.engine.state import global_window
+from app.engine.kb import knowledge_base
 from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.infofemme import infofemme_client
+from app.integrations.nia import evaluate_ghana_card
 from app.integrations.sandbox import intervene_sandbox
 from app.integrations import mtn_momo
 from app.models.schemas import AssessmentResult, EventType, RiskTier, SandboxEvent
@@ -146,6 +148,31 @@ async def receive_sandbox_event(
     text_payload = str(
         event.payload.get("text") or event.payload.get("transcript") or ""
     )
+
+    # Fast in-memory semantic search over InnoFemme KNUST Case Study Knowledge Base (< 2ms)
+    kb_match_data = None
+    rag_context = None
+    if text_payload.strip():
+        kb_matches = knowledge_base.search(text_payload, top_k=1)
+        if kb_matches:
+            top_kb = kb_matches[0]
+            kb_match_data = {
+                "case_id": top_kb.case_id,
+                "title": top_kb.title,
+                "typology": top_kb.typology,
+                "similarity": top_kb.similarity,
+                "is_benign": top_kb.is_benign,
+                "psychological_levers": top_kb.psychological_levers,
+                "source": top_kb.source,
+            }
+            if not top_kb.is_benign and top_kb.similarity >= 0.40:
+                score += int(top_kb.similarity * 50)
+                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} match): KNUST Dossier {top_kb.case_id} - {top_kb.title}")
+            elif top_kb.is_benign and top_kb.similarity >= 0.50:
+                score = max(0, score - 30)
+                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} match): {top_kb.title} (Legitimate Pattern)")
+        rag_context = knowledge_base.get_rag_context(text_payload)
+
     # External lookups run concurrently to keep decision latency low.
     glance_task = asyncio.create_task(check_glance_risk(event.msisdn))
     intent_task = asyncio.create_task(analyze_intent(text_payload))
@@ -199,6 +226,7 @@ async def receive_sandbox_event(
         triggered_rules=rules_fired,
         glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports)",
         llm_intent=llm_intent,
+        kb_match=kb_match_data,
         action_taken=action,
         latency_ms=round((time.perf_counter() - started) * 1000, 1),
         timestamp=datetime.utcnow(),
@@ -249,6 +277,18 @@ async def trigger_real_phone_bridge(action: str = "warn") -> dict:
     except Exception as exc:
         log.debug(f"Asterisk PBX offline or simulated: {exc}")
     return {"status": "simulated", "action": action, "detail": "Asterisk PBX offline; simulated fallback active."}
+
+
+@router.get("/knowledge-base")
+async def get_fraud_knowledge_base():
+    """Returns the precomputed InnoFemme KNUST Case Study Knowledge Base."""
+    return {
+        "count": len(knowledge_base.chunks),
+        "chunks": [
+            {k: v for k, v in c.items() if k != "vector"}
+            for c in knowledge_base.chunks
+        ]
+    }
 
 
 @router.post("/demo/real-phone-action")
@@ -364,7 +404,41 @@ async def receive_innofemme_plugin(payload: dict):
             score += pts
             rules_fired.append(desc)
 
+    # NIA Ghana Card & SIM Stacking evaluation (Hook 10 sim.register, Hook 11 sim.swap, Hook 15 payment.authorize)
+    card_no = ev_payload.get("ghanaCard") or data.get("ghanaCard") or (data.get("customer") or {}).get("ghanaCard")
+    sims_count = int(data.get("simsAlreadyOnThisGhanaCard") or ev_payload.get("simsAlreadyOnThisGhanaCard") or 1)
+    if card_no or sims_count > 1:
+        nia_result = evaluate_ghana_card(card_no, sims_count)
+        if nia_result.is_flagged:
+            score += 45
+            rules_fired.append(f"NIA Identity Integrity: {nia_result.reason}")
+
     text_content = str(ev_payload.get("text") or "")
+    
+    # Fast in-memory semantic search over InnoFemme KNUST Case Study Knowledge Base (< 2ms)
+    kb_match_data = None
+    rag_context = None
+    if text_content.strip():
+        kb_matches = knowledge_base.search(text_content, top_k=1)
+        if kb_matches:
+            top_kb = kb_matches[0]
+            kb_match_data = {
+                "case_id": top_kb.case_id,
+                "title": top_kb.title,
+                "typology": top_kb.typology,
+                "similarity": top_kb.similarity,
+                "is_benign": top_kb.is_benign,
+                "psychological_levers": top_kb.psychological_levers,
+                "source": top_kb.source,
+            }
+            if not top_kb.is_benign and top_kb.similarity >= 0.40:
+                score += int(top_kb.similarity * 50)
+                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} match): InnoFemme Dossier {top_kb.case_id} - {top_kb.title}")
+            elif top_kb.is_benign and top_kb.similarity >= 0.50:
+                score = max(0, score - 30)
+                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} match): {top_kb.title} (Legitimate Pattern)")
+        rag_context = knowledge_base.get_rag_context(text_content)
+
     glance_task = asyncio.create_task(check_glance_risk(sandbox_event.msisdn))
     intent_task = asyncio.create_task(analyze_intent(text_content))
     sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(sandbox_event.msisdn))
@@ -410,6 +484,7 @@ async def receive_innofemme_plugin(payload: dict):
         triggered_rules=rules_fired,
         glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports)",
         llm_intent=llm_intent,
+        kb_match=kb_match_data,
         action_taken=decision.upper(),
         latency_ms=round((time.perf_counter() - started) * 1000, 1),
         timestamp=datetime.utcnow(),

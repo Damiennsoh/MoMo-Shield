@@ -34,7 +34,7 @@ import { AppShell } from '@/components/AppShell';
 import { RiskGauge } from '@/components/RiskGauge';
 import { HandsetFrame } from '@/components/HandsetFrame';
 import { useStore, type RiskLevel } from '@/lib/useStore';
-import { apiBase, submitSandboxEvent, type AssessmentResult } from '@/lib/api';
+import { apiBase, submitSandboxEvent, type AssessmentResult, type KBMatchData } from '@/lib/api';
 import { assessmentToAlert, assessmentToSignalEvent, buildLabEvent } from '@/lib/mappers';
 import {
   Badge,
@@ -151,6 +151,7 @@ export default function SignalLabPage() {
     mode: RiskLevel;
     message: string;
     twiMessage: string;
+    kbMatch?: KBMatchData | null;
   } | null>(null);
 
   const [isRinging, setIsRinging] = useState(false);
@@ -220,6 +221,7 @@ export default function SignalLabPage() {
         mode,
         message: englishMsg,
         twiMessage: twiMsg,
+        kbMatch: res.kb_match,
       });
 
       setAnalysis(res.risk_score, englishMsg, twiMsg);
@@ -825,6 +827,32 @@ export default function SignalLabPage() {
                           </p>
                         </div>
                       </div>
+
+                      {/* RAG Knowledge Base Forensic Precedent */}
+                      {result?.kbMatch && (
+                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs shadow-sm space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 font-bold text-amber-300">
+                              <Sparkles size={14} className="text-[#ffcc00]" />
+                              RAG Precedent Match: InnoFemme Dossier {result.kbMatch.case_id}
+                            </span>
+                            <span className="rounded-full bg-amber-500/25 px-2 py-0.5 font-mono text-[10px] font-bold text-[#ffcc00] border border-amber-500/30">
+                              {Math.round(result.kbMatch.similarity * 100)}% Similarity
+                            </span>
+                          </div>
+                          <p className="font-semibold text-white leading-snug">{result.kbMatch.title}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {result.kbMatch.psychological_levers.map((lever) => (
+                              <span key={lever} className="rounded bg-black/40 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-amber-300 border border-amber-500/20">
+                                {lever}
+                              </span>
+                            ))}
+                            <span className="ml-auto text-[10px] text-slate-400 italic">
+                              {result.kbMatch.source}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Triggered Deterministic Heuristic Rules */}
                       {result && result.rules.length > 0 ? (

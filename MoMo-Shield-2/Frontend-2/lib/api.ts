@@ -6,6 +6,16 @@ export interface SandboxEventPayload {
   payload: Record<string, unknown>;
 }
 
+export interface KBMatchData {
+  case_id: string;
+  title: string;
+  typology: string;
+  similarity: number;
+  is_benign: boolean;
+  psychological_levers: string[];
+  source: string;
+}
+
 export interface AssessmentResult {
   event_id: string;
   msisdn: string;
@@ -15,6 +25,7 @@ export interface AssessmentResult {
   triggered_rules: string[];
   glance_status?: string | null;
   llm_intent?: string | null;
+  kb_match?: KBMatchData | null;
   action_taken: 'ALLOWED' | 'WARNED' | 'BLOCKED' | string;
   latency_ms: number;
   timestamp: string;

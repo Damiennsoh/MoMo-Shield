@@ -28,7 +28,7 @@ def _keyword_intent_fallback(text: str) -> str:
     return "Neutral / Benign Communication"
 
 
-async def analyze_intent(text: str) -> str:
+async def analyze_intent(text: str, rag_context: str | None = None) -> str:
     if not text:
         return "Neutral / Benign Communication"
     if not settings.gemini_enabled:
@@ -38,7 +38,18 @@ async def analyze_intent(text: str) -> str:
         from google.genai import types
         client = genai.Client(api_key=settings.gemini_api_key)
 
-        prompt = f"Analyze this MoMo message for fraud intent. Return JSON: {{'pattern': str, 'secret_requested': bool}}. Text: {text}"
+        if rag_context is None:
+            try:
+                from app.engine.kb import knowledge_base
+                rag_context = knowledge_base.get_rag_context(text)
+            except Exception:
+                pass
+
+        rag_prompt_section = f"\nRelevant Precedent from InnoFemme KNUST Library:\n{rag_context}\n" if rag_context else ""
+        prompt = (
+            f"Analyze this Ghanaian mobile money communication for fraud intent.{rag_prompt_section}"
+            f"Return JSON: {{'pattern': str, 'secret_requested': bool}}. Text: {text}"
+        )
 
         def _call():
             return client.models.generate_content(
