@@ -404,28 +404,64 @@ async def receive_innofemme_plugin(payload: dict):
         score += 35
         rules_fired.append("Robocall Sweep: Inbound call from high-frequency outreach line (unfamiliar caller)")
 
+    # SIM swap recency delivered in plug-in payloads (payment.authorize,
+    # menu.open, wallet.open, sim.swap carry lastSimSwapAt / swap timestamps)
+    swap_ts = ev_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
+    if swap_ts:
+        try:
+            swap_dt = datetime.fromisoformat(str(swap_ts).replace("Z", "+00:00"))
+            age_hours = (datetime.now(swap_dt.tzinfo) - swap_dt).total_seconds() / 3600
+            if 0 <= age_hours <= 48:
+                score += 45
+                rules_fired.append(f"SIM Swap Recency: Number ported to new SIM {age_hours:.0f}h ago — takeover/mule risk")
+        except (ValueError, TypeError):
+            pass
+
     for rule in RULES:
         pts, desc = rule(sandbox_event, history)
         if pts > 0 and desc:
             score += pts
             rules_fired.append(desc)
 
-    # NIA Ghana Card & SIM Stacking evaluation (Hook 10 sim.register, Hook 11 sim.swap, Hook 15 payment.authorize)
-    card_no = ev_payload.get("ghanaCard") or data.get("ghanaCard") or (data.get("customer") or {}).get("ghanaCard")
-    sims_count = int(data.get("simsAlreadyOnThisGhanaCard") or ev_payload.get("simsAlreadyOnThisGhanaCard") or 1)
-    if card_no or sims_count > 1:
-        nia_result = evaluate_ghana_card(card_no, sims_count)
+    # NIA Ghana Card & SIM/identity stacking evaluation.
+    # Plug-in payloads deliver registry counts directly (sim.register,
+    # business.onboard, account.open, wallet.open) — no extra API call needed.
+    ghana_card = (
+        ev_payload.get("ghanaCard")
+        or data.get("ghanaCard")
+        or (data.get("customer") or {}).get("ghanaCard")
+    )
+    sims_count = int(
+        data.get("simsAlreadyOnThisGhanaCard")
+        or ev_payload.get("simsAlreadyOnThisGhanaCard")
+        or 1
+    )
+    wallets_on_card = int(data.get("walletsOnThisGhanaCard") or ev_payload.get("walletsOnThisGhanaCard") or 0)
+    business_lines = int(data.get("businessLinesAlreadyOnThisGhanaCard") or ev_payload.get("businessLinesAlreadyOnThisGhanaCard") or 0)
+    accounts_other_banks = int(data.get("accountsAtOtherBanks") or ev_payload.get("accountsAtOtherBanks") or 0)
+    if ghana_card or sims_count > 1 or wallets_on_card > 1:
+        nia_result = evaluate_ghana_card(ghana_card, sims_count)
         if nia_result.is_flagged:
             score += 45
             rules_fired.append(f"NIA Identity Integrity: {nia_result.reason}")
+    if wallets_on_card >= 3:
+        score += 30
+        rules_fired.append(f"NIA Identity Sprawl: {wallets_on_card} MoMo wallets on one Ghana Card (mule-network indicator)")
+    if business_lines >= 3:
+        score += 25
+        rules_fired.append(f"NIA Agent Farm: {business_lines} business lines registered on one Ghana Card")
+    if accounts_other_banks >= 4:
+        score += 15
+        rules_fired.append(f"NIA Account Sprawl: {accounts_other_banks} bank accounts across institutions on one identity")
 
     text_content = str(ev_payload.get("text") or "")
-    
-    # Fast in-memory semantic search over InnoFemme KNUST Case Study Knowledge Base (< 2ms)
+
+    # SLA path: deterministic + lexical KB + fast external lookups only.
+    # Semantic embeddings and Gemini intent run post-decision as enrichment
+    # (they cannot affect the verdict inside the 2s plug-in window).
     kb_match_data = None
-    rag_context = None
     if text_content.strip():
-        kb_matches = await knowledge_base.search_smart(text_content, top_k=1)
+        kb_matches = knowledge_base.search(text_content, top_k=1)
         if kb_matches:
             top_kb = kb_matches[0]
             kb_match_data = {
@@ -436,25 +472,19 @@ async def receive_innofemme_plugin(payload: dict):
                 "is_benign": top_kb.is_benign,
                 "psychological_levers": top_kb.psychological_levers,
                 "source": top_kb.source,
-                "engine": getattr(top_kb, "engine", "lexical"),
+                "engine": "lexical",
             }
-            kb_engine = getattr(top_kb, "engine", "lexical")
-            if kb_engine == "semantic":
-                fraud_floor, benign_floor = 0.72, 0.78
-            else:
-                fraud_floor, benign_floor = 0.40, 0.50
-            if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
-                score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
-                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} {kb_engine} match): InnoFemme Dossier {top_kb.case_id} - {top_kb.title}")
-            elif top_kb.is_benign and top_kb.similarity >= benign_floor:
-                score = max(0, score - (25 if kb_engine == "semantic" else 30))
-                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title} (Legitimate Pattern)")
-        rag_context = await knowledge_base.get_rag_context_smart(text_content)
+            if not top_kb.is_benign and top_kb.similarity >= 0.40:
+                score += int(top_kb.similarity * 50)
+                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} lexical match): InnoFemme Dossier {top_kb.case_id} - {top_kb.title}")
+            elif top_kb.is_benign and top_kb.similarity >= 0.50:
+                score = max(0, score - 30)
+                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} lexical match): {top_kb.title} (Legitimate Pattern)")
 
     glance_task = asyncio.create_task(check_glance_risk(sandbox_event.msisdn))
-    intent_task = asyncio.create_task(analyze_intent(text_content, rag_context))
     sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(sandbox_event.msisdn))
-    glance_data, llm_intent, sim_data = await asyncio.gather(glance_task, intent_task, sim_task)
+    glance_data, sim_data = await asyncio.gather(glance_task, sim_task)
+    llm_intent = "deferred (post-decision enrichment)"
 
     if glance_data.risk_level == "HIGH":
         score += 40
@@ -506,11 +536,49 @@ async def receive_innofemme_plugin(payload: dict):
     ASSESSMENT_HISTORY.append(payload_dict)
     await manager.broadcast(payload_dict)
 
+    # Post-decision enrichment (outside the 2s plug-in SLA): semantic KB
+    # retrieval + grounded Gemini intent, pushed to the telemetry stream so
+    # the FraudOps dashboard still shows full explainability.
+    if text_content.strip():
+        asyncio.create_task(_enrich_plugin_assessment(
+            sandbox_event.event_id, text_content, point
+        ))
+
     if decision == "allow":
         return {"decision": "allow"}
     if decision == "delay":
         return {"decision": "delay", "minutes": 15, "message": message}
     return {"decision": decision, "message": message}
+
+
+async def _enrich_plugin_assessment(event_id: str, text: str, point: str) -> None:
+    """Runs after the plug-in decision is returned: semantic KB retrieval and
+    Gemini intent grounded in the retrieved precedent, broadcast to telemetry."""
+    try:
+        rag_context = await knowledge_base.get_rag_context_smart(text)
+        llm_intent = await analyze_intent(text, rag_context)
+        kb_matches = await knowledge_base.search_smart(text, top_k=1)
+        kb_match = None
+        if kb_matches:
+            top_kb = kb_matches[0]
+            kb_match = {
+                "case_id": top_kb.case_id,
+                "title": top_kb.title,
+                "typology": top_kb.typology,
+                "similarity": top_kb.similarity,
+                "is_benign": top_kb.is_benign,
+                "source": top_kb.source,
+                "engine": getattr(top_kb, "engine", "lexical"),
+            }
+        await manager.broadcast({
+            "type": "assessment_enrichment",
+            "event_id": event_id,
+            "point": point,
+            "llm_intent": llm_intent,
+            "kb_match": kb_match,
+        })
+    except Exception as exc:
+        log.debug(f"Plugin enrichment failed for {event_id}: {exc}")
 
 
 BENCHMARK_SCENARIOS = [
