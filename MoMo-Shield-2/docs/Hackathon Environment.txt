@@ -1,0 +1,147 @@
+Based on the newly provided documentation, I have comprehensively updated the report. This new source provides the exact technical specifications—the API endpoints, the data payloads, and the real-time decision mechanics—that were previously described abstractly.
+
+Here is the finalized, technical, and comprehensive report.
+
+---
+
+# Comprehensive Technical Report: MoMo Fraud Detection Hackathon Environment
+
+## 1. Executive Summary
+The hackathon environment is a full-stack simulation of the Ghanaian financial ecosystem. It provides teams with an isolated "world" containing networks (MTN, Telecel, AT), banks, the National Switch (GhIPSS), and regulatory bodies (NIA, BoG, NCA). Teams can build real-time fraud detection solutions either by **plugging an API directly into an institution's transaction flow** (Route 1) or by **building an external application** that consumes partner APIs (Route 2). The environment is equipped with a Fraud Console for injecting attacks, a downloadable dataset of 3 months of labeled transactions, and **Rancard Glance**, a shared fraud intelligence API.
+
+---
+
+## 2. Core Environment & Capabilities
+
+### A. The Simulated World
+*   **Components:** 3 Networks, 6 Banks, GhIPSS (Switch), NIA (ID), NCA (SIM rules), BoG (KYC limits).
+*   **Channels:** Fully functional phone simulators (USSD, SMS, Calls), Agent counters, and Back-Office dashboards.
+*   **Start Options:** Empty Country (manual setup), Simulated Country (100k+ transactions, 22% fraud), or a single Ready Test Customer.
+*   **Safety:** Save points, rollbacks, and full resets. Nothing done affects the real world.
+
+### B. The AI Assistant
+A natural language interface (accessed via UI or `POST {base}/assistant`) that delegates tasks to specialist agents (Builder, Operator, Integrator, Analyst, Guide). It can set up institutions, run fraud tests, and query data.
+
+### C. Rancard Glance (Shared Intelligence)
+An optional, external fraud intelligence service. It allows you to:
+1.  **Risk Check:** Query a mobile number to see if it has been reported by other organizations (returns threat status, risk level, history).
+2.  **Fraud Report:** Report a number to the shared intelligence network.
+*   *Integration:* Accessed via `glance.rancardmobility.com/developers` using a separate API key.
+
+---
+
+## 3. Data & The Fraud Console
+
+### A. The Dataset
+The simulated country includes three months of everyday life. Every transaction is labeled as **honest or fraud**, including specific typologies (e.g., SIM swap, fake prize, money mules). You can download tables for Transactions, People, SIM cards, SIM events, Wallets, Bank accounts, Calls, Texts, and Complaints.
+
+### B. The Fraud Console
+The testing engine. It plays fraud incidents (or all 10 pre-built typologies) through your world. It scores your solution based on:
+*   Frauds stopped vs. Got through.
+*   Money kept from fraudsters.
+*   **False Positives** (honest activities wrongly stopped). *Crucial for model tuning.*
+
+---
+
+## 4. Technical Integration: The 16 Plug-in Points (Route 1)
+
+This is the most powerful integration method. You build an API, and an institution calls it at a specific step in its flow. **You have 2 seconds to respond** (default) with one of four decisions:
+
+| Decision | Effect | Required Fields |
+| :--- | :--- | :--- |
+| `allow` | Proceeds normally. | None |
+| `reject` | Stops the action immediately. | `message` (max 150 chars) |
+| `warn` | Shows a warning; customer chooses to continue or cancel. | `message` |
+| `delay` | Refuses now, allows retry after `minutes`. | `minutes`, `message` |
+
+### The 16 Interception Points & Data Payloads
+
+#### Network Events (Payer's Network)
+1.  **`pin.set`**: Customer chooses/changes PIN. (Data: msisdn, pin, customer KYC details).
+2.  **`wallet.open`**: Wallet about to be opened. (Data: msisdn, walletType, KYC tier, customer details, `lastSimSwapAt`).
+3.  **`menu.open`**: Customer opens USSD menu. (Data: msisdn, wallet status, `onCallWith`).
+4.  **`payment.authorize`**: **CRITICAL FOR FRAUD.** Payment about to leave. (Data: amount, payer/payee details, `lastSimSwapAt`, `onCallWith`, `paymentsInLast24Hours`, `paymentsToThisPayeeBefore`).
+5.  **`payment.receive`**: Money about to arrive. (Data: payer/payee details, `paymentsReceivedInLast24Hours`, `differentPayersInLast24Hours`).
+6.  **`payment.request`**: Business asks customer to approve. (Data: amount, requester info, `requestsFromThisRequesterToday`, `chargedWithoutAsking`).
+7.  **`kyc.upgrade`**: Wallet KYC level raising. (Data: from/to tiers, requestedBy agent, customer details).
+8.  **`pin.reset`**: PIN reset at service point. (Data: msisdn, `walletBalance`, `walletStatus`, `lastSimSwapAt`, `pinResetsBefore`).
+9.  **`business.onboard`**: Agent/Merchant signing up. (Data: business type, owner details, `businessLinesAlreadyOnThisGhanaCard`).
+10. **`sim.register`**: SIM registering to Ghana Card. (Data: msisdn, registeredBy agent, customer details, `simsAlreadyOnThisGhanaCard`).
+11. **`sim.swap`**: Number moving to new SIM. (Data: msisdn, replacedBy, customer details, `walletBalance`, `swapsOnThisNumberBefore`).
+12. **`sms.deliver`**: Text about to reach subscriber. (Data: from, to, text, `textsBetweenThemBefore`).
+13. **`call.connect`**: Call about to ring. (Data: from, to, `callerSimRegisteredAt`, `callsBetweenThemBefore`, `numbersTheCallerHasRungToday`).
+
+#### Bank Events
+14. **`transfer.authorize`**: Transfer leaving bank account. (Data: amount, from account details, to wallet details).
+15. **`account.open`**: Bank account opening. (Data: customer details, `accountsAtOtherBanks`, `walletsOnThisGhanaCard`).
+
+#### Switch Events
+16. **`switch.route`**: Payment passing between institutions. (Data: from/to institutions, amount, `paymentsRoutedBetweenThemToday`).
+
+#### Post-Event Notifications (`events`)
+You can also subscribe to events *after* they happen (e.g., `payment.completed`, `wallet.locked`, `sim.swapped`). The answer is ignored; this is for updating your models asynchronously.
+
+### How to Connect Your API
+The sandbox is on the internet and cannot reach `localhost`. You have three options:
+1.  **The Bridge (Recommended):** Run `bridge.py` or `bridge.mjs` alongside your local API. Use `bridge://laptop` as the address.
+2.  **Host it:** Put your API on a public HTTPS server (e.g., Render, Heroku).
+3.  **Tunnel:** Use `ngrok` or `cloudflared`.
+
+---
+
+## 5. Technical Integration: Partner APIs (Route 2)
+
+If you are building an external app (e.g., a fraud dashboard, a USSD service, or a wallet), you use the Partner APIs. You must get a **Client ID** and **API Key** from the institution's console (under "API partners"). Authentication is via HTTP Basic or Bearer Token.
+
+### 1. Mobile Money API (MTN, Telecel, AT)
+*   **Collection:** `POST /collection/v1_0/requesttopay` (Ask customer to pay).
+*   **Disbursement:** `POST /disbursement/v1_0/transfer` (Send money out).
+*   **Balance/Info:** `GET /collection/v1_0/account/balance`, `GET /collection/v1_0/accountholder/msisdn/{number}/basicuserinfo`.
+*   **Pre-approval:** `POST /collection/v2_0/preapproval` (Permission to charge without asking each time).
+
+### 2. Network API
+*   **SMS:** `POST /v1/sms/messages` (Send text under your sender name).
+*   **Subscriber Check:** `GET /v1/subscribers/{number}` (Name, status, wallet presence).
+*   **SIM Swap Check:** `POST /v1/sim-swap/check` (Was SIM replaced in last `maxAge` hours?).
+*   **KYC Match:** `POST /v1/kyc-match` (Verify name/DOB against NIA).
+*   **USSD:** You can register a shortcode and receive every step as a JSON POST to your address.
+
+### 3. Bank API
+*   **Account Info:** `GET /v1/account`, `GET /v1/account/transactions`.
+*   **Name Enquiry:** `POST /v1/name-enquiry`.
+*   **Transfers:** `POST /v1/transfers` (to bank), `POST /v1/wallet-transfers` (to MoMo).
+
+### 4. National Switch (GhIPSS) API
+*   **Name Enquiry:** `POST /v1/name-enquiry` (Find which institution holds an account/number).
+*   **Transaction Status:** `GET /v1/transactions/{id}`.
+
+### 5. NIA Identity Verification API
+*   **Verify Card:** `POST /v1/verify {cardNumber}` (Is it valid?).
+*   **Verify Biometric:** `POST /v1/verify {cardNumber, fingerprint, purpose}` (Match fingerprint to person).
+
+---
+
+## 6. Strategy: Building Your Winning Solution
+
+### Step 1: Onboarding (First 15 Minutes)
+1. Load the Simulated Country.
+2. Create two test customers (save their PINs).
+3. Make a payment via the phone simulator.
+4. Run the Fraud Console once with nothing built to see baseline risk.
+5. Get a starter kit running (Python or Node.js) and use the Bridge to connect it.
+
+### Step 2: Data Analysis & Feature Engineering
+Download the 9 data tables. Analyze the 10 typologies. Look for patterns:
+*   *SIM Swap Fraud:* Look for a `sim.swap` event followed by a `payment.authorize` (especially high value) within minutes.
+*   *Money Mules:* Look at `payment.receive` payloads for accounts receiving from many different payers in 24h (`differentPayersInLast24Hours`).
+*   *Fake Customer Care:* Look for `call.connect` events from new SIMs (`callerSimRegisteredAt` is recent) before a payment.
+
+### Step 3: Choose Your Architecture
+*   **Real-Time Interception (Route 1):** Build a Python/Node API. Use the `payment.authorize` and `sim.swap` endpoints. Implement logic that returns `reject` or `delay` if suspicious.
+*   **App/Service (Route 2):** Build a dashboard that uses the Network API's `sim-swap/check` and Rancard Glance's Risk Check to score recipients before a user sends money.
+
+### Step 4: Leverage Glance
+Integrate Rancard Glance into your flow. If your local model detects a scam, call the `Fraud Report` endpoint to feed the shared intelligence network. Before allowing a payment, call `Risk Check` to see if the recipient number has been reported by other institutions.
+
+### Step 5: Test, Optimize, and Iterate
+Use the Fraud Console to inject specific attacks. Monitor the Scorecard. **Focus heavily on minimizing False Positives.** Use the sandbox's "Save Point" and "Roll Back" features to test different thresholds of your model rapidly. Use the `delay` decision if you are unsure but want to pause the transaction for manual review.

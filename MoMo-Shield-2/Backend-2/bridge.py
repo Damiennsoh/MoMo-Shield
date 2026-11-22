@@ -33,7 +33,7 @@ import uuid
 parser = argparse.ArgumentParser(description="Lets the sandbox reach an API running on this computer.")
 parser.add_argument("--sandbox", default=os.environ.get("SANDBOX"), help="your team's Base URL, https://…/api/w/your-team")
 parser.add_argument("--key", default=os.environ.get("TEAM_KEY"), help="your team key")
-parser.add_argument("--to", default=os.environ.get("TO", "http://localhost:4010"), help="where your API is (default http://localhost:4010)")
+parser.add_argument("--to", default=os.environ.get("TO", "http://localhost:8001"), help="where your API is (default http://localhost:8001)")
 parser.add_argument("--name", default=os.environ.get("NAME", "laptop"), help='what to call this bridge (default "laptop")')
 options = parser.parse_args()
 SANDBOX, TEAM_KEY, NAME = options.sandbox, options.key, options.name

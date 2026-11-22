@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = 15.0
     
     sandbox_api_key: str = ""
-    sandbox_base_url: str = "https://api.innofemme-sandbox.com/v1"
+    sandbox_team_key: str = ""
+    sandbox_client_id: str = ""
+    sandbox_base_url: str = "https://hackathon.innofemme.org/api/w"
 
     # MTN MoMo Collection API: keep credentials on the backend only.
     mtn_momo_base_url: str = "https://sandbox.momodeveloper.mtn.com"

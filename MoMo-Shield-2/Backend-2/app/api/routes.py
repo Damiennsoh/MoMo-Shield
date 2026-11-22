@@ -398,6 +398,9 @@ async def receive_innofemme_plugin(payload: dict):
         decision = "allow"
         message = ""
 
+    # Ensure message is strictly capped to 150 chars per InnoFemme plug-in specification
+    message = (message or "")[:150]
+
     result = AssessmentResult(
         event_id=sandbox_event.event_id,
         msisdn=sandbox_event.msisdn,
@@ -418,6 +421,8 @@ async def receive_innofemme_plugin(payload: dict):
 
     if decision == "allow":
         return {"decision": "allow"}
+    if decision == "delay":
+        return {"decision": "delay", "minutes": 15, "message": message}
     return {"decision": decision, "message": message}
 
 
