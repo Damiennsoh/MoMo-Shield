@@ -1,0 +1,13 @@
+scenario_id,user_id,event_id,event_type,event_time,description,is_transaction_event,scenario_is_fraudulent,scenario_name,data_origin
+SCN001,TESTUSER001,SCN001_EV01,SMS,2026-11-01 09:48:00,Your wallet will be suspended. Call immediately to restore access.,0,1,account_takeover_social_engineering,synthetic_integrated_test
+SCN001,TESTUSER001,SCN001_EV02,CALL_TRANSCRIPT,2026-11-01 09:54:00,I am from customer support. Read the OTP so I can secure your wallet.,0,1,account_takeover_social_engineering,synthetic_integrated_test
+SCN001,TESTUSER001,SCN001_EV03,TRANSACTION,2026-11-01 10:00:00,Transfer initiated to an unfamiliar recipient.,1,1,account_takeover_social_engineering,synthetic_integrated_test
+SCN002,TESTUSER002,SCN002_EV01,SMS,2026-11-01 09:50:00,A refund is waiting. Contact this number now to receive it.,0,1,fake_refund,synthetic_integrated_test
+SCN002,TESTUSER002,SCN002_EV02,CALL_TRANSCRIPT,2026-11-01 09:56:00,Please reverse the payment to this different number immediately.,0,1,fake_refund,synthetic_integrated_test
+SCN002,TESTUSER002,SCN002_EV03,TRANSACTION,2026-11-01 10:00:00,Transfer initiated to an unfamiliar recipient.,1,1,fake_refund,synthetic_integrated_test
+SCN003,TESTUSER003,SCN003_EV01,SMS,2026-11-01 09:40:00,Your previous transaction was successful. Thank you.,0,0,legitimate_everyday_transfer,synthetic_integrated_test
+SCN003,TESTUSER003,SCN003_EV02,TRANSACTION,2026-11-01 10:00:00,Transfer to a familiar recipient.,1,0,legitimate_everyday_transfer,synthetic_integrated_test
+SCN004,TESTUSER004,SCN004_EV01,SMS,2026-11-01 10:00:00,"Congratulations, you have won a cash prize. Pay a fee to claim.",0,1,suspicious_message_no_transaction,synthetic_integrated_test
+SCN005,TESTUSER005,SCN005_EV01,SMS,2026-11-01 09:52:00,"Never share your PIN or OTP with anyone, including customer support.",0,0,legitimate_security_advice,synthetic_integrated_test
+SCN005,TESTUSER005,SCN005_EV02,CALL_TRANSCRIPT,2026-11-01 09:56:00,Please check your transaction in the official app. We will never ask for your code.,0,0,legitimate_security_advice,synthetic_integrated_test
+SCN005,TESTUSER005,SCN005_EV03,TRANSACTION,2026-11-01 10:00:00,Transfer to a familiar recipient.,1,0,legitimate_security_advice,synthetic_integrated_test

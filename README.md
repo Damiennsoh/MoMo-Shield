@@ -15,6 +15,8 @@ MoMo-Shield/
 
 Keep `backend/` and `frontend/` separate. They have different runtime roles, entry points, dependencies, and deployment needs. The dashboard communicates with the backend over HTTP; they do not need to be merged into one application. The frontend can also run without the API by using its deterministic local rules engine.
 
+The standalone research prototype in [`fraud-detection-engine/`](fraud-detection-engine/README.md) has its own dependencies, notebooks, and tests. It is not currently integrated with the API or dashboard.
+
 ## Technology stack
 
 | Tool | Role in MoMo Shield |
