@@ -128,10 +128,29 @@ button, input, textarea, select {
     radial-gradient(rgba(100, 116, 139, 0.12) 0.8px, transparent 0.8px);
 }
 
-[data-theme="light"] header {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+.app-shell[data-theme="light"] header {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* Navbar text must remain dark on the light header despite global utility overrides. */
+[data-theme="light"] header [class*="text-slate-400"] {
+  color: #475569 !important;
+}
+
+[data-theme="light"] header [class*="text-slate-300"] {
+  color: #334155 !important;
+}
+
+[data-theme="light"] header [class*="text-slate-200"],
+[data-theme="light"] header [class*="text-white"] {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] header [class*="text-emerald-300"],
+[data-theme="light"] header [class*="text-emerald-400"] {
+  color: #047857 !important;
 }
 
 [data-theme="light"] aside {
@@ -151,7 +170,8 @@ button, input, textarea, select {
 [data-theme="light"] [class*="bg-[#090d12"],
 [data-theme="light"] [class*="bg-[#0a0f16"],
 [data-theme="light"] [class*="bg-[#090e14"],
-[data-theme="light"] [class*="bg-[#080d14"] {
+[data-theme="light"] [class*="bg-[#080d14"],
+[data-theme="light"] [class*="bg-[#080d14]/"] {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
   box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06);
@@ -173,7 +193,15 @@ button, input, textarea, select {
 
 [data-theme="light"] [class*="text-slate-200"],
 [data-theme="light"] [class*="text-slate-300"] {
-  color: #1e293b !important;
+  color: #334155 !important;
+}
+
+[data-theme="light"] aside nav a:not([aria-current="page"]) {
+  color: #334155 !important;
+}
+
+[data-theme="light"] aside nav a[aria-current="page"] {
+  color: #713f12 !important;
 }
 
 [data-theme="light"] [class*="text-slate-400"],
@@ -183,7 +211,41 @@ button, input, textarea, select {
 
 [data-theme="light"] [class*="text-slate-600"],
 [data-theme="light"] [class*="text-slate-700"] {
-  color: #64748b !important;
+  color: #475569 !important;
+}
+
+/* Keep dark utility text and muted status colors legible on white surfaces. */
+[data-theme="light"] [class*="text-slate-800"],
+[data-theme="light"] [class*="text-slate-900"],
+[data-theme="light"] [class*="text-slate-950"] {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] [class*="bg-slate-700"],
+[data-theme="light"] [class*="bg-slate-800"],
+[data-theme="light"] [class*="bg-slate-900"] {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] [class*="text-emerald-200"],
+[data-theme="light"] [class*="text-amber-200"],
+[data-theme="light"] [class*="text-rose-200"] {
+  color: #334155 !important;
+}
+
+[data-theme="light"] [class*="text-emerald-300"],
+[data-theme="light"] [class*="text-emerald-400"] {
+  color: #047857 !important;
+}
+
+[data-theme="light"] [class*="text-amber-300"],
+[data-theme="light"] [class*="text-amber-400"] {
+  color: #92400e !important;
+}
+
+[data-theme="light"] [class*="text-rose-300"],
+[data-theme="light"] [class*="text-rose-400"] {
+  color: #b91c1c !important;
 }
 
 /* Form inputs in light mode */
@@ -279,4 +341,37 @@ button, input, textarea, select {
 [data-theme="light"] [class*="bg-[#0c1118]"],
 [data-theme="light"] [class*="bg-[#17202a]"] {
   background-color: #ffffff !important;
+}
+
+.app-shell [class*="text-[8px]"] {
+  font-size: 0.625rem !important;
+  line-height: 1rem !important;
+}
+
+.app-shell [class*="text-[9px]"] {
+  font-size: 0.6875rem !important;
+  line-height: 1rem !important;
+}
+
+.app-shell [class*="text-[10px]"] {
+  font-size: 0.75rem !important;
+  line-height: 1.125rem !important;
+}
+
+.app-shell [class*="text-[11px]"] {
+  font-size: 0.8125rem !important;
+  line-height: 1.25rem !important;
+}
+
+.app-shell .font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"].app-shell [class*="text-slate-500"] {
+  color: #a3b0c0 !important;
+}
+
+[data-theme="dark"].app-shell [class*="text-slate-600"],
+[data-theme="dark"].app-shell [class*="text-slate-700"] {
+  color: #94a3b8 !important;
 }

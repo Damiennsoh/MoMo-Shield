@@ -4,7 +4,7 @@ import { PwaRegistration } from '@/components/PwaRegistration';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'MoMo Shield · FraudOps Command Center', template: '%s · MoMo Shield' },
+  title: { default: 'MoMo Shield · FraudOps Command Centre', template: '%s · MoMo Shield' },
   description: 'A mobile money fraud operations command center for reviewing live sandbox telemetry, risk decisions, and alerts.',
   applicationName: 'MoMo Shield',
   manifest: '/manifest.json',

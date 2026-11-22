@@ -30,7 +30,7 @@ import { useStore } from '@/lib/useStore';
 import { resetDemoSession } from '@/lib/api';
 
 const navItems = [
-  { href: '/', label: 'Command Center', icon: LayoutDashboard },
+  { href: '/', label: 'Command Centre', icon: LayoutDashboard },
   { href: '/lab', label: 'Live Signal Lab', icon: Radio, marker: 'LAB' },
   { href: '/handset', label: 'Handset Simulator', icon: Smartphone },
   { href: '/#campaigns', label: 'Campaign Intelligence', icon: Network },
@@ -101,10 +101,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ? 'Handset Simulator'
       : pathname === '/settings'
       ? 'Settings & API Keys'
-      : 'Command Center';
+      : 'Command Centre';
 
   return (
-    <div className="console-bg min-h-screen" data-theme={theme}>
+    <div className="app-shell console-bg min-h-screen" data-theme={theme}>
       {/* Desktop Sidebar */}
       <aside
         className={cn(
