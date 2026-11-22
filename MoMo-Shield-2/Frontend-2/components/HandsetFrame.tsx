@@ -71,7 +71,7 @@ export function HandsetFrame({
                 <b className="text-xs font-bold text-slate-900">Wallet Protected</b>
               </div>
               <p className="text-[10px] leading-relaxed font-medium text-slate-600">
-                Your MTN MoMo wallet is secure. Never share your PIN with anyone, including staff.
+                Your MTN MoMo wallet is secure. Standby for incoming transactions, calls, or USSD prompts.
               </p>
               <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2 font-mono text-[9px] font-bold text-slate-700 text-center">
                 *170# · Check Balance
@@ -108,16 +108,31 @@ export function HandsetFrame({
             </div>
           )}
 
-          {/* Localized Twi Warning notification card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="flex items-center justify-between text-[9px] font-bold text-slate-500">
-              <span className="text-[#b45309]">MoMo Shield Intervention</span>
-              <span>Just now</span>
+          {/* Localized Twi Warning notification card: ONLY displayed during active threat / intervention */}
+          {mode !== 'low' ? (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex items-center justify-between text-[9px] font-bold text-amber-800">
+                <span className="flex items-center gap-1 text-[#b45309]">
+                  <ShieldAlert size={11} />
+                  MoMo Shield Active Warning
+                </span>
+                <span className="text-amber-700">Just now</span>
+              </div>
+              <p className={`mt-1 font-semibold leading-relaxed text-slate-900 ${largerText ? 'text-xs' : 'text-[10px]'}`}>
+                {effectiveTwi}
+              </p>
             </div>
-            <p className={`mt-1 font-semibold leading-relaxed text-slate-900 ${largerText ? 'text-xs' : 'text-[10px]'}`}>
-              {effectiveTwi}
-            </p>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-white/70 p-3 shadow-xs">
+              <div className="flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                <span>Recent System Notice</span>
+                <span>Standby</span>
+              </div>
+              <p className="mt-1 text-[10px] font-medium leading-relaxed text-slate-500">
+                No active threat detected. MoMo Shield monitoring Hook 12, 13 & 15.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Home gesture bar */}
