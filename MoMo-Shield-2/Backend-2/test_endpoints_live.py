@@ -1,6 +1,9 @@
 import urllib.request
 import json
 import time
+import os
+
+BASE_URL = os.environ.get("MOMOSHIELD_API_URL", "http://localhost:8000").rstrip("/")
 
 def post(url, data):
     req = urllib.request.Request(
@@ -18,11 +21,11 @@ def get(url):
         return res.status, json.loads(res.read().decode("utf-8"))
 
 print("=== 1. TEST /knowledge-base ===")
-st, kb = get("http://localhost:8001/api/v1/knowledge-base")
+st, kb = get(f"{BASE_URL}/api/v1/knowledge-base")
 print(f"Status {st}: Loaded {kb.get('count')} chunks from KNUST Library")
 
 print("\n=== 2. TEST /webhook/sandbox (SMS Phishing) ===")
-st, res1 = post("http://localhost:8001/api/v1/webhook/sandbox", {
+st, res1 = post(f"{BASE_URL}/api/v1/webhook/sandbox", {
     "event_id": "test_sms_1",
     "msisdn": "+233240000101",
     "event_type": "sms",
@@ -34,7 +37,7 @@ print(f"Rules: {res1.get('triggered_rules')}")
 print(f"RAG Match: {res1.get('kb_match')}")
 
 print("\n=== 3. TEST /plugin (Hook 13: call.connect - Robocall Sweep) ===")
-st, res2 = post("http://localhost:8001/api/v1/plugin", {
+st, res2 = post(f"{BASE_URL}/api/v1/plugin", {
     "point": "call.connect",
     "institution": "mtn",
     "data": {
@@ -47,7 +50,7 @@ st, res2 = post("http://localhost:8001/api/v1/plugin", {
 print(f"Decision: {res2}")
 
 print("\n=== 4. TEST /plugin (Hook 15: payment.authorize - Active Call Co-occurrence GH22) ===")
-st, res3 = post("http://localhost:8001/api/v1/plugin", {
+st, res3 = post(f"{BASE_URL}/api/v1/plugin", {
     "point": "payment.authorize",
     "institution": "mtn",
     "data": {
@@ -64,7 +67,7 @@ st, res3 = post("http://localhost:8001/api/v1/plugin", {
 print(f"Decision: {res3}")
 
 print("\n=== 5. TEST /plugin (Hook 11: sim.swap - NIA SIM Stacking Alert) ===")
-st, res4 = post("http://localhost:8001/api/v1/plugin", {
+st, res4 = post(f"{BASE_URL}/api/v1/plugin", {
     "point": "sim.swap",
     "institution": "mtn",
     "data": {
@@ -75,18 +78,19 @@ st, res4 = post("http://localhost:8001/api/v1/plugin", {
 })
 print(f"Decision: {res4}")
 
-print("\n=== 6. TEST /demo/benchmark (Full 14 Scenarios) ===")
-st, bench = post("http://localhost:8001/api/v1/demo/benchmark", {})
+print("\n=== 6. TEST /demo/benchmark (synthetic local rule fixtures only) ===")
+st, bench = post(f"{BASE_URL}/api/v1/demo/benchmark", {})
 summary = bench.get("summary", {})
 print(f"Bench Status {st}: Total Scenarios: {summary.get('total_incidents')}")
-print(f"Frauds Caught: {summary.get('stopped_count')}/{summary.get('fraud_scenarios')}")
-print(f"False Positives: {summary.get('false_positives')}")
-print(f"Direct Cedis Protected: GH₵ {summary.get('ghc_protected', 0):,}")
-print(f"Precision: {summary.get('precision')} | Recall: {summary.get('recall')}")
-print(f"Average Decision Latency: {summary.get('avg_latency_ms')}ms")
+print(f"Fixture fraud cases stopped: {summary.get('stopped_count')}/{summary.get('fraud_scenarios')}")
+print(f"Fixture false positives (not judge score): {summary.get('false_positives')}")
+print(f"Fixture-estimated amount (not observed savings): GH₵ {summary.get('ghc_protected', 0):,}")
+print(f"Fixture precision: {summary.get('precision')} | fixture recall: {summary.get('recall')}")
+print(f"Local fixture evaluation time: {summary.get('avg_latency_ms')}ms (not end-to-end latency)")
+print(f"Measurement scope: {summary.get('measurement_scope')}")
 
 print("\n=== 7. TEST /events (Hydration Feed) ===")
-st, events = get("http://localhost:8001/api/v1/events")
+st, events = get(f"{BASE_URL}/api/v1/events")
 print(f"Hydration Feed: {len(events.get('events', []))} events captured")
 
 print("\nALL BACKEND API ENDPOINTS TESTED SUCCESSFULLY!")

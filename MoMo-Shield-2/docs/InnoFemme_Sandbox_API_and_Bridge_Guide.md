@@ -2,7 +2,7 @@
 ### Official Developer Integration Guide for MoMo Shield (Track 1)
 
 > **Source:** Extracted directly from [https://hackathon.innofemme.org/docs](https://hackathon.innofemme.org/docs)  
-> **Status:** Fully Verified & Wire-Compatible with MoMo Shield Backend-2
+> **Status:** Repository integration guide. A live sandbox registration and end-to-end round trip still require rehearsal; this document alone does not prove those outcomes.
 
 ---
 
@@ -20,12 +20,12 @@ The InnoFemme sandbox is an end-to-end simulation of Ghana's mobile financial in
 
 ## 2. The Bridge: Connecting Localhost to the Cloud Sandbox
 
-The sandbox runs on the internet and cannot directly reach `http://localhost:8001` on your development computer. To bridge this gap, InnoFemme provides `bridge.py` (which we have downloaded to `MoMo-Shield-2/Backend-2/bridge.py`).
+The sandbox runs on the internet and cannot directly reach your local backend. To bridge this gap, run `bridge.py` (included in `Backend-2/`). The backend defaults to port `8000`.
 
 ### How It Operates
 1. `bridge.py` establishes an outbound HTTP long-polling connection to the sandbox using your Team Key.
 2. When the sandbox needs a decision for `bridge://laptop/...`, it forwards the payload through the open bridge connection.
-3. The bridge relays the request to your local backend (`http://localhost:8001`), captures the response, and sends it back to the sandbox.
+3. The bridge relays the request to your local backend (`http://localhost:8000` by default), captures the response, and sends it back to the sandbox.
 
 ### Running the Bridge
 From the `MoMo-Shield-2/Backend-2` directory:
@@ -33,7 +33,7 @@ From the `MoMo-Shield-2/Backend-2` directory:
 python bridge.py \
   --sandbox https://hackathon.innofemme.org/api/w/YOUR-TEAM \
   --key YOUR-TEAM-KEY \
-  --to http://localhost:8001 \
+  --to http://localhost:8000 \
   --name laptop
 ```
 
@@ -106,7 +106,7 @@ Fired before the victim's phone rings.
   "numbersTheCallerHasRungToday": 42
 }
 ```
-- **MoMo Shield Intervention:** If `numbersTheCallerHasRungToday > 20` and `callsBetweenThemBefore == 0` and caller SIM is `< 48h` old, flags as Robocall / Scam Preconditioning (`GH19`). Returns `warn` to display caller risk banner.
+- **MoMo Shield Intervention:** If `numbersTheCallerHasRungToday > 20`, `callsBetweenThemBefore == 0`, and `callerSimRegisteredAt` is less than 48 hours old, flags Robocall / Scam Preconditioning (`GH19`) and returns `warn`.
 
 ### C. `payment.authorize` (Transaction Level Interception)
 Fired before money leaves the victim's wallet.
@@ -158,6 +158,8 @@ Fired when subscriber dials `*170#` or `*110#`.
 }
 ```
 - **Intervention:** If `onCallWith` is active, displays warning banner before menu opens: `"MoMo Shield: You are currently on a call. Never follow payment instructions given over the phone."`
+
+The implementation has named mappings for the five selected points above. It does not claim support for all 16 advertised sandbox hooks. NIA checks are local format/count heuristics over event-supplied values, not registry verification. Gemini and semantic RAG enrichment run after the plug-in decision and do not determine its verdict. Optional Glance/SIM-swap checks fail open and are bounded; configure only their separately verified credentials.
 
 ---
 
@@ -215,9 +217,9 @@ The results are computed automatically in the sandbox **Fraud Console** under **
 ## 7. MoMo Shield Integration Checklist
 
 1. Download `bridge.py` (already at `MoMo-Shield-2/Backend-2/bridge.py`).
-2. Run bridge pointing to port `8001`:
+2. Run bridge pointing to the backend's default port `8000`:
    ```bash
-   python bridge.py --sandbox https://hackathon.innofemme.org/api/w/YOUR-TEAM --key YOUR-TEAM-KEY --to http://localhost:8001
+   python bridge.py --sandbox https://hackathon.innofemme.org/api/w/YOUR-TEAM --key YOUR-TEAM-KEY --to http://localhost:8000
    ```
 3. In the sandbox web UI:
    - Go to **MTN MoMo Console** > **Plug-ins** > **Plug in an API**.

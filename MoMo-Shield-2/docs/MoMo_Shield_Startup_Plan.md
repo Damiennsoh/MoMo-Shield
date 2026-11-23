@@ -1,6 +1,8 @@
 # MoMo Shield — Startup-Grade Product Plan
 ### From Hackathon Demo → B2B SaaS Telco Middleware
 
+> **ARCHIVED ASPIRATIONAL PLAN — NOT CURRENT IMPLEMENTATION OR SANDBOX EVIDENCE.** The hook numbers, endpoints, latency targets, live-interception claims, cross-network capabilities, and commercial plans below were proposals, not verified facts. For the current contract and verification boundary, use `InnoFemme_Sandbox_API_and_Bridge_Guide.md` and the evidence-based `3-minut.txt` playbook. Current backend state is process-local; live hooks and Fraud Console outcomes require a separate sandbox rehearsal.
+
 > **Version 1.0 — 21 November 2026**  
 > Track 1: Fraud Prevention & Early Warning  
 > InnoFemme Africa Hackathon — Demo Day: Saturday 28 November 2026

@@ -6,14 +6,14 @@ instead and waits; whatever the sandbox has for your API arrives on that call, i
 here, and the answer is sent back. Your API stays an ordinary API: nothing in it changes.
 It needs nothing installed beyond Python 3.8 or later.
 
-1. Start your API on this computer, for example:   python3 plugin_api.py        (port 4010)
+1. Start the MoMo Shield backend on this computer (default port 8000).
 2. Start the bridge beside it (on Windows, type python in place of python3):
      python3 bridge.py --sandbox https://…/api/w/your-team --key YOUR-TEAM-KEY
    The two values are the "Base URL" and "Team key" at the top of your team's documentation page.
-   --to http://localhost:5000   if your API is somewhere other than http://localhost:4010
+   --to http://localhost:5000   if your API is somewhere other than http://localhost:8000
    --name ama                   to call this bridge something other than "laptop" (one name per laptop)
 3. Wherever the sandbox asks for your API's address, type:   bridge://laptop
-   A path is passed on too: bridge://laptop/check reaches http://localhost:4010/check
+   A path is passed on too: bridge://laptop/api/v1/plugin reaches the local plug-in route
 
 Leave it running while you work. If it stops, the sandbox treats your API as not answering.
 """
@@ -29,11 +29,13 @@ import urllib.error
 import urllib.request
 import uuid
 
+API_DECISION_TIMEOUT_SECONDS = 1.7
+
 # Settings can be given as arguments, which works on every system, or as environment variables.
 parser = argparse.ArgumentParser(description="Lets the sandbox reach an API running on this computer.")
 parser.add_argument("--sandbox", default=os.environ.get("SANDBOX"), help="your team's Base URL, https://…/api/w/your-team")
 parser.add_argument("--key", default=os.environ.get("TEAM_KEY"), help="your team key")
-parser.add_argument("--to", default=os.environ.get("TO", "http://localhost:8001"), help="where your API is (default http://localhost:8001)")
+parser.add_argument("--to", default=os.environ.get("TO", "http://localhost:8000"), help="where your API is (default http://localhost:8000)")
 parser.add_argument("--name", default=os.environ.get("NAME", "laptop"), help='what to call this bridge (default "laptop")')
 options = parser.parse_args()
 SANDBOX, TEAM_KEY, NAME = options.sandbox, options.key, options.name
@@ -74,14 +76,14 @@ def pass_on(request):
     try:
         outgoing = urllib.request.Request(api + request["path"], data=None if body is None else body.encode(), headers=request.get("headers") or {}, method=request["method"])
         try:
-            with urllib.request.urlopen(outgoing, timeout=10) as res:
+            with urllib.request.urlopen(outgoing, timeout=API_DECISION_TIMEOUT_SECONDS) as res:
                 answer = {"status": res.status, "body": res.read().decode()}
         except urllib.error.HTTPError as e:  # an answer such as 400 or 500 is still an answer
             answer = {"status": e.code, "body": e.read().decode()}
         say(f"{clock()}  {request['method']} {request['path']}  ->  {answer['status']} in {int((time.time() - started) * 1000)} ms")
     except Exception as e:
         slow = isinstance(e, socket.timeout) or isinstance(getattr(e, "reason", None), socket.timeout)
-        answer = {"error": f"The API at {api} took more than 10 seconds" if slow else f"Nothing is answering at {api}: is your API running?"}
+        answer = {"error": f"The API at {api} did not answer within {API_DECISION_TIMEOUT_SECONDS:.1f} seconds" if slow else f"Nothing is answering at {api}: is your API running?"}
         say(f"{clock()}  {request['method']} {request['path']}  ->  {answer['error']}")
     try:
         _, sent = tell({"action": "reply", "id": request["id"], **answer}, 10)

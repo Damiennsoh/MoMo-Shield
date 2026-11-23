@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     sandbox_api_key: str = ""
     sandbox_team_key: str = ""
     sandbox_client_id: str = ""
+    sandbox_network_client_id: str = ""
+    sandbox_network_api_key: str = ""
     sandbox_base_url: str = "https://hackathon.innofemme.org/api/w"
+    plugin_lookup_timeout_seconds: float = 1.0
 
     # MTN MoMo Collection API: keep credentials on the backend only.
     mtn_momo_base_url: str = "https://sandbox.momodeveloper.mtn.com"

@@ -1,7 +1,7 @@
 # MoMo Shield v2 — Deployment Guide
 
 Production topology: **Intelligence Core** (FastAPI, `Backend-2/`) + **FraudOps frontend** (Next.js, `Frontend-2/`).
-The MNO/sandbox calls the backend webhook directly; the frontend is display-only.
+For the hackathon plug-in path, InnoFemme calls `POST /api/v1/plugin` through the bridge (or directly if a reachable service URL is registered). `POST /api/v1/webhook/sandbox` is a separate internal event-ingestion contract and is not a plug-in substitute. The frontend is display-only.
 
 ```
 MNO Sandbox ──HTTPS──> Intelligence Core (Railway/Render) ──WS──> FraudOps (Vercel)
@@ -26,12 +26,15 @@ Recommended: **Railway** or **Render** (both support WebSockets + Docker).
    | `GLANCE_BASE_URL` | e.g. `https://api.glance.rancardmobility.com/v1` |
    | `GEMINI_API_KEY` | Google AI Studio key |
    | `GEMINI_MODEL` | e.g. `gemini-2.0-flash-exp` |
-   | `SANDBOX_API_KEY` | InnoFemme/MNO sandbox key |
-   | `SANDBOX_BASE_URL` | e.g. `https://api.innofemme-sandbox.com/v1` |
+   | `SANDBOX_API_KEY` | Optional bearer key for the separate webhook/intervention integration |
+   | `SANDBOX_BASE_URL` | InnoFemme team API base, e.g. `https://hackathon.innofemme.org/api/w/YOUR_TEAM` |
+   | `SANDBOX_NETWORK_CLIENT_ID` | Optional carrier network API Basic-auth client ID |
+   | `SANDBOX_NETWORK_API_KEY` | Optional carrier network API Basic-auth key |
+   | `PLUGIN_LOOKUP_TIMEOUT_SECONDS` | Optional plug-in lookup budget; default `1.0` second |
    | `WEBHOOK_API_KEY` | **Generate a strong random secret** — the MNO must send it |
    | `CORS_ORIGINS` | `https://your-app.vercel.app` (comma-separate if multiple) |
 
-   Leave `GLANCE_API_KEY`/`SANDBOX_API_KEY` empty or prefixed `your_` to keep mock mode.
+   Missing optional integration credentials fail open and do not generate seeded "live" intelligence.
 5. Note the public URL, e.g. `https://momo-shield-core.up.railway.app`.
 6. Verify: `GET https://<host>/health` → `{"status":"operational"}`.
 
@@ -52,22 +55,19 @@ Recommended: **Railway** or **Render** (both support WebSockets + Docker).
 Give the MNO this contract:
 
 ```
-POST https://<backend>/api/v1/webhook/sandbox
-Authorization: Bearer <WEBHOOK_API_KEY>
+POST https://<backend>/api/v1/plugin
 Content-Type: application/json
 
 {
-  "event_id": "unique-event-id",
-  "msisdn": "+233XXXXXXXXX",
-  "event_type": "sms | ussd | voice | transaction",
-  "timestamp": "2026-11-21T10:00:00Z",
-  "payload": { "text": "...", "amount": 500, "type": "transfer_out" }
+  "point": "sms.deliver",
+  "institution": "mtn",
+  "world": "YOUR_TEAM",
+  "at": "2026-11-21T10:00:00Z",
+  "data": { "from": "0200000000", "to": "0240000000", "text": "..." }
 }
 ```
 
-Response: `AssessmentResult` — `risk_score`, `risk_tier` (LOW/MEDIUM/HIGH),
-`triggered_rules`, `glance_status`, `llm_intent`, `action_taken`
-(ALLOWED/WARNED/BLOCKED), `latency_ms`.
+Response is the sandbox contract: `{"decision":"allow"}`, or `warn`/`reject` with a message of at most 150 characters; high-risk payments may receive one `delay` response with `minutes: 10`. The dashboard's `AssessmentResult` is internal telemetry, not the plug-in response schema.
 
 HIGH → backend calls `POST {SANDBOX_BASE_URL}/intervene` with `BLOCK_USSD` and
 reports the MSISDN to Glance. MEDIUM → `PUSH_WARNING`.
@@ -75,10 +75,10 @@ reports the MSISDN to Glance. MEDIUM → `PUSH_WARNING`.
 ## 4. Local development
 
 ```bash
-# Terminal 1 — Intelligence Core
+# Terminal 1 — Intelligence Core (default port 8000)
 cd MoMo-Shield-2/Backend-2
-pip install -r requirements.txt pytest
-uvicorn main:app --port 8001
+pip install -r requirements.txt pytest pytest-asyncio
+uvicorn main:app --host 0.0.0.0 --port 8000
 
 # Terminal 2 — FraudOps
 cd MoMo-Shield-2/Frontend-2
@@ -86,12 +86,12 @@ npm install
 npm run dev   # serves on :3000, reads NEXT_PUBLIC_API_URL from .env.local
 ```
 
-`.env.local` (gitignored): `NEXT_PUBLIC_API_URL=http://localhost:8001`
+`.env.local` (gitignored): `NEXT_PUBLIC_API_URL=http://localhost:8000`
 
 ## 5. Tests
 
 ```bash
-cd MoMo-Shield-2/Backend-2 && python -m pytest -q   # 24 tests
+cd MoMo-Shield-2/Backend-2 && python -m pytest -q
 cd MoMo-Shield-2/Frontend-2 && npm test             # node:test mapper tests
 cd MoMo-Shield-2/Frontend-2 && npm run typecheck    # tsc --noEmit
 ```

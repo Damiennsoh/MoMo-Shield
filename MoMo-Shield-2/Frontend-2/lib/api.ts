@@ -97,6 +97,7 @@ export interface BenchmarkSummary {
   ghc_protected: number;
   benchmark_time_ms: number;
   status: string;
+  measurement_scope: string;
 }
 
 export interface BenchmarkIncident {
@@ -116,6 +117,7 @@ export interface BenchmarkIncident {
 export interface BenchmarkResponse {
   summary: BenchmarkSummary;
   results: BenchmarkIncident[];
+  scope: string;
 }
 
 export async function runFraudBenchmark(): Promise<BenchmarkResponse> {

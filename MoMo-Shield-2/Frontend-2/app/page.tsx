@@ -327,8 +327,8 @@ export default function DashboardPage() {
         />
         <MetricCard
           title="Decision Latency"
-          value={avgLatencyMs != null ? `${avgLatencyMs}ms` : '118ms'}
-          delta="SLA: < 300ms p95"
+          value={avgLatencyMs != null ? `${avgLatencyMs}ms` : '—'}
+          delta="Observed events only; not p95"
           icon={Zap}
           tone="blue"
         />
@@ -652,7 +652,7 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* InnoFemme Fraud Benchmark Scorecard Dialog */}
+      {/* Local deterministic rule-fixture dialog */}
       <Dialog open={benchmarkOpen} onOpenChange={(open) => !benchmarkRunning && setBenchmarkOpen(open)}>
         <DialogContent className="max-w-3xl overflow-y-auto max-h-[85vh] p-0">
           <div className="border-b border-white/[.1] px-6 py-5 bg-gradient-to-r from-[#111927] to-[#070b10]">
@@ -663,10 +663,10 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-lg font-extrabold text-white">
-                    InnoFemme Fraud Simulator <span className="text-[#ffcc00]">Scorecard</span>
+                    Local Fraud Rule <span className="text-[#ffcc00]">Fixtures</span>
                   </DialogTitle>
                   <DialogDescription className="text-xs text-slate-400">
-                    Live benchmark across 11 Ghanaian carrier fraud typologies + legitimate baselines
+                    Local rule-only regression fixtures; not the live InnoFemme simulator
                   </DialogDescription>
                 </div>
               </div>
@@ -680,40 +680,43 @@ export default function DashboardPage() {
             {benchmarkRunning ? (
               <div className="py-12 text-center space-y-4">
                 <RefreshCw size={32} className="animate-spin mx-auto text-[#ffcc00]" />
-                <p className="text-sm font-bold text-white">Streaming 14 Simulated Scenarios Through MoMo Shield Engine...</p>
-                <p className="text-xs text-slate-400">Evaluating Hooks: sms.deliver, call.connect, payment.authorize, menu.open</p>
+                <p className="text-sm font-bold text-white">Running local deterministic regression fixtures...</p>
+                <p className="text-xs text-slate-400">No sandbox calls, external lookups, or end-to-end timing are included.</p>
               </div>
             ) : benchmarkData ? (
               <>
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  {benchmarkData.scope}
+                </div>
                 {/* 4 Scorecard Metrics */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Stopped Rate</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Fraud fixtures flagged</p>
                     <p className="mt-1 font-mono text-2xl font-extrabold text-white">
                       {benchmarkData.summary.stopped_count}/{benchmarkData.summary.fraud_scenarios}
                     </p>
-                    <p className="text-[10px] font-bold text-emerald-300 mt-1">100% Intercepted</p>
+                    <p className="text-[10px] font-bold text-emerald-300 mt-1">Synthetic fixture result</p>
                   </div>
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">False Positives</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Benign fixtures blocked</p>
                     <p className="mt-1 font-mono text-2xl font-extrabold text-white">
                       {benchmarkData.summary.false_positives}
                     </p>
-                    <p className="text-[10px] font-bold text-emerald-300 mt-1">0% Legitimate Friction</p>
+                    <p className="text-[10px] font-bold text-emerald-300 mt-1">Small fixed fixture set only</p>
                   </div>
                   <div className="rounded-xl border border-[#ffcc00]/30 bg-[#ffcc00]/10 p-3.5">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[#ffcc00]">GH₵ Protected</p>
                     <p className="mt-1 font-mono text-xl font-extrabold text-white">
                       GH₵ {benchmarkData.summary.ghc_protected.toLocaleString()}
                     </p>
-                    <p className="text-[10px] font-bold text-[#ffcc00] mt-1">Direct Loss Prevented</p>
+                    <p className="text-[10px] font-bold text-[#ffcc00] mt-1">Fixture-based estimate only</p>
                   </div>
                   <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Avg Decision Latency</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Avg rule-fixture time</p>
                     <p className="mt-1 font-mono text-2xl font-extrabold text-white">
                       {benchmarkData.summary.avg_latency_ms}ms
                     </p>
-                    <p className="text-[10px] font-bold text-sky-300 mt-1">&lt; 300ms SLA Pass</p>
+                    <p className="text-[10px] font-bold text-sky-300 mt-1">Not end-to-end plug-in latency</p>
                   </div>
                 </div>
 

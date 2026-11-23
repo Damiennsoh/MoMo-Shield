@@ -16,11 +16,12 @@ from app.engine.rules import (
     check_relative_new_number,
 )
 from app.models.schemas import EventType
+from datetime import datetime, timezone
 
 
 def _hist(msisdn_payload_pairs):
     return [
-        {"msisdn": m, "payload": p, "timestamp": __import__("datetime").datetime.utcnow()}
+        {"msisdn": m, "payload": p, "timestamp": datetime.now(timezone.utc)}
         for m, p in msisdn_payload_pairs
     ]
 
@@ -153,4 +154,3 @@ def test_relative_new_number_detection(make_event):
     pts, desc = check_relative_new_number(event, [])
     assert pts == 25
     assert "GH19B" in desc
-

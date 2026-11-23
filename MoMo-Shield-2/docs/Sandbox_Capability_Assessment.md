@@ -1,7 +1,9 @@
-# MoMo Shield vs InnoFemme Sandbox — Full Capability Assessment
+# Historical Capability Baseline — Superseded by Current Repository Code Review
+
+> **Status update (23 Nov 2026):** This file records an earlier assessment, not current runtime evidence. Backend-2 now implements the direct `POST /api/v1/plugin` path for five named points (`sms.deliver`, `call.connect`, `payment.authorize`, `menu.open`, `sim.swap`), and the bridge should target port 8000. This code has not by itself proven sandbox hook registration, live credentials, or an end-to-end judge run. The current contract is in [InnoFemme_Sandbox_API_and_Bridge_Guide.md](InnoFemme_Sandbox_API_and_Bridge_Guide.md); `/demo/benchmark` is not the Fraud Simulator.
 
 > [!CAUTION]
-> **Bottom line up front:** MoMo Shield is currently using ~15% of what this sandbox can do. We are treating a full telco simulation platform like a simple REST API. This document maps every capability gap and provides a concrete upgrade path from hackathon demo to investor-ready startup.
+> The sections below are a historical snapshot and contain earlier status statements. Do not use their hook-utilization percentages or scenario coverage as current evidence; validate sandbox registration and the Fraud Console scorecard directly.
 
 ---
 

@@ -63,10 +63,10 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3.5 py-4">
                 <ShieldCheck size={16} className="text-emerald-400" />
                 <div className="flex-1">
-                  <p className="text-xs font-bold text-white">Sandbox Inbound Webhook</p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Endpoint: POST /api/v1/webhook/sandbox (Bearer Token Protected)</p>
+                  <p className="text-xs font-bold text-white">Internal Event Webhook</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">POST /api/v1/webhook/sandbox (Bearer Token Protected); not the InnoFemme plug-in endpoint</p>
                 </div>
-                <Badge variant="success">READY</Badge>
+                <Badge variant="outline">INTERNAL</Badge>
               </div>
 
               <div className="flex items-center gap-3.5 py-4">

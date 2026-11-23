@@ -1,137 +1,135 @@
 ================================================================================
-MOMO SHIELD — THE 3-MINUTE JUDGES & INVESTORS PITCH & DEMO PLAYBOOK
-Track: Track 1 (Fraud Prevention & Early Warning)
-Target Audience: Hackathon Judges, Telco Executives, Bank of Ghana Regulators, Angel Investors
+MOMO SHIELD — 3-MINUTE INNOFEMME JUDGES PITCH & DEMO PLAYBOOK
+Track: Fraud Prevention & Early Warning
+Audience: InnoFemme Hackathon Judges
 ================================================================================
 
-EXECUTIVE OVERVIEW:
-MoMo Shield is an in-network fraud interception middleware (Route 1) paired with 
-a centralized FraudOps Syndicate Intelligence platform (Route 2). It stops mobile 
-money fraud in real-time (< 120ms) across Ghana's telecom networks (MTN, Telecel, AT) 
-before money leaves the victim's wallet, with zero app install required.
+EVIDENCE RULE FOR THIS SCRIPT
+Only claim a sandbox interception, a judge score, or end-to-end latency when it
+has been observed in the current sandbox session and the result is visible in
+its Fraud Console. The local regression scorecard is not the InnoFemme Fraud
+Simulator. Do not quote its fixture precision/recall, estimated protected
+amount, or local timing as live judge results. The dashboard's event latency is
+service-side timing, not end-to-end network latency.
+
+EXECUTIVE OVERVIEW
+MoMo Shield is a fraud-assessment plug-in for selected InnoFemme carrier
+interception points. It applies deterministic rules to SMS, call, payment,
+menu, and SIM-swap event payloads and returns the documented plug-in decision
+shape. Optional threat-intelligence lookups are bounded and fail open. The
+sandbox bridge and hook registration must be configured separately before
+claims of live interception are made.
 
 --------------------------------------------------------------------------------
-PITCH TIMELINE & SCRIPT (TOTAL: 180 SECONDS)
+PITCH TIMELINE & SCRIPT (180 SECONDS)
 --------------------------------------------------------------------------------
 
-[0:00 - 0:45] PART 1: THE PROBLEM & WHY TRADITIONAL APPS FAIL
+[0:00 - 0:40] PART 1: THE PROBLEM
 Speaker:
-"Honorable judges, over GH₵ 100 million was lost to Mobile Money fraud in West Africa 
-last year. In Ghana, over 60% of subscribers—particularly market women, rural farmers, 
-and elderly citizens—rely entirely on 2G feature phones ('Yam phones') using USSD *170#.
+"Mobile-money fraud often combines social pressure with a time-sensitive
+payment: an impersonated message, a coercive call, and a transfer request. A
+subscriber should not have to install a separate smartphone app to receive a
+warning at the point where that interaction is being assessed.
 
-Every existing anti-fraud solution makes the same fatal mistake: they build a smartphone 
-app. If an elderly farmer has to download an Android app from the Play Store, they are 
-already excluded and unprotected. 
-
-Furthermore, individual telcos suffer from 'Cross-Network Blindness': MTN cannot see 
-when a fraudster registers a burner SIM on Telecel and immediately routes stolen funds 
-into an AT Money mule account. 
-
-That is why we built MoMo Shield."
+MoMo Shield explores an in-network response: assess relevant events before the
+configured sandbox step proceeds, then return a concise allow, warn, reject,
+or payment-delay decision."
 
 Screen / Action:
-* Display MoMo Shield FraudOps Command Center.
-* Point to the Carrier Tenant bar showing: "MTN MoMo (65%) | Telecel Cash (22%) | AT Money (13%) | Unified".
+* Show the FraudOps dashboard and identify which indicators are live service
+  data versus illustrative UI/sample data.
+* Do not present mock carrier shares, graph relationships, or sample totals as
+  observed network intelligence.
 
 --------------------------------------------------------------------------------
-[0:45 - 1:45] PART 2: LIVE DEMO — IN-NETWORK INTERCEPTION (THE SHIELD)
+[0:40 - 1:35] PART 2: PLUG-IN DECISION PATH
 Speaker:
-"MoMo Shield does not wait for a police report or a post-mortem dispute. We built 
-an in-network middleware plug-in that lives directly inside the telecom core switch 
-at Hook 15 (payment.authorize), Hook 12 (sms.deliver), and Hook 13 (call.connect).
+"The backend accepts the documented InnoFemme plug-in contract at
+/api/v1/plugin. The selected points are sms.deliver, call.connect,
+payment.authorize, menu.open, and sim.swap. The bridge forwards sandbox calls
+to this endpoint; the separate internal /api/v1/webhook/sandbox route is not
+the plug-in contract.
 
-Watch what happens when a fraudster attempts an unapproved reversal or an urgent OTP 
-harvesting attack."
+For example, the call rule requires all of these supplied signals: a caller
+SIM registered within 48 hours, more than 20 numbers called that day, and no
+prior calls between the parties. A single high call count is not enough. For
+high-risk payments, the response can impose one 10-minute delay; a subsequent
+payment marked afterDelay is rejected if it remains high risk."
 
 Screen / Action:
-* Trigger an attack via the InnoFemme Sandbox Simulator or click 'Run Signal Test' / 'InnoFemme Benchmark' on the dashboard.
-* Watch the live WebSocket telemetry stream populate in under 120ms.
+* If the team bridge and hook are registered, trigger a scenario through the
+  InnoFemme Fraud Simulator and confirm the event and result in the sandbox
+  Fraud Console.
+* If live registration is not confirmed, send a documented request to the
+  local API and label it a local plug-in contract test—not a sandbox event.
+* Show the exact returned decision. Do not substitute the local fixture
+  scorecard for the Fraud Console result.
 
 Speaker:
-"Notice the execution latency: 118 milliseconds. InnoFemme gives us a 2,000ms SLA; 
-we evaluate 14 deterministic rules, cross-network SIM-swap age, and Rancard Glance 
-threat feeds in less than one-tenth of that window.
-
-The network halts the transaction. The money never moves. And on the victim's 
-handset—whether it is an iPhone 16 or a Nokia 3310—the user receives a localized, 
-interactive warning prompt:
-  'MoMo Shield Alert: Suspicious transfer request of GH₵ 800. Receiver wallet 
-   was created < 2 hours ago. 1) Cancel (Recommended) 2) Proceed.'
-
-The victim cancels. In seconds, our dynamic 'GH₵ Protected' counter updates to show 
-the exact cedis saved."
+"The synchronous verdict is based on deterministic rules, event-provided
+signals, lexical precedent matching, and optional bounded Glance/SIM-swap
+lookups when configured. Gemini and semantic RAG enrichment run after the
+plug-in verdict; they are not represented as live decision inputs. Our
+reported handler timing is not a network-to-network latency measurement."
 
 --------------------------------------------------------------------------------
-[1:45 - 2:30] PART 3: SYNDICATE GRAPH INTELLIGENCE (THE BRAIN)
+[1:35 - 2:20] PART 3: SIGNAL QUALITY & RESILIENCE
 Speaker:
-"Fraud in Ghana is no longer committed by lone opportunistic actors; it is operated 
-by organized crime syndicates running coordinated mule rings.
+"We made the boundaries explicit. NIA is not queried: Ghana Card format and
+SIM-count checks are local heuristics over supplied values. Glance and network
+SIM-swap lookups are optional, time-bounded, and fail open when unavailable.
+The system does not invent seeded live-risk results.
 
-Look at our Syndicate Graph Intelligence."
+Within one backend process, subscriber event-history updates are atomic, and
+the plug-in can assess overlapping SMS, calls, and payment events. This does
+not yet prove multi-worker or distributed-state correctness. We record those
+limits rather than claim production-scale capacity from a local test."
 
 Screen / Action:
-* Click on the 'Syndicate Graph Intelligence' pane on the Command Center.
-* Highlight the clustered nodes (Syndicate Hub Kumasi -> Mule Wallet -> Cash-out Agent Circle).
+* If time permits, show the mixed-event concurrency test and bounded-lookup
+  test as software regression evidence, not a carrier load-test result.
+* Explain the deployment's process-local state limitation and the need for
+  shared storage before scaling across workers.
 
+--------------------------------------------------------------------------------
+[2:20 - 3:00] PART 4: WHAT THE JUDGES SHOULD VERIFY
 Speaker:
-"When an attack is intercepted on MTN, MoMo Shield does not simply drop the call. 
-We map the receiving wallet's historical connections across Telecel and AT. 
-Here, our graph intelligence has unmasked a multi-tiered syndicate:
-1. The Spoofed Outreach line initiating the call.
-2. The Primary Mule Wallet attempting the collection.
-3. The Layered Secondary Wallets preparing for rapid cash-out at an agent in Kumasi.
+"For this hackathon, the meaningful evidence is a complete sandbox round trip:
+registered plug-in points, simulator-generated incidents reaching our service,
+valid decisions accepted by the sandbox, and the resulting outcomes in the
+Fraud Console. We are not presenting unobserved precision, false-positive, or
+latency numbers as measured results.
 
-Through our integration with the Rancard Glance API, this threat profile is 
-instantly broadcast as a high-risk entity to all partner institutions across Ghana, 
-burning the syndicate's entire mule infrastructure in seconds."
-
---------------------------------------------------------------------------------
-[2:30 - 3:00] PART 4: BUSINESS MODEL, TRACTION & STARTUP VISION
-Speaker:
-"MoMo Shield is designed as a venture-scale B2B SaaS startup. 
-
-Our revenue model is two-fold:
-1. Per-Transaction API Surcharge: GH₵ 0.05 per scored financial transaction paid by 
-   telcos and commercial banks to prevent fraud liability and chargebacks.
-2. Enterprise Compliance License: Annual subscription for GhIPSS (the National Switch), 
-   the Bank of Ghana (BoG), and the Cyber Security Authority (CSA) for national 
-   telemetry and cross-operator syndicate monitoring.
-
-By deploying as a native Route 1 plug-in with Route 2 cross-network intelligence, 
-MoMo Shield protects 100% of subscribers on day one without requiring a single app download.
-
-We stop the theft before the money moves. Thank you."
+Our next verification step is to exercise the judge's fraud typologies against
+the live bridge, review both stopped fraud and benign traffic in the Fraud
+Console, and capture decision and end-to-end timing separately. Thank you."
 
 --------------------------------------------------------------------------------
-JUDGES Q&A CHEAT-SHEET (DEFENSE PREPARATION)
+JUDGES Q&A — EVIDENCE-BASED ANSWERS
 --------------------------------------------------------------------------------
 
-Q1: "Why can't MTN or Telecel just build this themselves?"
-Answer:
-"Three reasons:
-1. Cross-Network Blindness: MTN cannot query Telecel's internal database or AT's 
-   SIM-swap records due to commercial competition and regulatory firewalls. MoMo Shield 
-   acts as an independent, neutral consortium middleware (similar to GhIPSS for clearing).
-2. Agility & Multi-Signal Fusion: Telco core switches are legacy telecommunication 
-   infrastructure. They cannot natively run LLM intent classification, behavioral heuristic 
-   clustering, and live multi-hop graph analysis in < 120ms without third-party middleware.
-3. Universal Protection: We protect the entire financial loop: Network -> Bank -> Switch."
+Q: "What is the measured false-positive rate?"
+A: "We will quote the value shown by the InnoFemme Fraud Console for the
+   current simulator run. The repository's fixed local regression fixtures
+   are useful for software checks but are not the live judge scorecard."
 
-Q2: "What about False Positives? Won't legitimate transfers get blocked?"
-Answer:
-"We employ a 3-tier risk architecture:
-- Low Risk (Score < 40): Allowed silently with zero friction.
-- Medium Risk (Score 40 - 74): Soft friction ('warn' / 'delay' 15-minute cooling off). 
-  The user is given an interactive choice, preventing false drops on genuine transactions.
-- High Risk (Score >= 75): Hard block ('reject') reserved only for confirmed typologies 
-  (e.g., active call co-occurrence during payment authorization + brand-new SIM swap). 
-In our InnoFemme Benchmark run across 14 scenarios, our False Positive rate is exactly 0%."
+Q: "What is the latency?"
+A: "The response contains backend handler timing. Optional network lookups
+   have a shared configurable timeout budget capped at 1.2 seconds, but we
+   have not measured end-to-end p95 latency through the live sandbox here."
 
-Q3: "How does this scale across West Africa?"
-Answer:
-"The Mobile Money protocol across Francophone and Anglophone Africa (MTN, Orange, 
-Moov, Wave) runs on identical GSMA Mobile Money and USSD specifications. Once deployed 
-in Ghana, our middleware adapter can plug into Côte d'Ivoire, Senegal, and Nigeria with 
-zero re-architecture."
+Q: "Does NIA verify the Ghana Card?"
+A: "No. The current code only checks the supplied card's format and supplied
+   SIM/account counts. It does not call or verify against the NIA registry."
+
+Q: "Do Gemini and RAG determine whether an event is blocked?"
+A: "No. For the plug-in path, semantic RAG and Gemini intent enrichment are
+   deferred until after the synchronous decision so they cannot hold up the
+   sandbox response or change that verdict."
+
+Q: "Can it process simultaneous event types?"
+A: "The in-process event window is updated atomically and optional lookups are
+   bounded. The current state is process-local; multi-worker deployment would
+   require shared atomic state and a separate load test."
+
 ================================================================================

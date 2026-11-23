@@ -1,9 +1,9 @@
 import asyncio
 import hmac
 import time
-from uuid import UUID
+from uuid import UUID, uuid4
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Deque, List
 
@@ -134,8 +134,7 @@ async def receive_sandbox_event(
     started = time.perf_counter()
     _verify_webhook_key(authorization)
 
-    history = global_window.get_history(event.msisdn)
-    global_window.add(event.msisdn, event.model_dump())
+    history = global_window.observe_and_add(event.msisdn, event.model_dump())
 
     score = 0
     rules_fired: List[str] = []
@@ -235,7 +234,7 @@ async def receive_sandbox_event(
         kb_match=kb_match_data,
         action_taken=action,
         latency_ms=round((time.perf_counter() - started) * 1000, 1),
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     payload = result.model_dump(mode="json")
@@ -304,52 +303,80 @@ async def real_phone_action(action: str = Query("ring", description="ring | hang
 
 @router.post("/demo/reset")
 async def reset_demo_state():
-    """Reset assessment history and in-memory rate-limiting windows for clean demo runs."""
+    """Clear in-process assessment and correlation state for a fresh demo run."""
     ASSESSMENT_HISTORY.clear()
-    global_window.events.clear()
+    global_window.clear()
     return {"status": "reset", "history_count": 0, "active_sessions": 0}
+
+
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _parse_timestamp(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 @router.post("/plugin")
 async def receive_innofemme_plugin(payload: dict):
-    """
-    Direct Plug-in handler for InnoFemme Sandbox (via bridge://laptop/api/v1/plugin).
-    Adheres to InnoFemme Section 7 specification:
-      Inbound:  { "point": "...", "institution": "...", "world": "...", "at": "...", "data": { ... } }
-      Outbound: { "decision": "allow" | "warn" | "reject" | "delay", "message": "..." }
-    """
+    """Score a documented InnoFemme plug-in event against the two-second target."""
     started = time.perf_counter()
-    point = payload.get("point", "unknown")
-    institution = payload.get("institution", "mtn")
-    data = payload.get("data") or {}
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="Plug-in request must be a JSON object")
 
-    # Map InnoFemme plug-in point into a SandboxEvent
-    msisdn = ""
+    point = str(payload.get("point") or "").strip()
+    institution = str(payload.get("institution") or "mtn").strip().lower()
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="Plug-in 'data' must be a JSON object")
+
+    supported_points = {
+        "sms.deliver", "call.connect", "payment.authorize", "menu.open", "sim.swap"
+    }
+    if point not in supported_points:
+        raise HTTPException(status_code=422, detail=f"Unsupported plug-in point: {point or '(missing)'}")
+
+    payer = data.get("payer") if isinstance(data.get("payer"), dict) else {}
+    if point in ("sms.deliver", "call.connect"):
+        msisdn = str(data.get("to") or "").strip()
+    elif point == "payment.authorize":
+        msisdn = str(payer.get("msisdn") or "").strip()
+    else:
+        msisdn = str(data.get("msisdn") or "").strip()
+    if not msisdn:
+        raise HTTPException(status_code=422, detail=f"Missing subscriber MSISDN for {point}")
+
     event_type = EventType.SMS
-    ev_payload = {}
-
+    event_payload = {}
     if point == "sms.deliver":
-        msisdn = str(data.get("to") or "")
-        event_type = EventType.SMS
-        ev_payload = {
+        event_payload = {
             "text": data.get("text", ""),
             "from": data.get("from", ""),
-            "textsBetweenThemBefore": data.get("textsBetweenThemBefore", 0),
+            "textsBetweenThemBefore": _safe_int(data.get("textsBetweenThemBefore")),
         }
     elif point == "call.connect":
-        msisdn = str(data.get("to") or "")
         event_type = EventType.VOICE
-        ev_payload = {
+        event_payload = {
             "from": data.get("from", ""),
             "callerSimRegisteredAt": data.get("callerSimRegisteredAt"),
-            "numbersTheCallerHasRungToday": data.get("numbersTheCallerHasRungToday", 0),
-            "callsBetweenThemBefore": data.get("callsBetweenThemBefore", 0),
+            "numbersTheCallerHasRungToday": _safe_int(data.get("numbersTheCallerHasRungToday")),
+            "callsBetweenThemBefore": _safe_int(data.get("callsBetweenThemBefore")),
+            "status": "ringing",
         }
     elif point == "payment.authorize":
-        payer = data.get("payer") or {}
-        msisdn = str(payer.get("msisdn") or "")
         event_type = EventType.TRANSACTION
-        ev_payload = {
+        event_payload = {
             "type": "transfer_out",
             "amount": data.get("amount", 0),
             "fee": data.get("fee", 0),
@@ -358,107 +385,93 @@ async def receive_innofemme_plugin(payload: dict):
             "lastSimSwapAt": payer.get("lastSimSwapAt"),
         }
     elif point == "menu.open":
-        msisdn = str(data.get("msisdn") or "")
         event_type = EventType.USSD
-        ev_payload = {
-            "ussd_input": "*170#",
+        event_payload = {
+            "ussd_input": str(data.get("shortcode") or "*170#"),
+            "status": "active",
             "onCallWith": data.get("onCallWith"),
             "lastSimSwapAt": data.get("lastSimSwapAt"),
         }
     elif point == "sim.swap":
-        msisdn = str(data.get("msisdn") or "")
         event_type = EventType.TRANSACTION
-        ev_payload = {
+        event_payload = {
             "type": "new_device_binding",
-            "swapsOnThisNumberBefore": data.get("swapsOnThisNumberBefore", 0),
+            "swapsOnThisNumberBefore": _safe_int(data.get("swapsOnThisNumberBefore")),
         }
-    else:
-        msisdn = str(data.get("msisdn") or data.get("to") or "+233240000000")
-        event_type = EventType.TRANSACTION
-        ev_payload = data
 
-    if not msisdn:
-        msisdn = "+233240000000"
-
+    event_id = f"inno_{uuid4().hex}"
     sandbox_event = SandboxEvent(
-        event_id=f"inno_{int(time.time()*1000)}",
+        event_id=event_id,
         msisdn=msisdn,
         event_type=event_type,
-        timestamp=datetime.utcnow(),
-        payload=ev_payload,
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+        payload=event_payload,
     )
+    history = global_window.observe_and_add(msisdn, sandbox_event.model_dump())
 
-    history = global_window.get_history(sandbox_event.msisdn)
-    global_window.add(sandbox_event.msisdn, sandbox_event.model_dump())
-
-    # Evaluate against rules
     score = 0
     rules_fired: List[str] = []
-
-    # Extra carrier metadata checks available in InnoFemme plug-in data:
-    if ev_payload.get("onCallWith"):
+    if point in ("payment.authorize", "menu.open") and event_payload.get("onCallWith"):
         score += 50
-        rules_fired.append("Active Call Co-occurrence: Subscriber is on active call during financial operation")
+        rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
-    if ev_payload.get("numbersTheCallerHasRungToday", 0) > 25 and ev_payload.get("callsBetweenThemBefore", 0) == 0:
-        score += 35
-        rules_fired.append("Robocall Sweep: Inbound call from high-frequency outreach line (unfamiliar caller)")
-
-    # SIM swap recency delivered in plug-in payloads (payment.authorize,
-    # menu.open, wallet.open, sim.swap carry lastSimSwapAt / swap timestamps)
-    swap_ts = ev_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
-    if swap_ts:
-        try:
-            swap_dt = datetime.fromisoformat(str(swap_ts).replace("Z", "+00:00"))
-            age_hours = (datetime.now(swap_dt.tzinfo) - swap_dt).total_seconds() / 3600
-            if 0 <= age_hours <= 48:
+    # The documented robocall signal requires all three facts, not call volume alone.
+    if point == "call.connect":
+        caller_sim_at = _parse_timestamp(event_payload.get("callerSimRegisteredAt"))
+        if caller_sim_at is not None:
+            age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - caller_sim_at).total_seconds() / 3600
+            if (
+                _safe_int(event_payload.get("numbersTheCallerHasRungToday")) > 20
+                and _safe_int(event_payload.get("callsBetweenThemBefore")) == 0
+                and 0 <= age_hours < 48
+            ):
                 score += 45
-                rules_fired.append(f"SIM Swap Recency: Number ported to new SIM {age_hours:.0f}h ago — takeover/mule risk")
-        except (ValueError, TypeError):
-            pass
+                rules_fired.append("GH19 Robocall Preconditioning: new caller SIM (<48h), >20 numbers called today, no prior calls")
+
+    swap_ts = event_payload.get("lastSimSwapAt")
+    swap_dt = _parse_timestamp(swap_ts)
+    if swap_dt is not None:
+        age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - swap_dt).total_seconds() / 3600
+        if 0 <= age_hours <= 48:
+            score += 45
+            rules_fired.append(f"SIM Swap Recency: subscriber SIM changed {age_hours:.0f}h ago")
 
     for rule in RULES:
-        pts, desc = rule(sandbox_event, history)
-        if pts > 0 and desc:
-            score += pts
-            rules_fired.append(desc)
+        points, description = rule(sandbox_event, history)
+        if points > 0 and description:
+            score += points
+            rules_fired.append(description)
 
-    # NIA Ghana Card & SIM/identity stacking evaluation.
-    # Plug-in payloads deliver registry counts directly (sim.register,
-    # business.onboard, account.open, wallet.open) — no extra API call needed.
-    ghana_card = (
-        ev_payload.get("ghanaCard")
-        or data.get("ghanaCard")
-        or (data.get("customer") or {}).get("ghanaCard")
+    # NIA is not queried here: these are local checks over event-supplied claims.
+    customer = data.get("customer") if isinstance(data.get("customer"), dict) else {}
+    ghana_card = data.get("ghanaCard") or customer.get("ghanaCard")
+    count_keys = (
+        "simsAlreadyOnThisGhanaCard",
+        "walletsOnThisGhanaCard",
+        "businessLinesAlreadyOnThisGhanaCard",
+        "accountsAtOtherBanks",
     )
-    sims_count = int(
-        data.get("simsAlreadyOnThisGhanaCard")
-        or ev_payload.get("simsAlreadyOnThisGhanaCard")
-        or 1
-    )
-    wallets_on_card = int(data.get("walletsOnThisGhanaCard") or ev_payload.get("walletsOnThisGhanaCard") or 0)
-    business_lines = int(data.get("businessLinesAlreadyOnThisGhanaCard") or ev_payload.get("businessLinesAlreadyOnThisGhanaCard") or 0)
-    accounts_other_banks = int(data.get("accountsAtOtherBanks") or ev_payload.get("accountsAtOtherBanks") or 0)
-    if ghana_card or sims_count > 1 or wallets_on_card > 1:
+    sims_count = _safe_int(data.get("simsAlreadyOnThisGhanaCard", 1), 1)
+    wallets_on_card = _safe_int(data.get("walletsOnThisGhanaCard"))
+    business_lines = _safe_int(data.get("businessLinesAlreadyOnThisGhanaCard"))
+    accounts_other_banks = _safe_int(data.get("accountsAtOtherBanks"))
+    identity_data_present = bool(ghana_card) or any(key in data for key in count_keys)
+    if identity_data_present:
         nia_result = evaluate_ghana_card(ghana_card, sims_count)
         if nia_result.is_flagged:
             score += 45
-            rules_fired.append(f"NIA Identity Integrity: {nia_result.reason}")
+            rules_fired.append(f"Local identity/SIM-count heuristic (not live NIA verification): {nia_result.reason}")
     if wallets_on_card >= 3:
         score += 30
-        rules_fired.append(f"NIA Identity Sprawl: {wallets_on_card} MoMo wallets on one Ghana Card (mule-network indicator)")
+        rules_fired.append(f"Identity sprawl heuristic: {wallets_on_card} wallets on supplied Ghana Card")
     if business_lines >= 3:
         score += 25
-        rules_fired.append(f"NIA Agent Farm: {business_lines} business lines registered on one Ghana Card")
+        rules_fired.append(f"Identity sprawl heuristic: {business_lines} business lines on supplied Ghana Card")
     if accounts_other_banks >= 4:
         score += 15
-        rules_fired.append(f"NIA Account Sprawl: {accounts_other_banks} bank accounts across institutions on one identity")
+        rules_fired.append(f"Identity sprawl heuristic: {accounts_other_banks} other-bank accounts on supplied identity")
 
-    text_content = str(ev_payload.get("text") or "")
-
-    # SLA path: deterministic + lexical KB + fast external lookups only.
-    # Semantic embeddings and Gemini intent run post-decision as enrichment
-    # (they cannot affect the verdict inside the 2s plug-in window).
+    text_content = str(event_payload.get("text") or "")
     kb_match_data = None
     if text_content.strip():
         kb_matches = knowledge_base.search(text_content, top_k=1)
@@ -476,80 +489,94 @@ async def receive_innofemme_plugin(payload: dict):
             }
             if not top_kb.is_benign and top_kb.similarity >= 0.40:
                 score += int(top_kb.similarity * 50)
-                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} lexical match): InnoFemme Dossier {top_kb.case_id} - {top_kb.title}")
-            elif top_kb.is_benign and top_kb.similarity >= 0.50:
-                score = max(0, score - 30)
-                rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} lexical match): {top_kb.title} (Legitimate Pattern)")
+                rules_fired.append(f"Lexical fraud precedent ({top_kb.similarity:.0%} match): {top_kb.title}")
+            # A benign lexical similarity is explanatory only; it never subtracts
+            # points from deterministic fraud evidence.
 
-    glance_task = asyncio.create_task(check_glance_risk(sandbox_event.msisdn))
-    sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(sandbox_event.msisdn))
-    glance_data, sim_data = await asyncio.gather(glance_task, sim_task)
-    llm_intent = "deferred (post-decision enrichment)"
+    # Check the suspicious party for SMS/calls, but the subscriber for wallet events.
+    intel_msisdn = str(data.get("from") or msisdn) if point in ("sms.deliver", "call.connect") else msisdn
+    # Both optional lookups overlap and are bounded by one shared deadline.
+    glance_task = asyncio.create_task(check_glance_risk(intel_msisdn))
+    sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(msisdn, institution))
+    timeout = min(max(settings.plugin_lookup_timeout_seconds, 0.05), 1.2)
+    done, pending = await asyncio.wait(
+        {glance_task, sim_task}, timeout=timeout, return_when=asyncio.ALL_COMPLETED
+    )
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+    glance_data = None
+    sim_data = {"status": "UNKNOWN", "risk_boost": 0}
+    if glance_task in done:
+        try:
+            glance_data = glance_task.result()
+        except Exception as exc:
+            log.warning("Glance lookup failed for plug-in event %s: %s", event_id, exc)
+    if sim_task in done:
+        try:
+            sim_data = sim_task.result() or sim_data
+        except Exception as exc:
+            log.warning("SIM-swap lookup failed for plug-in event %s: %s", event_id, exc)
 
-    if glance_data.risk_level == "HIGH":
+    glance_level = getattr(glance_data, "risk_level", "UNKNOWN")
+    glance_reports = _safe_int(getattr(glance_data, "reports", 0))
+    if glance_level == "HIGH":
         score += 40
-        rules_fired.append(f"Glance Intelligence: Cross-operator high-risk flag ({glance_data.reports} reports){' [DEMO SEED]' if getattr(glance_data, 'simulated', False) else ''}")
+        rules_fired.append(f"Glance cross-operator intelligence: HIGH ({glance_reports} reports)")
+    if _safe_int(sim_data.get("risk_boost")) > 0:
+        score += _safe_int(sim_data.get("risk_boost"))
+        rules_fired.append("InnoFemme network-edge SIM-swap check: recent swap reported")
 
-    if sim_data.get("risk_boost", 0) > 0:
-        score += sim_data["risk_boost"]
-        rules_fired.append(f"Network Edge: SIM swapped {sim_data.get('days_since_swap')}d ago")
-
+    score = min(100, max(0, score))
     tier = (
-        RiskTier.HIGH
-        if score >= settings.risk_threshold_high
-        else RiskTier.MEDIUM
-        if score >= settings.risk_threshold_medium
+        RiskTier.HIGH if score >= settings.risk_threshold_high
+        else RiskTier.MEDIUM if score >= settings.risk_threshold_medium
         else RiskTier.LOW
     )
-
-    # Determine InnoFemme decision: allow | warn | reject | delay
-    if tier == RiskTier.HIGH:
+    delay_payment = point == "payment.authorize" and tier == RiskTier.HIGH and not bool(data.get("afterDelay"))
+    if delay_payment:
+        decision = "delay"
+        message = "MoMo Shield: High-risk transfer held for a 10-minute cooling period."
+    elif tier == RiskTier.HIGH:
         decision = "reject"
-        message = "MoMo Shield Alert: High-risk fraudulent activity detected. Transaction blocked."
-        asyncio.create_task(trigger_real_phone_bridge("warn"))
+        message = "MoMo Shield Alert: High-risk fraudulent activity detected."
+        if point == "payment.authorize":
+            message += " Transfer blocked."
     elif tier == RiskTier.MEDIUM:
         decision = "warn"
-        message = "MoMo Shield Warning: Suspicious prompt detected. Never share your MoMo PIN with anyone."
+        message = "MoMo Shield Warning: Suspicious activity. Never share your MoMo PIN."
     else:
         decision = "allow"
         message = ""
-
-    # Ensure message is strictly capped to 150 chars per InnoFemme plug-in specification
-    message = (message or "")[:150]
+    message = message[:150]
 
     result = AssessmentResult(
-        event_id=sandbox_event.event_id,
-        msisdn=sandbox_event.msisdn,
-        event_type=sandbox_event.event_type,
-        risk_score=min(100, score),
+        event_id=event_id,
+        msisdn=msisdn,
+        event_type=event_type,
+        risk_score=score,
         risk_tier=tier,
         triggered_rules=rules_fired,
-        glance_status=f"{glance_data.risk_level} ({glance_data.reports} reports){' · demo seed' if getattr(glance_data, 'simulated', False) else ''}",
-        llm_intent=llm_intent,
+        glance_status=f"{glance_level} ({glance_reports} reports)",
+        llm_intent="deferred (post-decision enrichment)",
         kb_match=kb_match_data,
         action_taken=decision.upper(),
         latency_ms=round((time.perf_counter() - started) * 1000, 1),
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
     )
-
-    payload_dict = result.model_dump(mode="json")
-    ASSESSMENT_HISTORY.append(payload_dict)
-    await manager.broadcast(payload_dict)
-
-    # Post-decision enrichment (outside the 2s plug-in SLA): semantic KB
-    # retrieval + grounded Gemini intent, pushed to the telemetry stream so
-    # the FraudOps dashboard still shows full explainability.
+    result_payload = result.model_dump(mode="json")
+    ASSESSMENT_HISTORY.append(result_payload)
+    # Dashboard delivery and semantic/LLM enrichment must not hold up the MNO response.
+    asyncio.create_task(manager.broadcast(result_payload))
     if text_content.strip():
-        asyncio.create_task(_enrich_plugin_assessment(
-            sandbox_event.event_id, text_content, point
-        ))
+        asyncio.create_task(_enrich_plugin_assessment(event_id, text_content, point))
 
     if decision == "allow":
         return {"decision": "allow"}
     if decision == "delay":
-        return {"decision": "delay", "minutes": 15, "message": message}
+        return {"decision": "delay", "minutes": 10, "message": message}
     return {"decision": decision, "message": message}
-
 
 async def _enrich_plugin_assessment(event_id: str, text: str, point: str) -> None:
     """Runs after the plug-in decision is returned: semantic KB retrieval and
@@ -762,10 +789,7 @@ BENCHMARK_SCENARIOS = [
 
 @router.post("/demo/benchmark")
 async def run_fraud_benchmark():
-    """
-    Simulates an InnoFemme Section 13 Fraud Benchmark run across all sandbox typologies
-    and legitimate baseline transactions.
-    """
+    """Run local deterministic regression fixtures, not the InnoFemme simulator."""
     started_total = time.perf_counter()
     results = []
     stopped = 0
@@ -780,7 +804,7 @@ async def run_fraud_benchmark():
             event_id=item["id"],
             msisdn=item["msisdn"],
             event_type=item["event_type"],
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             payload=item["payload"],
         )
         score = 0
@@ -800,7 +824,7 @@ async def run_fraud_benchmark():
         )
 
         decision = "BLOCKED" if tier == RiskTier.HIGH else "WARNED" if tier == RiskTier.MEDIUM else "ALLOWED"
-        lat = round((time.perf_counter() - t0) * 1000 + 45.0, 1)  # realistic p95 latency
+        lat = round((time.perf_counter() - t0) * 1000, 3)
 
         if item["is_fraud"]:
             if decision in ("BLOCKED", "WARNED"):
@@ -845,8 +869,8 @@ async def run_fraud_benchmark():
             "ghc_protected": total_saved,
             "benchmark_time_ms": total_time,
             "status": "COMPLETED",
+            "measurement_scope": "local deterministic rule fixtures only; not end-to-end sandbox latency or judge scorecard",
         },
         "results": results,
+        "scope": "Synthetic local rule-only regression fixtures; does not invoke the InnoFemme Fraud Simulator or optional network/LLM services.",
     }
-
-

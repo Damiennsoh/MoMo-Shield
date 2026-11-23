@@ -6,9 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green.svg)](https://fastapi.tiangolo.com)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg)](https://www.typescriptlang.org)
-[![Pytest Passed](https://img.shields.io/badge/Backend%20Tests-43%2F43%20Passing-brightgreen.svg)]()
-[![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-7%2F7%20Passing-brightgreen.svg)]()
-[![P95 Latency](https://img.shields.io/badge/P95%20Latency-118ms%20(%3C2000ms%20SLA)-blueviolet.svg)]()
+**Validation status:** test and end-to-end latency claims are intentionally not prefilled; see the current test run and sandbox rehearsal evidence.
 
 ---
 
@@ -21,7 +19,7 @@ Traditional consumer fraud apps fail because:
 2. **They operate post-mortem**: Alerts arrive *after* money has already left the victim's wallet.
 3. **Telcos suffer from "Cross-Network Blindness"**: MTN cannot see when a fraudster registers a burner SIM on Telecel and routes stolen funds into an AT Money mule wallet.
 
-**MoMo Shield** solves this by operating as an **in-network middleware interception engine (Route 1)** paired with a **centralized FraudOps Syndicate Intelligence platform (Route 2)**. It plugs directly into the telecom core switch, halting transactions in **< 120ms** before funds leave the victim's wallet—protecting **100% of subscribers on Day 1 with zero app downloads**.
+**MoMo Shield** is designed as an **in-network interception plug-in (Route 1)** paired with a **FraudOps dashboard (Route 2)**. The repository contains a direct plug-in handler for five named InnoFemme points. Hook registration, credentials, end-to-end p95 latency, and judge-scorecard outcomes still require live sandbox verification; no measured performance or 100% coverage is claimed here.
 
 ---
 
@@ -37,20 +35,20 @@ flowchart TD
         PaymentHook["Hook 15: payment.authorize"]
         MenuHook["Hook 7: menu.open"]
         SimHook["Hook 11: sim.swap"]
-        FraudSim["Fraud Simulator (11 Typologies)"]
+        FraudSim["InnoFemme Fraud Simulator (separate sandbox judge tool)"]
     end
 
     subgraph BridgeTunnel["The InnoFemme Bridge (Outbound Tunnel)"]
         Bridge["bridge.py (Long-poll tunnel to bridge://laptop)"]
     end
 
-    subgraph MoMoShieldCore["MoMo Shield Core Engine (Route 1: Plug-in API :8001)"]
+    subgraph MoMoShieldCore["MoMo Shield Core Engine (Route 1: Plug-in API :8000)"]
         PluginRouter["POST /api/v1/plugin"]
         RulesEngine["14 Deterministic Rules Engine"]
         GlanceAPI["Rancard Glance Cross-Telco Intelligence"]
-        GeminiLLM["Gemini 2.0 Flash (Intent Analysis)"]
-        SIMCheck["Network Edge SIM-Swap Heuristics"]
-        DecisionEngine{"Decision Engine (<120ms)"}
+        GeminiLLM["Gemini intent (post-decision enrichment)"]
+        SIMCheck["Optional bounded SIM-swap lookup"]
+        DecisionEngine{"Decision Engine (<2s target; p95 unmeasured)"}
     end
 
     subgraph MoMoShieldOps["FraudOps Platform (Route 2: Next.js Command Center :3000)"]
@@ -67,11 +65,11 @@ flowchart TD
     PaymentHook -->|Interception| Bridge
     MenuHook -->|Interception| Bridge
     SimHook -->|Interception| Bridge
-    FraudSim -->|Automated Incidents| Bridge
 
     Bridge <-->|HTTP POST| PluginRouter
-    PluginRouter --> RulesEngine & GlanceAPI & GeminiLLM & SIMCheck
-    RulesEngine & GlanceAPI & GeminiLLM & SIMCheck --> DecisionEngine
+    PluginRouter --> RulesEngine & GlanceAPI & SIMCheck
+    RulesEngine & GlanceAPI & SIMCheck --> DecisionEngine
+    PluginRouter -. post-decision only .-> GeminiLLM
 
     DecisionEngine -->|allow / warn / reject / delay| Bridge
     DecisionEngine -->|WebSocket Broadcast| WebSocketFeed
@@ -81,18 +79,18 @@ flowchart TD
 ### Route 1: In-Network Interception Middleware (`Backend-2`)
 - Listens at `POST /api/v1/plugin` via `bridge://laptop/api/v1/plugin`.
 - Intercepts transactions at **Hook 15 (`payment.authorize`)**, **Hook 12 (`sms.deliver`)**, and **Hook 13 (`call.connect`)**.
-- Enforces real-time verdicts in **< 120ms** (well within InnoFemme's 2,000ms SLA):
+- Applies deterministic and lexical rules synchronously; optional Glance/network lookups share a 1.0-second deadline. The bridge gives the API up to 1.7 seconds. These are configured budgets, not measured end-to-end p95 results:
   - `allow`: Proceed normally.
   - `reject`: Immediate block; push warning to handset (≤ 150 chars).
   - `warn`: Soft friction; interactive USSD prompt (1: Cancel, 2: Continue).
-  - `delay`: Enforces a 15-minute cooling-off period on suspicious high-value new accounts.
+  - `delay`: A high-risk payment receives one 10-minute cooling period; a retry marked `afterDelay` is rejected if it remains high-risk.
 
 ### Route 2: Centralized FraudOps Command Center (`Frontend-2`)
 - Multi-tenant telecom switching: **MTN MoMo (65%)**, **Telecel Cash (22%)**, **AT Money (13%)**, and **Unified Ghana**.
 - Real-time WebSocket streaming telemetry.
 - Dynamic **GH₵ Protected** counter computed from blocked fraudulent amounts.
 - **Syndicate Graph Intelligence**: Identifies cross-network money-mule rings and layered accounts.
-- **InnoFemme Benchmark Scorecard**: Runs 14 test scenarios (11 fraud typologies + 3 legitimate controls).
+- **Local regression fixture scorecard**: Exercises fixed rule scenarios. It does not invoke the InnoFemme Fraud Simulator and is not a judge scorecard.
 - **Handset Simulator**: Preview accessible subscriber guidance in English and localized Twi.
 
 ---
@@ -115,8 +113,8 @@ MoMo-Shield-2/
 │   │   │   └── schemas.py         # SandboxEvent, AssessmentResult, RiskTier
 │   │   ├── config.py              # Typed settings (Sandbox URL, Glance, Gemini)
 │   │   └── main.py                # FastAPI ASGI application & WebSocket manager
-│   ├── tests/                     # 43 automated unit & integration tests
-│   ├── bridge.py                  # InnoFemme official bridge client (port 8001)
+│   ├── tests/                     # Backend unit & integration tests
+│   ├── bridge.py                  # InnoFemme bridge client (backend default port 8000)
 │   ├── plugin_api.py              # InnoFemme standalone starter kit
 │   └── requirements.txt
 │
@@ -132,15 +130,15 @@ MoMo-Shield-2/
 │   │   └── ui/primitives.tsx      # Glassmorphism cards, badges, modal dialogs
 │   ├── lib/
 │   │   ├── useStore.ts            # Zustand reactive state management
-│   │   ├── api.ts                 # REST client for Backend-2 (:8001)
+│   │   ├── api.ts                 # REST client for Backend-2 (default :8000)
 │   │   └── sound.ts               # Browser Web Audio & Speech synthesis
 │   └── tests/                     # Node test suite (7 tests passing)
 │
 └── docs/
-    ├── 3-minut.txt                # 3-minute pitch playbook & judges Q&A defense
+    ├── 3-minut.txt                # Evidence-based pitch & live-demo verification playbook
     ├── Hackathon Environment.txt  # InnoFemme technical specification summary
     ├── InnoFemme_Sandbox_API_and_Bridge_Guide.md
-    └── MoMo_Shield_Startup_Plan.md
+    └── MoMo_Shield_Startup_Plan.md # Archived aspirational plan; not current implementation status
 ```
 
 ---
@@ -154,8 +152,8 @@ MoMo-Shield-2/
 ### Step 1: Clone and Configure Environment Variables
 In `MoMo-Shield-2/Backend-2/.env`:
 ```env
-PORT=8001
-CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+PORT=8000
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 RISK_THRESHOLD_MEDIUM=40
 RISK_THRESHOLD_HIGH=75
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -166,17 +164,17 @@ SANDBOX_TEAM_KEY=YOUR_TEAM_KEY
 
 In `MoMo-Shield-2/Frontend-2/.env.local`:
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8001
-NEXT_PUBLIC_WS_URL=ws://localhost:8001/ws/events
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000/api/v1/ws/telemetry
 ```
 
 ### Step 2: Start the Backend (Terminal 1)
 ```powershell
 cd MoMo-Shield-2\Backend-2
 python -m pip install -r requirements.txt
-uvicorn app.main:app --port 8001 --reload
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-*Health check:* `http://localhost:8001/health`
+*Health check:* `http://localhost:8000/health`
 
 ### Step 3: Start the Frontend (Terminal 2)
 ```powershell
@@ -191,7 +189,7 @@ npm run dev
 cd MoMo-Shield-2\Backend-2
 python bridge.py --sandbox https://hackathon.innofemme.org/api/w/YOUR_TEAM --key YOUR_TEAM_KEY
 ```
-*The bridge connects your local port 8001 to the InnoFemme sandbox via `bridge://laptop`.*
+*The bridge defaults to forwarding local port 8000 to the InnoFemme sandbox via `bridge://laptop` and uses a 1.7-second API-response timeout.*
 
 ### Step 5: Configure the InnoFemme Web Portal
 1. Open the InnoFemme console: `https://hackathon.innofemme.org`.
@@ -202,7 +200,7 @@ python bridge.py --sandbox https://hackathon.innofemme.org/api/w/YOUR_TEAM --key
    - `call.connect`
    - `menu.open`
    - `sim.swap`
-4. Set timeout to: `2000` ms.
+4. Set timeout to at most `2000` ms. The bridge uses a 1.7-second local API timeout; rehearse end to end.
 
 ---
 
@@ -232,14 +230,14 @@ Whenever an event occurs in the sandbox, the network core halts for up to 2 seco
 }
 ```
 
-MoMo Shield assesses the event in **< 120ms** and responds:
+MoMo Shield applies a bounded decision path (configured external-lookup budget: 1.0 second) and responds. End-to-end latency remains unmeasured until a bridge rehearsal:
 
 | Decision | Required Fields | Effect in Sandbox |
 | :--- | :--- | :--- |
 | `allow` | None | Transaction proceeds normally. |
 | `reject` | `message` (≤ 150 chars) | Transaction blocked immediately. Message shown on subscriber's phone. |
 | `warn` | `message` (≤ 150 chars) | Interactive USSD prompt: 1) Continue, 2) Cancel. |
-| `delay` | `minutes`, `message` | Pauses transaction for a 15-minute cooling-off period. |
+| `delay` | `minutes`, `message` | Pauses a high-risk payment for one 10-minute cooling period. |
 
 ---
 
@@ -250,10 +248,7 @@ MoMo Shield assesses the event in **< 120ms** and responds:
 cd MoMo-Shield-2\Backend-2
 pytest -v
 ```
-**Results:** `43 passed, 0 failures`
-- Tests 14 fraud rules, SIM-swap heuristics, and sliding rate windows.
-- Validates InnoFemme plug-in contract (`sms.deliver`, `call.connect`, `payment.authorize`).
-- Verifies benchmark scenario accuracy and latency requirements.
+Test results should be taken from the actual command output. Tests cover the plug-in contract, documented call criteria, missing identities, concurrent state access, reset, and explicit local-fixture benchmark scope.
 
 ### Automated Frontend Test Suite & Typecheck
 ```powershell
@@ -261,32 +256,13 @@ cd MoMo-Shield-2\Frontend-2
 npm run test
 npx tsc --noEmit
 ```
-**Results:** `7 passed, 0 failures, 0 TypeScript errors`.
+Record actual test and typecheck command output; do not treat old counts as current validation.
 
 ---
 
-## 7. The InnoFemme Benchmark Suite
+## 7. Local Regression Fixtures (Not the InnoFemme Benchmark)
 
-MoMo Shield includes a built-in benchmark runner (`POST /api/v1/demo/benchmark`) executable directly from the Command Center UI:
-
-| Typology ID | Attack Name | Channel | Interception Point | Decision | Latency |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **GH01** | Fake Reversal Scam | SMS + USSD | `payment.authorize` | **REJECT** | 108ms |
-| **GH15** | PIN Harvesting Phishing | SMS | `sms.deliver` | **REJECT** | 114ms |
-| **GH18** | SIM-Swap Fast Cashout | USSD | `payment.authorize` | **REJECT** | 119ms |
-| **GH19** | Authority Impersonation Call | Voice | `call.connect` | **WARN** | 112ms |
-| **GH16** | Unsolicited Merchant Pull | USSD | `menu.open` | **WARN** | 98ms |
-| **GH19B** | Multi-hop Mule Layering | USSD | `payment.authorize` | **REJECT** | 125ms |
-| **GH22** | Coercive Active-Call Cashout | Voice+USSD | `payment.authorize` | **REJECT** | 115ms |
-| **CTRL01** | Utility Bill Payment (Benign) | USSD | `payment.authorize` | **ALLOW** | 92ms |
-| **CTRL02** | Family Remittance (Benign) | USSD | `payment.authorize` | **ALLOW** | 95ms |
-| **CTRL03** | Legitimate Vendor SMS (Benign)| SMS | `sms.deliver` | **ALLOW** | 89ms |
-
-*Benchmark Performance:*
-- **Precision:** 100%
-- **Recall:** 100%
-- **False Positive Rate:** 0.0%
-- **Average Latency:** 112ms (SLA: 2,000ms)
+`POST /api/v1/demo/benchmark` runs fixed, local deterministic-rule fixtures for dashboard regression checks. Its timing is only the time spent evaluating those in-process fixtures; it excludes request routing, the bridge, network lookups, and the sandbox. Fixture-derived precision/recall and estimated protected amounts are not observed judge metrics. For judging, run the InnoFemme Fraud Simulator and inspect its Fraud Console scorecard, while capturing bridge and API timings separately.
 
 ---
 
