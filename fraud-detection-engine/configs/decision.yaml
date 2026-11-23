@@ -1,0 +1,12 @@
+# Actions trigger when estimated expected loss (probability * amount) reaches
+# the corresponding intervention/friction cost. Tune these with the sandbox team.
+costs:
+  warn: 5.0
+  hold: 50.0
+  freeze: 250.0
+actions:
+  - allow
+  - warn
+  - hold
+  - freeze
+

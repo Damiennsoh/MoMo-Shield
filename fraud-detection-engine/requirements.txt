@@ -1,0 +1,10 @@
+numpy
+pandas
+PyYAML
+scikit-learn
+lightgbm
+shap
+fastapi
+uvicorn
+jupyter
+

@@ -1,0 +1,372 @@
+{
+  "run_id": "20261123T051710201396Z",
+  "warning": "Mock-data metrics are rehearsal results, not evidence of real-world performance.",
+  "rows": {
+    "all_transactions": 100023,
+    "excluded_boundary_case_rows": 123,
+    "train": 59974,
+    "validation": 19947,
+    "test": 19979
+  },
+  "boundaries": {
+    "train_end": "2026-10-14T10:23:14+00:00",
+    "validation_end": "2026-11-01T05:56:50.600000+00:00"
+  },
+  "max_fpr_target": 0.01,
+  "selected_thresholds": {
+    "rules": 0.5714285714285714,
+    "logistic": 1.0,
+    "gradient_boosted": 0.9999958435505683,
+    "ensemble_calibrated": 1.0
+  },
+  "models": {
+    "rules": {
+      "threshold": 0.5714285714285714,
+      "precision": 1.0,
+      "recall": 0.03096947935368043,
+      "false_positive_rate": 0.0,
+      "amount_weighted_recall": 0.07141760902130677,
+      "amount_stopped": 634176.05,
+      "false_positive_count": 0,
+      "false_negative_count": 4318,
+      "pr_auc": 0.49016628294745446,
+      "roc_auc": 0.749330335792918,
+      "positive_count": 4456,
+      "negative_count": 15523,
+      "per_fraud_kind": {
+        "agent_fraud": {
+          "count": 333,
+          "recall": 0.03903903903903904,
+          "amount_weighted_recall": 0.05509726580941938
+        },
+        "fake_merchant": {
+          "count": 644,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "fake_promo": {
+          "count": 168,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "limit_splitting": {
+          "count": 1262,
+          "recall": 0.09746434231378764,
+          "amount_weighted_recall": 0.09736198448682001
+        },
+        "mule_chain": {
+          "count": 904,
+          "recall": 0.0022123893805309734,
+          "amount_weighted_recall": 0.012438122702436454
+        },
+        "pin_phishing": {
+          "count": 346,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "relative_impersonation": {
+          "count": 163,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "reversal_scam": {
+          "count": 175,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "rtp_abuse": {
+          "count": 173,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "sim_swap": {
+          "count": 288,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        }
+      },
+      "recall_at_fpr_budget_on_test": 0.03096947935368043
+    },
+    "logistic": {
+      "threshold": 1.0,
+      "precision": 1.0,
+      "recall": 0.01570915619389587,
+      "false_positive_rate": 0.0,
+      "amount_weighted_recall": 0.01054140970521914,
+      "amount_stopped": 93605.90000000001,
+      "false_positive_count": 0,
+      "false_negative_count": 4386,
+      "pr_auc": 0.9872177029978473,
+      "roc_auc": 0.9955076650608566,
+      "positive_count": 4456,
+      "negative_count": 15523,
+      "per_fraud_kind": {
+        "agent_fraud": {
+          "count": 333,
+          "recall": 0.21021021021021022,
+          "amount_weighted_recall": 0.19252687400860566
+        },
+        "fake_merchant": {
+          "count": 644,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "fake_promo": {
+          "count": 168,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "limit_splitting": {
+          "count": 1262,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "mule_chain": {
+          "count": 904,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "pin_phishing": {
+          "count": 346,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "relative_impersonation": {
+          "count": 163,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "reversal_scam": {
+          "count": 175,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "rtp_abuse": {
+          "count": 173,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "sim_swap": {
+          "count": 288,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        }
+      },
+      "recall_at_fpr_budget_on_test": 0.01570915619389587
+    },
+    "gradient_boosted": {
+      "threshold": 0.9999958435505683,
+      "precision": 0.0,
+      "recall": 0.0,
+      "false_positive_rate": 0.0,
+      "amount_weighted_recall": 0.0,
+      "amount_stopped": 0.0,
+      "false_positive_count": 0,
+      "false_negative_count": 4456,
+      "pr_auc": 0.9925764418367565,
+      "roc_auc": 0.9976460625809087,
+      "positive_count": 4456,
+      "negative_count": 15523,
+      "per_fraud_kind": {
+        "agent_fraud": {
+          "count": 333,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "fake_merchant": {
+          "count": 644,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "fake_promo": {
+          "count": 168,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "limit_splitting": {
+          "count": 1262,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "mule_chain": {
+          "count": 904,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "pin_phishing": {
+          "count": 346,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "relative_impersonation": {
+          "count": 163,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "reversal_scam": {
+          "count": 175,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "rtp_abuse": {
+          "count": 173,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        },
+        "sim_swap": {
+          "count": 288,
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
+        }
+      },
+      "recall_at_fpr_budget_on_test": 0.0002244165170556553
+    },
+    "ensemble_calibrated": {
+      "threshold": 1.0,
+      "precision": 1.0,
+      "recall": 0.5123429084380611,
+      "false_positive_rate": 0.0,
+      "amount_weighted_recall": 0.632917963478642,
+      "amount_stopped": 5620202.350000001,
+      "false_positive_count": 0,
+      "false_negative_count": 2173,
+      "pr_auc": 0.994518202643534,
+      "roc_auc": 0.9978409361518455,
+      "positive_count": 4456,
+      "negative_count": 15523,
+      "per_fraud_kind": {
+        "agent_fraud": {
+          "count": 333,
+          "recall": 0.6426426426426426,
+          "amount_weighted_recall": 0.7069600083949589
+        },
+        "fake_merchant": {
+          "count": 644,
+          "recall": 0.3385093167701863,
+          "amount_weighted_recall": 0.3421706223278145
+        },
+        "fake_promo": {
+          "count": 168,
+          "recall": 0.16666666666666666,
+          "amount_weighted_recall": 0.16731517509727625
+        },
+        "limit_splitting": {
+          "count": 1262,
+          "recall": 0.6347068145800316,
+          "amount_weighted_recall": 0.635232246223445
+        },
+        "mule_chain": {
+          "count": 904,
+          "recall": 0.6570796460176991,
+          "amount_weighted_recall": 0.6833059919194325
+        },
+        "pin_phishing": {
+          "count": 346,
+          "recall": 0.3554913294797688,
+          "amount_weighted_recall": 0.5224819512946671
+        },
+        "relative_impersonation": {
+          "count": 163,
+          "recall": 0.2331288343558282,
+          "amount_weighted_recall": 0.29876863253402464
+        },
+        "reversal_scam": {
+          "count": 175,
+          "recall": 0.4,
+          "amount_weighted_recall": 0.46307321339948226
+        },
+        "rtp_abuse": {
+          "count": 173,
+          "recall": 0.5028901734104047,
+          "amount_weighted_recall": 0.567307108612229
+        },
+        "sim_swap": {
+          "count": 288,
+          "recall": 0.3819444444444444,
+          "amount_weighted_recall": 0.5973055380717158
+        }
+      },
+      "recall_at_fpr_budget_on_test": 0.5123429084380611
+    }
+  },
+  "expected_cost_actions": {
+    "allow": {
+      "transaction_count": 15023,
+      "fraud_count": 40
+    },
+    "freeze": {
+      "transaction_count": 3492,
+      "fraud_count": 3416
+    },
+    "hold": {
+      "transaction_count": 938,
+      "fraud_count": 820
+    },
+    "warn": {
+      "transaction_count": 526,
+      "fraud_count": 180
+    }
+  },
+  "latency_benchmark": {
+    "scope": "warmed in-process scoring; excludes feature construction and network",
+    "transactions": 200,
+    "p50_ms": 31.28440002910793,
+    "p95_ms": 51.29821999871637,
+    "p99_ms": 130.20868102903475
+  },
+  "tree_implementation": "LGBMClassifier",
+  "feature_columns": [
+    "amount",
+    "fee",
+    "payer_tx_count_1h",
+    "payer_tx_count_24h",
+    "payer_tx_count_7d",
+    "payer_out_count_24h",
+    "payer_out_amount_24h",
+    "payer_in_amount_24h",
+    "payer_unique_payees_7d",
+    "payer_new_payee",
+    "payer_amount_mean_30d",
+    "amount_vs_payer_mean",
+    "payee_in_count_24h",
+    "payee_in_amount_24h",
+    "payee_unique_senders_24h",
+    "payee_unique_senders_7d",
+    "payee_out_amount_24h",
+    "payee_pass_through_ratio",
+    "amount_near_limit",
+    "amount_to_limit_ratio",
+    "payer_calls_window",
+    "payee_calls_window",
+    "call_before_tx",
+    "payer_texts_1h",
+    "payer_suspicious_texts_24h",
+    "payee_suspicious_texts_24h",
+    "payer_prize_texts_24h",
+    "payer_urgent_texts_24h",
+    "payer_credit_claim_texts_24h",
+    "payer_credit_claim_mismatch_1h",
+    "payer_hours_since_sim_replacement",
+    "payer_hours_since_pin_reset",
+    "payee_hours_since_sim_replacement",
+    "payee_hours_since_pin_reset",
+    "payer_sim_replacement_count_window",
+    "payer_pin_reset_count_window",
+    "payee_sim_replacement_count_window",
+    "payee_pin_reset_count_window",
+    "payer_sim_and_pin_reset_window",
+    "payer_account_age_days",
+    "payee_account_age_days",
+    "hour_of_day",
+    "is_weekend",
+    "is_night",
+    "type_p2p",
+    "type_cash_in",
+    "type_cash_out",
+    "type_merchant_pay",
+    "type_float_transfer",
+    "type_bank_to_wallet",
+    "type_approval_debit",
+    "anomaly_score"
+  ]
+}

@@ -1,0 +1,26 @@
+# Each table maps source_column: internal_column. Replace these examples if the
+# sandbox uses different names; unmapped columns pass through unchanged.
+columns:
+  transactions:
+    timestamp: timestamp
+    payer_number: payer_number
+    payee_number: payee_number
+    amount: amount
+    type: type
+  wallets:
+    number: number
+    opened_at: opened_at
+  calls:
+    timestamp: timestamp
+    caller_number: caller_number
+    callee_number: callee_number
+  texts:
+    timestamp: timestamp
+    sender: sender
+    recipient_number: recipient_number
+    body: body
+  sim_events:
+    timestamp: timestamp
+    number: number
+    event: event
+

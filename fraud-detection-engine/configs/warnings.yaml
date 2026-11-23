@@ -1,0 +1,11 @@
+languages:
+  en:
+    status: template
+    reviewer: ""
+    reviewed_on: ""
+    text: "This transaction looks unusual. Confirm the recipient and never share your PIN or one-time code."
+  tw:
+    status: pending_native_review
+    reviewer: ""
+    reviewed_on: ""
+    text: ""
