@@ -54,6 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const avgLatencyMs = useStore((state) => state.avgLatencyMs);
   const soundEnabled = useStore((state) => state.soundEnabled);
   const toggleSound = useStore((state) => state.toggleSound);
+  const setSoundEnabled = useStore((state) => state.setSoundEnabled);
   const resetDemo = useStore((state) => state.resetDemo);
 
   const [open, setOpen] = useState(false);
@@ -70,7 +71,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? 'light'
         : 'dark';
     setTheme(preferred);
-  }, []);
+
+    const savedSoundPreference = window.localStorage.getItem('momo-shield-sound');
+    if (savedSoundPreference !== null) {
+      setSoundEnabled(savedSoundPreference !== 'false');
+    }
+  }, [setSoundEnabled]);
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
