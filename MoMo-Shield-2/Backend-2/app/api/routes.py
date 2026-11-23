@@ -341,25 +341,45 @@ async def receive_innofemme_plugin(payload: dict):
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="Plug-in 'data' must be a JSON object")
 
+    # All 16 documented InnoFemme interception points (Hackathon Environment §4).
     supported_points = {
-        "sms.deliver", "call.connect", "payment.authorize", "menu.open", "sim.swap"
+        # Network events
+        "pin.set", "wallet.open", "menu.open", "payment.authorize",
+        "payment.receive", "payment.request", "kyc.upgrade", "pin.reset",
+        "business.onboard", "sim.register", "sim.swap", "sms.deliver",
+        "call.connect",
+        # Bank events
+        "transfer.authorize", "account.open",
+        # Switch event
+        "switch.route",
     }
     if point not in supported_points:
         raise HTTPException(status_code=422, detail=f"Unsupported plug-in point: {point or '(missing)'}")
 
     payer = data.get("payer") if isinstance(data.get("payer"), dict) else {}
-    if point in ("sms.deliver", "call.connect"):
-        msisdn = str(data.get("to") or "").strip()
-    elif point == "payment.authorize":
-        msisdn = str(payer.get("msisdn") or "").strip()
-    else:
-        msisdn = str(data.get("msisdn") or "").strip()
+    payee = data.get("payee") if isinstance(data.get("payee"), dict) else {}
+    customer = data.get("customer") if isinstance(data.get("customer"), dict) else {}
+
+    # Subscriber MSISDN differs per hook: deliveries/calls target "to",
+    # payments name payer/payee, lifecycle hooks carry "msisdn".
+    msisdn = ""
+    for candidate in (
+        data.get("to"),
+        payer.get("msisdn"),
+        data.get("msisdn"),
+        payee.get("msisdn"),
+        customer.get("msisdn"),
+    ):
+        if candidate:
+            msisdn = str(candidate).strip()
+            break
     if not msisdn:
         raise HTTPException(status_code=422, detail=f"Missing subscriber MSISDN for {point}")
 
-    event_type = EventType.SMS
+    event_type = EventType.TRANSACTION
     event_payload = {}
     if point == "sms.deliver":
+        event_type = EventType.SMS
         event_payload = {
             "text": data.get("text", ""),
             "from": data.get("from", ""),
@@ -374,16 +394,6 @@ async def receive_innofemme_plugin(payload: dict):
             "callsBetweenThemBefore": _safe_int(data.get("callsBetweenThemBefore")),
             "status": "ringing",
         }
-    elif point == "payment.authorize":
-        event_type = EventType.TRANSACTION
-        event_payload = {
-            "type": "transfer_out",
-            "amount": data.get("amount", 0),
-            "fee": data.get("fee", 0),
-            "payee": data.get("payee"),
-            "onCallWith": payer.get("onCallWith"),
-            "lastSimSwapAt": payer.get("lastSimSwapAt"),
-        }
     elif point == "menu.open":
         event_type = EventType.USSD
         event_payload = {
@@ -392,11 +402,93 @@ async def receive_innofemme_plugin(payload: dict):
             "onCallWith": data.get("onCallWith"),
             "lastSimSwapAt": data.get("lastSimSwapAt"),
         }
+    elif point == "payment.authorize":
+        event_payload = {
+            "type": "transfer_out",
+            "amount": data.get("amount", 0),
+            "fee": data.get("fee", 0),
+            "payee": data.get("payee"),
+            "onCallWith": payer.get("onCallWith"),
+            "lastSimSwapAt": payer.get("lastSimSwapAt"),
+        }
+    elif point == "payment.receive":
+        event_payload = {
+            "type": "transfer_in",
+            "amount": data.get("amount", 0),
+            "payer": data.get("payer"),
+            "paymentsReceivedInLast24Hours": _safe_int(data.get("paymentsReceivedInLast24Hours")),
+            "differentPayersInLast24Hours": _safe_int(data.get("differentPayersInLast24Hours")),
+        }
+    elif point == "payment.request":
+        event_payload = {
+            "type": "payment_request",
+            "amount": data.get("amount", 0),
+            "requester": data.get("requester"),
+            "requestsFromThisRequesterToday": _safe_int(data.get("requestsFromThisRequesterToday")),
+            "chargedWithoutAsking": bool(data.get("chargedWithoutAsking")),
+        }
     elif point == "sim.swap":
-        event_type = EventType.TRANSACTION
         event_payload = {
             "type": "new_device_binding",
             "swapsOnThisNumberBefore": _safe_int(data.get("swapsOnThisNumberBefore")),
+            "walletBalance": data.get("walletBalance"),
+            "lastSimSwapAt": data.get("lastSimSwapAt"),
+        }
+    elif point == "sim.register":
+        event_payload = {
+            "type": "sim_register",
+            "registeredBy": data.get("registeredBy"),
+            "simsAlreadyOnThisGhanaCard": _safe_int(data.get("simsAlreadyOnThisGhanaCard"), 1),
+        }
+    elif point == "wallet.open":
+        event_payload = {
+            "type": "wallet_open",
+            "walletType": data.get("walletType"),
+            "kycTier": data.get("kycTier"),
+            "onCallWith": data.get("onCallWith"),
+            "lastSimSwapAt": data.get("lastSimSwapAt"),
+        }
+    elif point == "pin.set":
+        event_payload = {"type": "pin_set", "customer": customer or None}
+    elif point == "pin.reset":
+        event_payload = {
+            "type": "pin_reset",
+            "walletBalance": data.get("walletBalance"),
+            "lastSimSwapAt": data.get("lastSimSwapAt"),
+            "pinResetsBefore": _safe_int(data.get("pinResetsBefore")),
+        }
+    elif point == "kyc.upgrade":
+        event_payload = {
+            "type": "kyc_upgrade",
+            "fromTier": data.get("fromTier"),
+            "toTier": data.get("toTier"),
+            "requestedBy": data.get("requestedBy"),
+        }
+    elif point == "business.onboard":
+        event_payload = {
+            "type": "business_onboard",
+            "businessType": data.get("businessType"),
+            "owner": customer or None,
+        }
+    elif point == "account.open":
+        event_payload = {
+            "type": "account_open",
+            "accountsAtOtherBanks": _safe_int(data.get("accountsAtOtherBanks")),
+            "walletsOnThisGhanaCard": _safe_int(data.get("walletsOnThisGhanaCard")),
+        }
+    elif point == "transfer.authorize":
+        event_payload = {
+            "type": "transfer_out",
+            "amount": data.get("amount", 0),
+            "channel": "bank",
+            "fromAccount": data.get("fromAccount"),
+            "toWallet": data.get("toWallet"),
+        }
+    elif point == "switch.route":
+        event_payload = {
+            "type": "switch_route",
+            "amount": data.get("amount", 0),
+            "paymentsRoutedBetweenThemToday": _safe_int(data.get("paymentsRoutedBetweenThemToday")),
         }
 
     event_id = f"inno_{uuid4().hex}"
@@ -411,7 +503,8 @@ async def receive_innofemme_plugin(payload: dict):
 
     score = 0
     rules_fired: List[str] = []
-    if point in ("payment.authorize", "menu.open") and event_payload.get("onCallWith"):
+    if point in ("payment.authorize", "menu.open", "wallet.open", "payment.request", "pin.reset") \
+            and (event_payload.get("onCallWith") or data.get("onCallWith")):
         score += 50
         rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
@@ -428,13 +521,37 @@ async def receive_innofemme_plugin(payload: dict):
                 score += 45
                 rules_fired.append("GH19 Robocall Preconditioning: new caller SIM (<48h), >20 numbers called today, no prior calls")
 
-    swap_ts = event_payload.get("lastSimSwapAt")
+    swap_ts = event_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
     swap_dt = _parse_timestamp(swap_ts)
     if swap_dt is not None:
         age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - swap_dt).total_seconds() / 3600
         if 0 <= age_hours <= 48:
             score += 45
             rules_fired.append(f"SIM Swap Recency: subscriber SIM changed {age_hours:.0f}h ago")
+
+    # Hook-specific payload signals documented in Hackathon Environment §4.
+    if point == "payment.request":
+        if event_payload.get("chargedWithoutAsking"):
+            score += 40
+            rules_fired.append("RTP abuse: merchant flagged as charging without subscriber consent")
+        if _safe_int(event_payload.get("requestsFromThisRequesterToday")) >= 5:
+            score += 25
+            rules_fired.append("RTP flood: requester has sent 5+ payment requests today")
+    elif point == "payment.receive":
+        if _safe_int(event_payload.get("differentPayersInLast24Hours")) >= 8:
+            score += 20
+            rules_fired.append("Mule inbound: 8+ distinct payers credited in 24h")
+    elif point == "pin.reset":
+        if _safe_int(event_payload.get("pinResetsBefore")) >= 2:
+            score += 30
+            rules_fired.append("PIN-reset abuse: subscriber has reset PIN 2+ times")
+    elif point == "kyc.upgrade" and data.get("requestedBy"):
+        score += 15
+        rules_fired.append("Agent-initiated KYC upgrade — verify agent authority")
+    elif point == "switch.route":
+        if _safe_int(event_payload.get("paymentsRoutedBetweenThemToday")) >= 10:
+            score += 20
+            rules_fired.append("Switch velocity: 10+ routed payments between same institutions today")
 
     for rule in RULES:
         points, description = rule(sandbox_event, history)

@@ -9,7 +9,13 @@ _REQUEST_RE = re.compile(
     re.I,
 )
 _AUTHORITY_RE = re.compile(
-    r"\b(mtn|vodafone|telecel|airteltigo|bank|fraud department|security team|agent|office|head office|official|verified)\b",
+    r"\b(mtn|vodafone|telecel|airteltigo|moMo|momo|mobile money|bank|fraud department|security team|agent|office|head office|official|verified)\b",
+    re.I,
+)
+# Benign security advice negates the solicitation ("never share your PIN").
+_NEGATION_RE = re.compile(
+    r"\b(never|do not|don't|won't|will not|no one)\b[^.]{0,50}\b(share|give|tell|send|provide|enter|confirm|disclose|reply)\b"
+    r"|\b(share|give|tell|send|provide|enter|confirm|disclose|reply)\b[^.]{0,50}\b(never|no one)\b",
     re.I,
 )
 _URGENCY_RE = re.compile(
@@ -37,6 +43,8 @@ def check_content_credential_request(event: SandboxEvent, history: List) -> Tupl
     if event.event_type not in _CONTENT_TYPES:
         return 0, ""
     text = _text(event)
+    if _NEGATION_RE.search(text):
+        return 0, ""
     if _SECRET_RE.search(text) and _REQUEST_RE.search(text):
         return 45, "Credential request: message asks the subscriber for a secret"
     if _SECRET_RE.search(text) and event.event_type == EventType.USSD:
@@ -48,6 +56,8 @@ def check_content_impersonation(event: SandboxEvent, history: List) -> Tuple[int
     if event.event_type not in _CONTENT_TYPES:
         return 0, ""
     text = _text(event)
+    if _NEGATION_RE.search(text):
+        return 0, ""
     if _AUTHORITY_RE.search(text) and _SECRET_RE.search(text):
         return 15, "Operator/authority impersonation combined with secret solicitation"
     if _AUTHORITY_RE.search(text) and _URGENCY_RE.search(text):
@@ -247,6 +257,30 @@ def check_relative_new_number(event: SandboxEvent, history: List) -> Tuple[int, 
     return 0, ""
 
 
+# ---------------------------------------------------------------------------
+# Composite — confirmed credential-harvesting SMS: secret solicitation combined
+# with ANY deception lever (authority, urgency, prize, link) on an SMS delivery.
+# This is the signal that justifies blocking SMS delivery outright (reject).
+# ---------------------------------------------------------------------------
+def check_sms_credential_harvesting(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    if event.event_type != EventType.SMS:
+        return 0, ""
+    text = _text(event)
+    if _NEGATION_RE.search(text):
+        return 0, ""
+    if not (_SECRET_RE.search(text) and _REQUEST_RE.search(text)):
+        return 0, ""
+    lever = (
+        _AUTHORITY_RE.search(text)
+        or _URGENCY_RE.search(text)
+        or _PRIZE_RE.search(text)
+        or _LINK_RE.search(text)
+    )
+    if lever:
+        return 25, "Confirmed credential-harvesting SMS: secret solicitation combined with deception lever — block delivery"
+    return 0, ""
+
+
 RULES = [
     check_content_credential_request,
     check_content_impersonation,
@@ -263,4 +297,5 @@ RULES = [
     check_structuring,
     check_approve_to_receive,
     check_relative_new_number,
+    check_sms_credential_harvesting,
 ]
