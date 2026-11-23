@@ -1,0 +1,15 @@
+# Replay windows and behavioral thresholds used by features/state.py.
+windows:
+  history_days: 30
+  velocity_hours: 1
+  day_hours: 24
+  week_days: 7
+  call_minutes: 30
+  text_hours: 1
+  text_days: 24
+  sim_hours: 72
+
+thresholds:
+  transaction_limit: 5000
+  near_limit_fraction: 0.9
+
