@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     sandbox_base_url: str = "https://hackathon.innofemme.org/api/w"
     plugin_lookup_timeout_seconds: float = 1.0
 
+    # Shared correlation state. Empty = process-local memory (single worker).
+    # Set to redis://host:6379/0 to share the event window across workers.
+    redis_url: str = ""
+
     # MTN MoMo Collection API: keep credentials on the backend only.
     mtn_momo_base_url: str = "https://sandbox.momodeveloper.mtn.com"
     mtn_momo_api_user: str = ""
