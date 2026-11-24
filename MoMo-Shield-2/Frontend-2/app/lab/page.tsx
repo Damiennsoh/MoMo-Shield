@@ -135,7 +135,7 @@ const CASE_STUDY_PRESETS = [
 ];
 
 const twiWarningDefault =
-  'Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!';
+  'Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!';
 const englishWarningDefault =
   'Transaction blocked. We detected suspicious credential pressure. Never share your MoMo PIN with anyone. Call 100 for support.';
 
@@ -203,7 +203,7 @@ export default function SignalLabPage() {
 
       const twiMsg =
         res.action_taken === 'BLOCKED'
-          ? 'Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!'
+          ? 'Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!'
           : mode === 'medium'
             ? 'Mepa wo kyɛw, twɛn kakra ansa. Mfa wo PIN mma obiara.'
             : 'Wo MoMo sika bɔne biara nni ho. MoMo remmisa wo PIN da.';

@@ -4,7 +4,7 @@ Fraud Knowledge Base — hybrid lexical + semantic matcher (RAG engine).
 - Lexical layer: bag-of-words + char 3-gram cosine over precomputed vectors
   (sub-millisecond, always available, no network).
 - Semantic layer: Gemini embeddings (gemini-embedding-001) over the same
-  InnoFemme KNUST case-study chunks. Chunk vectors are computed once and
+  InnoFemme fraud case-study chunks. Chunk vectors are computed once and
   cached to disk; queries embed in ~200-400ms. Falls back to lexical when
   no Gemini key is configured.
 """
@@ -242,9 +242,19 @@ class FraudKnowledgeBase:
             is_benign=bool(chunk.get("is_benign", False)),
             psychological_levers=chunk.get("psychological_levers", []),
             summary=chunk.get("summary", ""),
-            source=chunk.get("source", "InnoFemme Case Study Library"),
+            source=_display_source(chunk.get("source")),
             engine=engine,
         )
+
+
+def _display_source(raw) -> str:
+    """Rebrand provenance for display: the corpus is the InnoFemme fraud
+    case-study library, not a KNUST-branded product surface."""
+    s = str(raw or "InnoFemme Fraud Case Corpus")
+    s = s.replace("KNUST Kumasi Case Study Library", "Fraud Case Corpus")
+    s = s.replace("KNUST Case Study Library", "Fraud Case Corpus")
+    s = s.replace("InnoFemme x Hack for Equity", "InnoFemme")
+    return s
 
 
 def format_rag_context(match: KBMatch) -> str:
@@ -254,7 +264,7 @@ def format_rag_context(match: KBMatch) -> str:
             f"Verified benign pattern — {match.title}. Typical safe transaction."
         )
     return (
-        f"Precedent from InnoFemme KNUST Case Study {match.case_id} ({match.title}):\n"
+        f"Precedent from InnoFemme Fraud Case Study {match.case_id} ({match.title}):\n"
         f"- Typology: {match.typology}\n"
         f"- Psychological Levers: {', '.join(match.psychological_levers)}\n"
         f"- Modus Operandi: {match.summary}\n"

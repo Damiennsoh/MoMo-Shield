@@ -20,8 +20,11 @@ function tierToRisk(tier: AssessmentResult['risk_tier']): RiskLevel {
 }
 
 function actionToStatus(action: string): FraudAlert['status'] {
-  if (action === 'BLOCKED') return 'blocked';
-  if (action === 'WARNED') return 'active';
+  // Webhook path reports BLOCKED/WARNED; plug-in path reports
+  // REJECT/WARN/DELAY/ALLOW — normalize both vocabularies.
+  const a = action.toUpperCase();
+  if (a === 'BLOCKED' || a === 'REJECT') return 'blocked';
+  if (a === 'WARNED' || a === 'WARN' || a === 'DELAY') return 'active';
   return 'released';
 }
 

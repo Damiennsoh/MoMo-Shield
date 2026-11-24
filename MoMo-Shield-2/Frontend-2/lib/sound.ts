@@ -107,7 +107,7 @@ export async function playEnglishTwiWarning(options: WarningSpeechOptions = {}):
 
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-  const twiPrompt = options.twiText || "Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!";
+  const twiPrompt = options.twiText || "Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!";
   const englishPrompt = options.englishText || "Warning: Transaction hold. Suspicious activity detected. Never share your MoMo PIN with anyone. Call 100 for support.";
 
   try {

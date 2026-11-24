@@ -125,7 +125,7 @@ export default function DashboardPage() {
     setIsPlayingWarning(true);
     void playEnglishTwiWarning({
       englishText: `Transaction blocked for subscriber ${selected.msisdn}. High fraud risk confirmed.`,
-      twiText: `Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!`,
+      twiText: `Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!`,
     });
     setTimeout(() => setIsPlayingWarning(false), 3800);
   };
@@ -166,7 +166,7 @@ export default function DashboardPage() {
         if (soundEnabled) {
           void playEnglishTwiWarning({
             englishText: `Transaction blocked for ${selected.msisdn}. High fraud risk confirmed.`,
-            twiText: `Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!`,
+            twiText: `Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!`,
           });
         }
         try {
@@ -589,7 +589,7 @@ export default function DashboardPage() {
                 <strong>English: </strong> Transaction placed on hold. Do not share your PIN. Call 100 for support.
               </p>
               <p className="mt-1.5 text-xs text-slate-200 leading-relaxed border-t border-amber-400/20 pt-1.5">
-                <strong className="text-[#ffcc00]">Twi: </strong> Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!
+                <strong className="text-[#ffcc00]">Twi: </strong> Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!
               </p>
 
               {/* Play English + Twi Audio Warning Button */}

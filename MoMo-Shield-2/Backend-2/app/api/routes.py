@@ -37,7 +37,6 @@ _SCAM_MARKERS = (
     "credential request",
     "unverified credit claim",
     "cross-channel precursor",
-    "sms blast",
     "gh15",
     "gh16",
     "phishing link",
@@ -162,7 +161,7 @@ async def receive_sandbox_event(
         event.payload.get("text") or event.payload.get("transcript") or ""
     )
 
-    # Fast in-memory semantic search over InnoFemme KNUST Case Study Knowledge Base (< 2ms)
+    # Fast in-memory semantic search over InnoFemme Fraud Case Corpus (< 2ms)
     kb_match_data = None
     rag_context = None
     if text_payload.strip():
@@ -186,7 +185,7 @@ async def receive_sandbox_event(
                 fraud_floor, benign_floor = 0.40, 0.50
             if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
                 score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
-                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} {kb_engine} match): KNUST Dossier {top_kb.case_id} - {top_kb.title}")
+                rules_fired.append(f"RAG Knowledge Base ({top_kb.similarity:.0%} {kb_engine} match): Case Dossier {top_kb.case_id} - {top_kb.title}")
             elif top_kb.is_benign and top_kb.similarity >= benign_floor:
                 score = max(0, score - (25 if kb_engine == "semantic" else 30))
                 rules_fired.append(f"RAG Benign Control ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title} (Legitimate Pattern)")
@@ -320,7 +319,7 @@ async def trigger_real_phone_bridge(action: str = "warn") -> dict:
 
 @router.get("/knowledge-base")
 async def get_fraud_knowledge_base():
-    """Returns the precomputed InnoFemme KNUST Case Study Knowledge Base."""
+    """Returns the precomputed InnoFemme Fraud Case Corpus."""
     return {
         "count": len(knowledge_base.chunks),
         "chunks": [
@@ -547,14 +546,15 @@ async def receive_innofemme_plugin(payload: dict):
     rules_fired: List[str] = []
 
     # Cross-subscriber SMS blast: identical text hitting many victims in 10
-    # minutes is a campaign signature, independent of content rules.
+    # minutes corroborates fraud, but capped at +30 — legitimate bulk SMS
+    # (school notices, promos) must never warn on blast volume alone.
     if point == "sms.deliver":
         victims = sms_blast_window.observe(str(event_payload.get("text") or ""), msisdn)
         if victims >= 8:
-            score += 45
+            score += 30
             rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
         elif victims >= 5:
-            score += 30
+            score += 25
             rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
         elif victims >= 3:
             score += 15

@@ -76,7 +76,7 @@ export default function HandsetPage() {
 
     const twi =
       next === 'high'
-        ? 'Kɔkɔbɔ! Yɛn hu sɛ obi rehyɛ wo. Mepa wo kyɛw, mfa wo PIN mma obiara!'
+        ? 'Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!'
         : next === 'medium'
         ? 'Mepa wo kyɛw, twɛn kakra ansa. Mfa wo PIN mma obiara.'
         : 'Wo MoMo sika bɔne biara nni ho. MoMo remmisa wo PIN da.';

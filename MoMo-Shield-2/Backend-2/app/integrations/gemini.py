@@ -45,7 +45,7 @@ async def analyze_intent(text: str, rag_context: str | None = None) -> str:
             except Exception:
                 pass
 
-        rag_prompt_section = f"\nRelevant Precedent from InnoFemme KNUST Library:\n{rag_context}\n" if rag_context else ""
+        rag_prompt_section = f"\nRelevant Precedent from InnoFemme Fraud Case Library:\n{rag_context}\n" if rag_context else ""
         prompt = (
             f"Analyze this Ghanaian mobile money communication for fraud intent.{rag_prompt_section}"
             f"Return JSON: {{'pattern': str, 'secret_requested': bool}}. Text: {text}"

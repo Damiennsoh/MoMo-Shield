@@ -334,7 +334,9 @@ def test_plugin_sms_blast_identical_text_escalates(_stub_integrations):
         assert response.status_code == 200
     rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
     assert any("SMS blast" in rule for rule in rules)
-    assert routes.ASSESSMENT_HISTORY[-1]["risk_score"] >= 40
+    # Blast is corroborating-only: capped at +30 so identical benign bulk
+    # SMS can never warn on volume alone.
+    assert 30 <= routes.ASSESSMENT_HISTORY[-1]["risk_score"] < 75
 
 
 def test_plugin_sms_blast_single_victim_no_escalation(_stub_integrations):
