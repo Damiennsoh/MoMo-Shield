@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 from typing import List, Tuple
 
 from app.models.schemas import EventType, SandboxEvent
@@ -281,6 +282,102 @@ def check_sms_credential_harvesting(event: SandboxEvent, history: List) -> Tuple
     return 0, ""
 
 
+# ---------------------------------------------------------------------------
+# Call connect — probabilistic multi-signal caller scoring.
+# Tiered fan-out, caller SIM age and prior-contact history accumulate as
+# points; no single signal ever blocks on its own (guide.txt spec).
+# ---------------------------------------------------------------------------
+def _parse_iso(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def _norm_msisdn(value) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    if digits.startswith("233"):
+        digits = "0" + digits[3:]
+    return digits
+
+
+def check_call_connect_signals(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """Additive caller-risk score for call.connect metadata.
+
+    - fan-out: >25 numbers rung today +20, >10 +5 (union-leader safe: volume
+      alone stays LOW)
+    - caller SIM registered within 24h: +15
+    - no prior calls between caller and subscriber: +5
+    """
+    if event.event_type != EventType.VOICE:
+        return 0, ""
+    payload = event.payload or {}
+    points = 0
+    reasons = []
+
+    try:
+        rung_today = int(payload.get("numbersTheCallerHasRungToday") or 0)
+    except (TypeError, ValueError):
+        rung_today = 0
+    if rung_today > 25:
+        points += 20
+        reasons.append(f"extreme caller fan-out ({rung_today} numbers today)")
+    elif rung_today > 10:
+        points += 5
+        reasons.append(f"elevated caller fan-out ({rung_today} numbers today)")
+
+    sim_at = _parse_iso(payload.get("callerSimRegisteredAt"))
+    if sim_at is not None:
+        age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - sim_at).total_seconds() / 3600
+        if 0 <= age_hours <= 24:
+            points += 15
+            reasons.append("caller SIM registered within 24h")
+
+    if payload.get("callsBetweenThemBefore") == 0:
+        points += 5
+        reasons.append("no prior calls between caller and subscriber")
+
+    if points:
+        return points, "Call metadata: " + "; ".join(reasons)
+    return 0, ""
+
+
+# ---------------------------------------------------------------------------
+# Cross-channel precursor — GH01 reversal scam: the caller recently sent the
+# subscriber an unverified credit SMS, then calls to "reverse" it.
+# ---------------------------------------------------------------------------
+_CREDIT_CLAIM_RE = re.compile(
+    r"\b(received|credited|refund(?:ed)?|reversal|payment\s+alert|money\s+alert)\b"
+    r"|\bgh[c₵]?\s*[-–]?\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:ghc|ghs|cedis|gh₵)\b",
+    re.I,
+)
+
+
+def check_call_after_credit_sms(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """Inbound call from a number that recently sent this subscriber a
+    credit-claim SMS — the text→voice setup of the reversal scam."""
+    if event.event_type != EventType.VOICE:
+        return 0, ""
+    caller = _norm_msisdn((event.payload or {}).get("from"))
+    if not caller:
+        return 0, ""
+    for prior in history:
+        if prior.get("event_type") != "sms":
+            continue
+        prior_payload = prior.get("payload") or {}
+        if _norm_msisdn(prior_payload.get("from")) != caller:
+            continue
+        if _CREDIT_CLAIM_RE.search(str(prior_payload.get("text") or "")):
+            return 30, (
+                "Cross-channel precursor: caller recently sent subscriber an "
+                "unverified credit SMS (GH01 reversal-scam pattern)"
+            )
+    return 0, ""
+
+
 RULES = [
     check_content_credential_request,
     check_content_impersonation,
@@ -298,4 +395,6 @@ RULES = [
     check_approve_to_receive,
     check_relative_new_number,
     check_sms_credential_harvesting,
+    check_call_connect_signals,
+    check_call_after_credit_sms,
 ]

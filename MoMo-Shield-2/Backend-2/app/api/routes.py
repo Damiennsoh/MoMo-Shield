@@ -18,7 +18,7 @@ from app.engine.kb import knowledge_base
 from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.infofemme import infofemme_client
-from app.integrations.nia import evaluate_ghana_card
+from app.integrations.nia import evaluate_ghana_card, verify_card_live
 from app.integrations.sandbox import intervene_sandbox
 from app.integrations import mtn_momo
 from app.models.schemas import AssessmentResult, EventType, RiskTier, SandboxEvent
@@ -341,6 +341,10 @@ async def receive_innofemme_plugin(payload: dict):
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="Plug-in 'data' must be a JSON object")
 
+    # events is informational only (answer ignored); accept and allow.
+    if point == "events":
+        return {"decision": "allow"}
+
     # All 16 documented InnoFemme interception points (Hackathon Environment §4).
     supported_points = {
         # Network events
@@ -508,19 +512,6 @@ async def receive_innofemme_plugin(payload: dict):
         score += 50
         rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
-    # The documented robocall signal requires all three facts, not call volume alone.
-    if point == "call.connect":
-        caller_sim_at = _parse_timestamp(event_payload.get("callerSimRegisteredAt"))
-        if caller_sim_at is not None:
-            age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - caller_sim_at).total_seconds() / 3600
-            if (
-                _safe_int(event_payload.get("numbersTheCallerHasRungToday")) > 20
-                and _safe_int(event_payload.get("callsBetweenThemBefore")) == 0
-                and 0 <= age_hours < 48
-            ):
-                score += 45
-                rules_fired.append("GH19 Robocall Preconditioning: new caller SIM (<48h), >20 numbers called today, no prior calls")
-
     swap_ts = event_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
     swap_dt = _parse_timestamp(swap_ts)
     if swap_dt is not None:
@@ -615,9 +606,15 @@ async def receive_innofemme_plugin(payload: dict):
     # Both optional lookups overlap and are bounded by one shared deadline.
     glance_task = asyncio.create_task(check_glance_risk(intel_msisdn))
     sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(msisdn, institution))
+    # Live NIA registry verify only when the hook supplies a Ghana Card —
+    # shares the same bounded deadline, fails open on any error.
+    nia_task = (
+        asyncio.create_task(verify_card_live(ghana_card)) if ghana_card else None
+    )
+    lookup_tasks = {glance_task, sim_task} | ({nia_task} if nia_task else set())
     timeout = min(max(settings.plugin_lookup_timeout_seconds, 0.05), 1.2)
     done, pending = await asyncio.wait(
-        {glance_task, sim_task}, timeout=timeout, return_when=asyncio.ALL_COMPLETED
+        lookup_tasks, timeout=timeout, return_when=asyncio.ALL_COMPLETED
     )
     for task in pending:
         task.cancel()
@@ -635,15 +632,31 @@ async def receive_innofemme_plugin(payload: dict):
             sim_data = sim_task.result() or sim_data
         except Exception as exc:
             log.warning("SIM-swap lookup failed for plug-in event %s: %s", event_id, exc)
+    nia_live = None
+    if nia_task is not None and nia_task in done:
+        try:
+            nia_live = nia_task.result()
+        except Exception as exc:
+            log.warning("NIA verify failed for plug-in event %s: %s", event_id, exc)
 
     glance_level = getattr(glance_data, "risk_level", "UNKNOWN")
     glance_reports = _safe_int(getattr(glance_data, "reports", 0))
     if glance_level == "HIGH":
         score += 40
         rules_fired.append(f"Glance cross-operator intelligence: HIGH ({glance_reports} reports)")
+    elif glance_reports >= 2:
+        score += 25
+        rules_fired.append(f"Glance cross-operator intelligence: {glance_reports} prior reports")
     if _safe_int(sim_data.get("risk_boost")) > 0:
         score += _safe_int(sim_data.get("risk_boost"))
         rules_fired.append("InnoFemme network-edge SIM-swap check: recent swap reported")
+    if isinstance(nia_live, dict):
+        if nia_live.get("valid") is False:
+            score += 40
+            rules_fired.append("Live NIA verify: Ghana Card not found in national registry")
+        elif nia_live.get("biometricMatch") is False:
+            score += 50
+            rules_fired.append("Live NIA verify: biometric check failed")
 
     score = min(100, max(0, score))
     tier = (
@@ -664,6 +677,15 @@ async def receive_innofemme_plugin(payload: dict):
         decision = "warn"
         message = "MoMo Shield Warning: Suspicious activity. Never share your MoMo PIN."
     else:
+        decision = "allow"
+        message = ""
+
+    # Hackathon Environment §7: warn/delay are only accepted at menu.open,
+    # payment.authorize, sms.deliver and call.connect. Every other step takes
+    # allow/reject only — answering warn there is a contract violation. The
+    # suspicion is still recorded in telemetry via triggered_rules.
+    WARN_CAPABLE_POINTS = {"menu.open", "payment.authorize", "sms.deliver", "call.connect"}
+    if decision == "warn" and point not in WARN_CAPABLE_POINTS:
         decision = "allow"
         message = ""
     message = message[:150]

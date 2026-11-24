@@ -14,6 +14,20 @@ from app.utils.logger import get_logger
 log = get_logger(__name__)
 _ALLOWED_CARRIERS = {"mtn", "telecel", "at"}
 
+# Ghana numbering plan → carrier, used to pick which network API to call.
+_CARRIER_BY_PREFIX = {
+    "024": "mtn", "025": "mtn", "053": "mtn", "054": "mtn", "055": "mtn", "059": "mtn",
+    "020": "telecel", "050": "telecel",
+    "026": "at", "027": "at", "056": "at", "057": "at",
+}
+
+
+def _carrier_for_msisdn(msisdn: str) -> str:
+    digits = "".join(ch for ch in str(msisdn) if ch.isdigit())
+    if digits.startswith("233"):
+        digits = "0" + digits[3:]
+    return _CARRIER_BY_PREFIX.get(digits[:3], "mtn")
+
 
 class InnoFemmeNetworkClient:
     def __init__(self):
@@ -56,12 +70,51 @@ class InnoFemmeNetworkClient:
         return {"msisdn": msisdn, "status": "UNKNOWN", "risk_boost": 0}
 
     async def get_subscriber_profile(self, msisdn: str) -> Dict[str, Any]:
-        """Profile lookup is unavailable until its contract is verified."""
-        return {"msisdn": msisdn, "status": "UNIMPLEMENTED"}
+        """GET network/v1/subscribers/{number} — name, status, hasWallet."""
+        carrier = _carrier_for_msisdn(msisdn)
+        if not self.enabled:
+            return {"msisdn": msisdn, "status": "UNCONFIGURED"}
+        phone_number = str(msisdn).replace("+", "").strip()
+        endpoint = f"{self.base_url}/network/{carrier}/v1/subscribers/{phone_number}"
+        try:
+            async with httpx.AsyncClient(timeout=0.75) as client:
+                response = await client.get(endpoint, auth=(self.client_id, self.api_key))
+                if response.status_code == 200:
+                    data = response.json()
+                    return {"msisdn": msisdn, "status": "OK", "profile": data,
+                            "source": "innofemme_network_api"}
+                log.warning("Subscriber lookup returned HTTP %s", response.status_code)
+        except Exception as exc:
+            log.warning("Subscriber lookup failed: %s", exc)
+        return {"msisdn": msisdn, "status": "UNKNOWN"}
 
-    async def send_ussd_push(self, msisdn: str, message: str) -> bool:
-        """USSD push is outside this verified plug-in integration contract."""
-        log.info("[USSD PUSH NOT SENT] %s: %s", msisdn, message)
+    async def send_ussd_push(self, msisdn: str, message: str, carrier: str | None = None) -> bool:
+        """Proactive warning to a subscriber.
+
+        The sandbox has no USSD-push primitive; the network SMS API
+        (Hackathon Environment §3, same Basic credentials) is the real
+        channel. Kept under the legacy name for existing callers.
+        """
+        carrier = (carrier or _carrier_for_msisdn(msisdn)).strip().lower()
+        if carrier not in _ALLOWED_CARRIERS:
+            return False
+        if not self.enabled:
+            log.info("[WARNING SMS NOT SENT — no network credentials] %s: %s", msisdn, message)
+            return False
+        phone_number = str(msisdn).replace("+", "").strip()
+        endpoint = f"{self.base_url}/network/{carrier}/v1/sms/messages"
+        try:
+            async with httpx.AsyncClient(timeout=0.75) as client:
+                response = await client.post(
+                    endpoint,
+                    json={"to": phone_number, "text": message[:160]},
+                    auth=(self.client_id, self.api_key),
+                )
+                if response.status_code in (200, 201, 202):
+                    return True
+                log.warning("Warning SMS returned HTTP %s", response.status_code)
+        except Exception as exc:
+            log.warning("Warning SMS failed: %s", exc)
         return False
 
 

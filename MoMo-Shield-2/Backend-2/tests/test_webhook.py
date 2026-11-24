@@ -195,22 +195,42 @@ def test_plugin_flags_credential_harvesting_sms(_stub_integrations):
     assert routes.ASSESSMENT_HISTORY[-1]["risk_score"] >= settings.risk_threshold_medium
 
 
-def test_plugin_call_requires_all_documented_robocall_signals(_stub_integrations):
+def test_plugin_call_multi_signal_reaches_warn(_stub_integrations):
+    """Probabilistic model: new SIM (+15) + fan-out >25 (+20) + cold call (+5)
+    = 40 → warn. No single signal blocks on its own."""
     recent_sim = (datetime.now(timezone.utc) - timedelta(hours=2)).replace(tzinfo=None).isoformat() + "Z"
     payload = _plugin("call.connect", {
         "from": "0209876543",
         "to": "0241234567",
         "callerSimRegisteredAt": recent_sim,
         "callsBetweenThemBefore": 0,
-        "numbersTheCallerHasRungToday": 21,
+        "numbersTheCallerHasRungToday": 30,
     })
     response = client.post("/api/v1/plugin", json=payload)
     assert response.status_code == 200
     assert response.json()["decision"] == "warn"
-    assert "GH19 Robocall Preconditioning" in routes.ASSESSMENT_HISTORY[-1]["triggered_rules"][0]
+    rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
+    assert any("Call metadata" in rule for rule in rules)
 
 
-def test_plugin_call_at_exactly_twenty_numbers_does_not_trigger(_stub_integrations):
+def test_plugin_call_single_signal_stays_allowed(_stub_integrations):
+    """Union-leader case: high volume alone must not warn or block."""
+    old_sim = (datetime.now(timezone.utc) - timedelta(days=400)).replace(tzinfo=None).isoformat() + "Z"
+    response = client.post(
+        "/api/v1/plugin",
+        json=_plugin("call.connect", {
+            "from": "0209876543",
+            "to": "0241234567",
+            "callerSimRegisteredAt": old_sim,
+            "callsBetweenThemBefore": 3,
+            "numbersTheCallerHasRungToday": 30,
+        }),
+    )
+    assert response.status_code == 200
+    assert response.json()["decision"] == "allow"
+
+
+def test_plugin_call_at_twenty_numbers_is_minor_weight(_stub_integrations):
     recent_sim = (datetime.now(timezone.utc) - timedelta(hours=2)).replace(tzinfo=None).isoformat() + "Z"
     response = client.post(
         "/api/v1/plugin",
@@ -224,8 +244,8 @@ def test_plugin_call_at_exactly_twenty_numbers_does_not_trigger(_stub_integratio
     )
 
     assert response.status_code == 200
+    # +15 SIM +5 fan-out +5 cold = 25 → below warn threshold
     assert response.json()["decision"] == "allow"
-    assert not any("GH19 Robocall Preconditioning" in rule for rule in routes.ASSESSMENT_HISTORY[-1]["triggered_rules"])
 
 
 def test_plugin_does_not_warn_for_old_caller_sim(_stub_integrations):
@@ -240,8 +260,57 @@ def test_plugin_does_not_warn_for_old_caller_sim(_stub_integrations):
             "numbersTheCallerHasRungToday": 42,
         }),
     )
+    # +20 fan-out +5 cold = 25 → allow; old SIM contributes nothing
     assert response.status_code == 200
     assert response.json()["decision"] == "allow"
+
+
+def test_plugin_call_rejects_when_glance_and_metadata_align(_stub_integrations):
+    _stub_integrations["glance_high"] = True
+    recent_sim = (datetime.now(timezone.utc) - timedelta(hours=2)).replace(tzinfo=None).isoformat() + "Z"
+    response = client.post(
+        "/api/v1/plugin",
+        json=_plugin("call.connect", {
+            "from": "0209876543",
+            "to": "0241234567",
+            "callerSimRegisteredAt": recent_sim,
+            "callsBetweenThemBefore": 0,
+            "numbersTheCallerHasRungToday": 30,
+        }),
+    )
+    # +15 SIM +20 fan-out +5 cold +40 Glance HIGH = 80 → reject
+    assert response.status_code == 200
+    assert response.json()["decision"] == "reject"
+
+
+def test_plugin_call_cross_channel_credit_sms_precursor(_stub_integrations):
+    """GH01 aha-moment: credit-claim SMS then a call from the same number."""
+    sms = client.post(
+        "/api/v1/plugin",
+        json=_plugin("sms.deliver", {
+            "from": "0209876543",
+            "to": "0241234567",
+            "text": "You have received GH₵500. Reply YES within 10 minutes to claim your refund.",
+        }),
+    )
+    assert sms.status_code == 200
+
+    recent_sim = (datetime.now(timezone.utc) - timedelta(hours=2)).replace(tzinfo=None).isoformat() + "Z"
+    call = client.post(
+        "/api/v1/plugin",
+        json=_plugin("call.connect", {
+            "from": "0209876543",
+            "to": "0241234567",
+            "callerSimRegisteredAt": recent_sim,
+            "callsBetweenThemBefore": 0,
+            "numbersTheCallerHasRungToday": 0,
+        }),
+    )
+    assert call.status_code == 200
+    # +30 cross-channel +15 SIM +5 cold = 50 → warn
+    assert call.json()["decision"] == "warn"
+    rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
+    assert any("Cross-channel precursor" in rule for rule in rules)
 
 
 def test_plugin_payment_uses_one_time_cooling_period_then_rejects(_stub_integrations):

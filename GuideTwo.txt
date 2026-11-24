@@ -1,107 +1,134 @@
-You are asking exactly the right questions. These two specific areas—**Inclusivity** and **Dynamic Detection**—are the exact difference between a "cool coding project" and a "fundable startup." 
-
-Here is how we integrate your brilliant ideas into the architecture and pitch, ensuring you score maximum points on the **"Built for the people who need it" (20 pts)** and **"Actually works" (15 pts)** rubrics.
+I read the full live documentation myself. **Devin is ~90% correct, but he is framing a real capability as a limitation, and he is underselling the single most important plug-in point we have.** Let me give you the verified truth, line by line, with the exact doc evidence.
 
 ---
 
-### Part 1: Inclusivity & Accessibility (The "Built for the People" Strategy)
+## ✅ Where Devin is RIGHT
 
-Your intuition is 100% correct. A visual banner on a screen is useless to a blind person or someone who cannot read. Here is how **MoMo Shield** factors in every user type, and how you explain it to the judges (MTN, NGOs, Donors):
+**1. There is no documented API to originate, answer, or drop a call.**
+§9 "Phones" documents exactly three primitives, and nothing more:
 
-#### 1. The Blind and Illiterate Users (Voice-First Intervention)
-*   **The Problem:** They cannot read an SMS or a smartphone push notification.
-*   **The Solution:** **Audio/IVR (Interactive Voice Response) Intervention.** 
-*   **How it works in your system:** When the engine hits a HIGH risk score (75+), it doesn't just send a text. It triggers an automated voice call (via the Telco's IVR system) to the victim's phone. 
-*   **The Pitch to Judges:** *"For our blind and illiterate users, MoMo Shield is voice-first. When we detect a scam, we trigger an automated IVR call in Twi or English: 'Kɔkɔbɔ! Do not share your PIN.' We don't rely on literacy; we rely on audio."* (This is why your pre-recorded Twi audio idea is so critical).
-
-#### 2. Feature Phone Users (USSD & SMS)
-*   **The Problem:** They don't have smartphones, so they can't receive app push notifications.
-*   **The Solution:** **USSD Push and SMS Alerts.**
-*   **How it works:** The Telco's network intercepts the USSD session (e.g., `*170#`) before the PIN is entered. The network pushes a USSD menu to the feature phone: *"WARNING: Suspicious activity. Press 1 to Cancel, Press 2 to Proceed."*
-*   **The Pitch to Judges:** *"Our engine is Telco-agnostic. It sits on the server side. Whether the user is on a 2005 Nokia using USSD or an iPhone 15 using the MoMo App, our API intercepts the transaction request at the network level."*
-
-#### 3. Android/Smartphone Users (App & OS Level)
-*   **The Solution:** In-app banners, OS-level push notifications, and SMS.
-
-**Summary for the Pitch:** *"MoMo Shield protects the user on the device they already have. We don't ask them to download a new app. We adapt our intervention—Voice for the blind, USSD for feature phones, Push for smartphones."*
-
----
-
-### Part 2: Killing the "Hardcoded Play Button" (Dynamic Detection)
-
-You are absolutely right to be worried about the "Play Scenario" button. If a judge sees you click a button and a pre-scripted animation plays, they will think: *"This is just an `if/else` statement. It won't work on real, messy data."*
-
-To prove this is a **Live Decision Engine**, we need to change how the demo is initiated. We move from a **"Scripted Replayer"** to a **"Live Threat Injector."**
-
-Here are three ways to implement this in your Streamlit dashboard, ranging from easiest to most impressive:
-
-#### Method 1: The "Judge-in-the-Loop" Live Text/Mic Input (Easiest & Most Effective)
-Instead of a dropdown menu of scenarios, add a **"Live Threat Monitor"** tab to your dashboard. 
-*   **The UI:** A simple text box (or a microphone button) that says: *"Type or speak a suspicious message in Twi, English, or Pidgin..."*
-*   **The Action:** The judge types: *"Mepa wo kyɛw, send your OTP to unblock your account."* or your ML partner speaks it into the mic.
-*   **The Backend:** Your FastAPI engine receives this raw text. The deterministic rules catch "OTP" (+30 pts). The Gemini API analyzes the Twi/English code-switch and catches "Authority + Loss Aversion" (+20 pts). 
-*   **The Result:** The dashboard instantly updates: **Risk: 85/100 (HIGH)**. The mock phone shows the intervention.
-*   **Why this wins:** It proves your engine is evaluating *unseen, live data* in real-time. It is not hardcoded.
-
-#### Method 2: The "Raw Event Injector" (For Telemetry)
-For scenarios that rely on backend data (like GH18 New Device Takeover), don't use a "Play" button. Create a **"Manual Event Ingestion"** form in your Streamlit sidebar.
-*   **The UI:** Simple input fields: `MSISDN`, `Event Type (Dropdown)`, `IMEI`, `Amount`.
-*   **The Action:** You or the judge manually types in a new IMEI number and clicks "Inject Event."
-*   **The Backend:** The engine evaluates this raw event against the state window. It sees a new IMEI (+40 pts) and flags it.
-*   **Why this wins:** It shows the judges the actual data your engine consumes, proving it's a real data-processing pipeline, not a video game.
-
-#### Method 3: The "Sandbox Listener" (The Ultimate Proof)
-If the InnoFemme hackathon provides a WebSocket or an API endpoint for their sandbox:
-*   **The UI:** A status indicator that says: *"Listening to InnoFemme Sandbox Stream... 🟢 Live"*
-*   **The Action:** As the sandbox generates random events, your dashboard updates live.
-*   **Why this wins:** It is the ultimate proof that your system works on external, unprescribed data.
-
----
-
-### 🛠️ How to Update Your Code for the "Live Threat Injector"
-
-To implement **Method 1** (which is the most impressive for the Q&A session), add this to your `app.py` in a new tab:
-
-```python
-import streamlit as st
-from app.services.api_client import assess_event # Your existing API client
-
-st.title("🛡️ Live Threat Monitor")
-st.markdown("Test the engine with unprescribed, live inputs. Type or speak a scam message below.")
-
-# 1. Live Text Input
-user_input = st.text_area("Enter a suspicious SMS or Voice Transcript (Twi/English/Pidgin):", height=100)
-
-# 2. The Live Assessment Button
-if st.button("🔍 Analyze Live Signal"):
-    if user_input:
-        with st.spinner("Engine processing..."):
-            # Construct a raw communication event dynamically
-            live_event = {
-                "event_id": "live-test-001",
-                "msisdn": "+233240000999", # Dummy number
-                "event_type": "communication",
-                "channel": "VOICE",
-                "text_or_transcript": user_input,
-                "timestamp": "2026-11-28T12:00:00"
-            }
-            
-            # Send to your FastAPI backend
-            response = assess_event(live_event)
-            
-            # Display the dynamic result
-            if response.risk_tier == "HIGH":
-                st.error(f"🚨 HIGH RISK DETECTED! Score: {response.risk_score}/100")
-                st.write(f"**Reason:** {response.triggered_rules[0].description}")
-                st.info(f"**Twi Warning:** {response.twi_warning_message}")
-            else:
-                st.success(f"✅ LOW RISK. Score: {response.risk_score}/100. Transaction allowed.")
+```
+POST /ussd                          → start/drive a USSD session
+POST /s/phone {action: sms_send}    → send an SMS
+GET  /s/phone?msisdn=…&thread=…     → read conversations/one thread
 ```
 
-### Summary of Your Next Steps
+There is **no** `call_send`, `call_answer`, `call_drop`, or `call_transfer` action anywhere in the API surface. So the "drop scammer → callback from 100" pattern we discussed earlier **cannot be built as an API call.** I was wrong to architect around it. Devin caught that, and he is right to.
 
-1.  **Update the Pitch:** Explicitly state how the system adapts to the blind (Voice/IVR) and feature phones (USSD). This is a massive selling point for NGOs and Donors.
-2.  **Hide the "Play Scenario" Button:** Keep it for your internal testing, but during the actual demo, use the **"Live Threat Monitor"** tab. 
-3.  **Let the Judges Break It:** When you present, say: *"Don't trust our pre-built scenarios. Judge, please type a scam message in Twi right now and watch the engine catch it."* 
+**2. The dormant-credentials caveat is correct and important.**
+Your NIA-verify and warning-SMS code paths are inert until you add `SANDBOX_TEAM_KEY` and the network `CLIENT_ID`/`API_KEY` (issued from the network console → **API partners** tab, per §1). The code "fails open" — which is actually the *safe* behavior, but it means those features are currently doing nothing.
 
-When you do that, the "hardcoded toy" accusation dies instantly. You transition from a hackathon participant to a startup founder demonstrating a live, adaptive product.
+---
+
+## ❌ Where Devin is WRONG (he missed the best part)
+
+Devin says *"there's no call feature"* and *"where would it live in the UI? Nowhere."* **This is incorrect.** There IS a first-class, documented call-interception mechanism, and it is *better* than what we were planning:
+
+### The `call.connect` plug-in point (§7)
+
+| Step | Who asks | When | You can answer |
+|---|---|---|---|
+| **`call.connect`** | A network | **A call is about to ring one of this network's subscribers** | **allow, warn, reject** |
+
+And the payload it hands you is *exactly* the fraud signal we need:
+
+```json
+{
+  "from": "0209876543",
+  "fromNetwork": "telecel",
+  "callerSimRegisteredAt": "2026-11-05T16:31:00.000Z",
+  "to": "0241234567",
+  "toNetwork": "mtn",
+  "callsBetweenThemBefore": 2,
+  "numbersTheCallerHasRungToday": 3
+}
+```
+
+That last field — `numbersTheCallerHasRungToday` — is the **GH19 nuisance-swarm / fan-out signal** baked into the API. You don't have to compute it; the sandbox gives it to you.
+
+And the docs explicitly state where `warn` lands:
+
+> *"**warn** is shown where the customer is looking at a screen: before the phone menu opens, on a payment from the phone menu, as a label on a text, and **on the incoming call screen**."*
+
+**So the mid-call warning IS real, IS documented, and IS the intended mechanism.** You return `{decision:"warn", message:"…"}` at `call.connect`, and the victim's incoming-call screen shows the banner *before they answer*. That is prevention, not reaction — a stronger story than "drop + callback."
+
+### The fraud simulator generates the calls for you (§13)
+
+You never need to originate a call, because the **Fraud API plays call-based incidents live**:
+
+> *"The fraud simulator plays fraud incidents… the fraudster gets a line, reaches the victim, the money leaves, moves on and is withdrawn. At each step your service is asked."*
+
+The relevant kinds:
+- `pin_phishing` — *"A caller posing as customer service gets the PIN and empties the wallet"* (voice-driven)
+- `reversal_scam` — *"A fake 'payment received' text, then a call asking for the money to be sent back"* (text→voice→USSD, i.e. GH01)
+
+So the correct architecture is: **the simulator rings the victim → the sandbox calls your API at `call.connect` → you score and answer `allow`/`warn`/`reject` → the sandbox acts.** That is literally Route 1 ("Your API inside an institution's flow") from the screenshots you sent me. Devin is right that *we* don't originate; he's wrong that there's "no call feature."
+
+---
+
+## ⚠️ The one honest correction on audio (for the blind/illiterate)
+
+We must be truthful here, because a judge will probe it. **You cannot inject audio into a live call via any documented endpoint.** `warn` is a *visual* banner on the incoming-call screen. A blind or illiterate user cannot read it.
+
+So the inclusive design is **tiered by decision, not by audio injection:**
+
+| Risk | Your answer at `call.connect` | What the victim experiences | Who it protects |
+|---|---|---|---|
+| **HIGH** | `reject` | The scam call **never rings**. Pretext never lands. | **Everyone** — blind, illiterate, feature-phone, smartphone. The call is blocked at the switch. |
+| **MEDIUM** | `warn` | Visual banner on incoming-call screen + they choose continue/cancel | Sighted, literate users |
+| **LOW** | `allow` | Normal | No friction |
+
+For the **audio** part of your demo, the honest place is the **handset simulator page** you already have (`/handset` with `playEnglishTwiWarning`) — that proves the *voice-first intervention concept* for the vulnerable, and you pair it with the `reject`-at-`call.connect` story for the live sandbox. **Do not claim the sandbox plays your Twi audio into a real call.** Pitch it as: *"HIGH-risk calls are rejected at the network, so the pretext never reaches a user who cannot read a warning; for medium risk we show the banner, and our voice-first handset layer delivers the same warning as audio for the blind and illiterate."* That is accurate and still scores the 20 pts.
+
+---
+
+## 🚨 The most important thing Devin did NOT flag
+
+Read this line from §7:
+
+> *"You have **2 seconds** to answer unless the institution gave you longer."*
+
+**Your real SLA is not <5s — it is <2s at the plug-in.** This validates the entire hybrid architecture we built:
+- Deterministic rules: ~10–50ms ✅
+- Glance: 500ms timeout cap ✅
+- Gemini: 1.5s timeout cap, **but** if you call Glance *and* Gemini serially you can approach 2s ⚠️
+
+**Action:** run Glance + Gemini **in parallel** (`asyncio.gather`), not sequentially, and keep the 2s fallback. Your measured 23–87ms gives you headroom, but a judge running `kinds:"all"` with 55 incidents will expose any serial-call latency. Parallelize now.
+
+Also note: *"If you do not answer in time… the institution does what its owner chose when plugging you in: carry on as normal, or refuse."* → For the demo, set `ifDown:"carry_on"` so a timeout never breaks the flow, and rely on your fast local rules.
+
+---
+
+## 🔬 Do Devin's probe — it's smart and cheap
+
+The docs literally say:
+
+> *"Send an unknown action to a system and the error lists the actions it supports."*
+
+Once you have the team key, run:
+
+```bash
+curl -X POST https://hackathon.innofemme.org/api/w/YOUR-TEAM/s/phone \
+  -H "x-team-key: YOUR-TEAM-KEY" -H "content-type: application/json" \
+  -d '{"action":"__probe__"}'
+```
+
+Read the error — it will enumerate every real action `phone` supports. **If a call action exists undocumented, you'll see it here.** Do this in 5 minutes, then architect only against what's confirmed. (The intro does say phones *"take calls"*, so the *console UI* clearly handles calls even if the API doesn't expose origination — the probe settles it.)
+
+---
+
+## ✅ Final verdict & corrected plan
+
+| Devin's claim | Verdict |
+|---|---|
+| No documented call origination/answer/drop API | **CORRECT** |
+| "Drop scammer → callback from 100" has no endpoint | **CORRECT** — kill that pattern |
+| "There's no call feature / nowhere in the UI" | **WRONG** — `call.connect` (allow/warn/reject) is a documented, first-class call-interception plug-in, and `warn` lands on the incoming-call screen |
+| The real call moments are in-band via the fraud simulator | **CORRECT** — and this is the *right* architecture (Route 1) |
+| Probe `s/phone` for undocumented actions | **GOOD IDEA** — do it |
+| NIA/warning-SMS code is dormant without keys | **CORRECT** — add the credentials |
+
+**Your corrected call story for the judges:**
+> *"We don't originate calls — the network does. Our API sits at the network's `call.connect` plug-in point. The moment a fraudster's call is about to ring a subscriber, the switch asks us. We read the caller's fan-out (`numbersTheCallerHasRungToday`), check Rancard Glance, and answer in under 200ms: **reject** the call before it ever reaches a user who cannot read a warning, or **warn** on the incoming-call screen. That is prevention at the switch, not reaction after the pretext lands."*
+
+That is fully supported by the docs, fully defensible under Act 843, and genuinely stronger than the drop-and-callback idea. Update your `app/api/routes.py` to register a `call.connect` handler returning `allow/warn/reject`, parallelize Glance+Gemini under the 2s window, add the team key + client credentials to `.env`, and run the probe. You're good.
