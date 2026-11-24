@@ -794,9 +794,26 @@ async def receive_innofemme_plugin(payload: dict):
         return {"decision": "delay", "minutes": 10, "message": message}
     return {"decision": decision, "message": message}
 
+# Bound concurrent post-decision enrichment so a 55-incident simulator burst
+# can't exhaust the Gemini quota or thread pool. Enrichment is best-effort;
+# excess tasks queue briefly, then proceed — verdicts are never affected.
+_ENRICH_SEMAPHORE = asyncio.Semaphore(4)
+
+
 async def _enrich_plugin_assessment(event_id: str, text: str, point: str) -> None:
     """Runs after the plug-in decision is returned: semantic KB retrieval and
     Gemini intent grounded in the retrieved precedent, broadcast to telemetry."""
+    try:
+        await asyncio.wait_for(_ENRICH_SEMAPHORE.acquire(), timeout=8)
+    except asyncio.TimeoutError:
+        return  # queue saturated — drop stale enrichment, verdict unaffected
+    try:
+        await _enrich_plugin_assessment_inner(event_id, text, point)
+    finally:
+        _ENRICH_SEMAPHORE.release()
+
+
+async def _enrich_plugin_assessment_inner(event_id: str, text: str, point: str) -> None:
     try:
         rag_context = await knowledge_base.get_rag_context_smart(text)
         llm_intent = await analyze_intent(text, rag_context)
