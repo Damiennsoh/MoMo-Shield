@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 
 from app.config import settings
 from app.engine.rules import RULES
-from app.engine.state import global_window
+from app.engine.state import global_window, sms_blast_window
 from app.engine.kb import knowledge_base
 from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
@@ -379,6 +379,10 @@ async def receive_innofemme_plugin(payload: dict):
             break
     if not msisdn:
         raise HTTPException(status_code=422, detail=f"Missing subscriber MSISDN for {point}")
+    # For inbound money the protected subscriber is the payee — the plug-in
+    # is asked on the payee's network, so correlate under their window.
+    if point == "payment.receive" and payee.get("msisdn"):
+        msisdn = str(payee["msisdn"]).strip()
 
     event_type = EventType.TRANSACTION
     event_payload = {}
@@ -507,6 +511,21 @@ async def receive_innofemme_plugin(payload: dict):
 
     score = 0
     rules_fired: List[str] = []
+
+    # Cross-subscriber SMS blast: identical text hitting many victims in 10
+    # minutes is a campaign signature, independent of content rules.
+    if point == "sms.deliver":
+        victims = sms_blast_window.observe(str(event_payload.get("text") or ""), msisdn)
+        if victims >= 8:
+            score += 45
+            rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
+        elif victims >= 5:
+            score += 30
+            rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
+        elif victims >= 3:
+            score += 15
+            rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
+
     if point in ("payment.authorize", "menu.open", "wallet.open", "payment.request", "pin.reset") \
             and (event_payload.get("onCallWith") or data.get("onCallWith")):
         score += 50

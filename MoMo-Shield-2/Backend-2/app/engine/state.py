@@ -7,8 +7,10 @@ Two backends behind one interface:
   horizontal scaling. Keys: momo:window:{msisdn}, score = event epoch,
   member = JSON event. Falls back to memory per-call on Redis errors.
 """
+import hashlib
 import json
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -234,3 +236,56 @@ def _event_json(event: Any) -> str:
 
 
 global_window = EventWindow()
+
+
+class SmsBlastWindow:
+    """Cross-subscriber SMS blast detector.
+
+    Complements the per-MSISDN EventWindow: indexes normalized SMS text
+    across ALL subscribers so identical scam texts hitting many victims in a
+    short window escalate the score. In-memory only — a Redis sorted-set
+    backend can replace it the same way EventWindow does when needed.
+    """
+
+    _MIN_NORMALIZED_LEN = 10
+
+    def __init__(self, window_minutes: int = 10):
+        self._window_seconds = window_minutes * 60
+        self._hits: Dict[str, List[tuple]] = defaultdict(list)  # hash -> [(epoch, msisdn)]
+        self._lock = threading.Lock()
+        self._ops = 0
+
+    @staticmethod
+    def _key(text: str) -> str:
+        normalized = "".join(ch for ch in str(text).lower() if ch.isalnum())
+        if len(normalized) < SmsBlastWindow._MIN_NORMALIZED_LEN:
+            return ""
+        return hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+
+    def observe(self, text: str, msisdn: str) -> int:
+        """Record an SMS delivery; return distinct victims seen in window."""
+        key = self._key(text)
+        if not key:
+            return 0
+        now = time.time()
+        cutoff = now - self._window_seconds
+        with self._lock:
+            hits = [(t, m) for t, m in self._hits[key] if t >= cutoff]
+            hits.append((now, msisdn))
+            self._hits[key] = hits
+            self._ops += 1
+            if self._ops % 500 == 0:
+                self._sweep(cutoff)
+            return len({m for _, m in hits})
+
+    def _sweep(self, cutoff: float) -> None:
+        stale = [k for k, v in self._hits.items() if not any(t >= cutoff for t, _ in v)]
+        for k in stale:
+            del self._hits[k]
+
+    def clear(self) -> None:
+        with self._lock:
+            self._hits.clear()
+
+
+sms_blast_window = SmsBlastWindow()

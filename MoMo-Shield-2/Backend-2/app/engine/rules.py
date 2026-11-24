@@ -378,6 +378,69 @@ def check_call_after_credit_sms(event: SandboxEvent, history: List) -> Tuple[int
     return 0, ""
 
 
+# ---------------------------------------------------------------------------
+# Unverified credit claim — GH01/GH02 precursor on sms.deliver itself.
+# An SMS asserting "you received GH₵X" that ALSO pressures the subscriber to
+# send money back / claim / reactivate, with NO matching inbound payment in
+# the subscriber's event window, is the reversal-scam signature. Legitimate
+# bank/wallet credit alerts carry no reciprocal demand, so they pass.
+# ---------------------------------------------------------------------------
+_CLAIM_AMOUNT_RE = re.compile(
+    r"(?:gh[c₵]?|ghs|cedis|gh₵)\s*[-–]?\s*(\d[\d,]*(?:\.\d+)?)"
+    r"|(\d[\d,]*(?:\.\d+)?)\s*(?:ghc|ghs|cedis|gh₵)",
+    re.I,
+)
+_RECIPROCAL_RE = re.compile(
+    r"\b(send\s+(?:it|the\s+money|money)\s+back|send\s+back|return\s+(?:the\s+)?"
+    r"(?:money|payment|funds)|transfer\s+(?:it|the\s+money|back)|"
+    r"reverse\s+(?:the\s+)?(?:payment|transfer|credit|transaction)|pay\s+back|"
+    r"claim\s+your\s+(?:refund|reward|prize|cashback|money)|"
+    r"reactivat\w+|refund\s+(?:fee|charge)|to\s+reverse)\b",
+    re.I,
+)
+_INBOUND_TYPES = {"transfer_in", "credit", "payment_received", "sms_credit"}
+
+
+def _claimed_amounts(text: str) -> List[float]:
+    amounts = []
+    for m in _CLAIM_AMOUNT_RE.finditer(text):
+        raw = m.group(1) or m.group(2) or ""
+        try:
+            amounts.append(float(raw.replace(",", "")))
+        except ValueError:
+            continue
+    return amounts
+
+
+def check_unverified_credit_claim(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    if event.event_type != EventType.SMS:
+        return 0, ""
+    text = _text(event)
+    if _NEGATION_RE.search(text):
+        return 0, ""
+    if not _CREDIT_CLAIM_RE.search(text) or not _RECIPROCAL_RE.search(text):
+        return 0, ""
+    claimed = _claimed_amounts(text)
+    for prior in history:
+        prior_payload = prior.get("payload") or {}
+        if prior_payload.get("type") not in _INBOUND_TYPES:
+            continue
+        try:
+            actual = float(prior_payload.get("amount") or 0)
+        except (TypeError, ValueError):
+            continue
+        if actual <= 0:
+            continue
+        if not claimed:
+            return 0, ""  # unverifiable claim but money did arrive — benefit of doubt
+        if any(abs(actual - c) <= max(1.0, c * 0.15) for c in claimed):
+            return 0, ""  # ledger corroborates the claimed credit
+    return 40, (
+        "Unverified credit claim: SMS asserts a payment with reciprocal "
+        "pressure and no matching inbound payment in subscriber history"
+    )
+
+
 RULES = [
     check_content_credential_request,
     check_content_impersonation,
@@ -397,4 +460,5 @@ RULES = [
     check_sms_credential_harvesting,
     check_call_connect_signals,
     check_call_after_credit_sms,
+    check_unverified_credit_claim,
 ]

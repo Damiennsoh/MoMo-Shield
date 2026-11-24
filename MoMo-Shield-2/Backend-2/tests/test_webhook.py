@@ -58,6 +58,7 @@ def _stub_integrations(monkeypatch):
     monkeypatch.setattr(routes, "_enrich_plugin_assessment", fake_enrichment)
     routes.ASSESSMENT_HISTORY.clear()
     routes.global_window.clear()
+    routes.sms_blast_window.clear()
     return calls
 
 
@@ -311,6 +312,81 @@ def test_plugin_call_cross_channel_credit_sms_precursor(_stub_integrations):
     assert call.json()["decision"] == "warn"
     rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
     assert any("Cross-channel precursor" in rule for rule in rules)
+
+
+def test_plugin_sms_blast_identical_text_escalates(_stub_integrations):
+    """Same text to 8 distinct victims in 10 min → +45 blast signal."""
+    text = ("Congratulations! Your MoMo wallet was selected for a verified "
+            "data bonus. Confirm your details now to claim it.")
+    for i in range(8):
+        response = client.post(
+            "/api/v1/plugin",
+            json=_plugin("sms.deliver", {
+                "from": "0240000099",
+                "to": f"024555{i:04d}",
+                "text": text,
+            }),
+        )
+        assert response.status_code == 200
+    rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
+    assert any("SMS blast" in rule for rule in rules)
+    assert routes.ASSESSMENT_HISTORY[-1]["risk_score"] >= 40
+
+
+def test_plugin_sms_blast_single_victim_no_escalation(_stub_integrations):
+    """Same text to one victim twice is not a blast (distinct-victim count)."""
+    text = "Your MoMo statement for this month is now ready to view."
+    for _ in range(3):
+        client.post(
+            "/api/v1/plugin",
+            json=_plugin("sms.deliver", {
+                "from": "0240000099",
+                "to": "0245559999",
+                "text": text,
+            }),
+        )
+    rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
+    assert not any("SMS blast" in rule for rule in rules)
+
+
+def test_plugin_unverified_credit_claim_warns(_stub_integrations):
+    """Credit claim + reciprocal pressure + empty ledger → +40 → warn."""
+    response = client.post(
+        "/api/v1/plugin",
+        json=_plugin("sms.deliver", {
+            "from": "0240000001",
+            "to": "0247770001",
+            "text": "You have received GH₵500 from 0551234567. Send it back to reverse the transaction.",
+        }),
+    )
+    assert response.status_code == 200
+    rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
+    assert any("Unverified credit claim" in rule for rule in rules)
+    assert response.json()["decision"] == "warn"
+
+
+def test_plugin_verified_credit_claim_does_not_fire(_stub_integrations):
+    """A real payment.receive in the victim's window corroborates the SMS."""
+    victim, sender = "0247770002", "0240000002"
+    client.post(
+        "/api/v1/plugin",
+        json=_plugin("payment.receive", {
+            "amount": 500,
+            "payer": {"msisdn": sender},
+            "payee": {"msisdn": victim},
+        }),
+    )
+    response = client.post(
+        "/api/v1/plugin",
+        json=_plugin("sms.deliver", {
+            "from": sender,
+            "to": victim,
+            "text": "You have received GH₵500 from 0551234567. Send it back to reverse the transaction.",
+        }),
+    )
+    assert response.status_code == 200
+    rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
+    assert not any("Unverified credit claim" in rule for rule in rules)
 
 
 def test_plugin_payment_uses_one_time_cooling_period_then_rejects(_stub_integrations):
