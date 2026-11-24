@@ -40,14 +40,9 @@ interface ShieldStore {
   setAnalysis: (score: number, message: string, twiMessage?: string) => void;
   resolveAlert: (id: string, status: NonNullable<FraudAlert['status']>) => void;
   toggleSound: () => void;
+  setSoundEnabled: (enabled: boolean) => void;
   resetDemo: () => void;
 }
-
-const getInitialSoundPreference = (): boolean => {
-  if (typeof window === 'undefined') return true;
-  const stored = window.localStorage.getItem('momo-shield-sound');
-  return stored !== 'false';
-};
 
 export const useStore = create<ShieldStore>((set) => ({
   events: [],
@@ -57,7 +52,7 @@ export const useStore = create<ShieldStore>((set) => ({
   handsetMessage: 'Your MoMo account is protected. Never share your PIN with anyone.',
   twiWarningMessage: 'Mepa wo kyɛw, fa wo PIN kɔ ma. We’ll never ask for your PIN.',
   englishWarningMessage: 'Your MoMo account is protected. Never share your PIN with anyone.',
-  soundEnabled: getInitialSoundPreference(),
+  soundEnabled: true,
   connected: false,
   backendReachable: false,
   avgLatencyMs: null,
@@ -69,6 +64,7 @@ export const useStore = create<ShieldStore>((set) => ({
       }
       return { soundEnabled: next };
     }),
+  setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
   addEvent: (event, alert) => set((state) => ({ events: [event, ...state.events].slice(0, 12), alerts: alert ? [alert, ...state.alerts].slice(0, 8) : state.alerts })),
   ingestAssessment: (result) =>
     set((state) => {
