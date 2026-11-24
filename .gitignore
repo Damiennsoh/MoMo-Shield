@@ -27,3 +27,6 @@ fraudops-web/.next/
 
 # Generated semantic KB embedding cache (rebuilds on first query)
 MoMo-Shield-2/Backend-2/app/data/kb_embeddings_cache.json
+
+# Local threat intel ledger (runtime data)
+MoMo-Shield-2/Backend-2/data/

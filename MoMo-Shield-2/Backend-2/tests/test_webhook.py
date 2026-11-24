@@ -59,6 +59,7 @@ def _stub_integrations(monkeypatch):
     routes.ASSESSMENT_HISTORY.clear()
     routes.global_window.clear()
     routes.sms_blast_window.clear()
+    routes.local_threat_db.clear_all()
     return calls
 
 
@@ -308,10 +309,13 @@ def test_plugin_call_cross_channel_credit_sms_precursor(_stub_integrations):
         }),
     )
     assert call.status_code == 200
-    # +30 cross-channel +15 SIM +5 cold = 50 → warn
-    assert call.json()["decision"] == "warn"
+    # +30 cross-channel +15 SIM +5 cold +25 local-ledger (sender was
+    # confirmed by the unverified-credit SMS) = 75 → reject. The learning
+    # loop escalates a repeat offender automatically.
+    assert call.json()["decision"] == "reject"
     rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
     assert any("Cross-channel precursor" in rule for rule in rules)
+    assert any("Local threat ledger" in rule for rule in rules)
 
 
 def test_plugin_sms_blast_identical_text_escalates(_stub_integrations):
@@ -347,6 +351,16 @@ def test_plugin_sms_blast_single_victim_no_escalation(_stub_integrations):
         )
     rules = routes.ASSESSMENT_HISTORY[-1]["triggered_rules"]
     assert not any("SMS blast" in rule for rule in rules)
+
+
+def test_local_threat_db_normalizes_and_counts(_stub_integrations):
+    db = routes.local_threat_db
+    db.record("+233209999999", "test-scam")
+    hit = db.check("0209999999")
+    assert hit["found"] and hit["reports"] == 1
+    db.record("0209999999", "test-scam")
+    assert db.check("+233 20 999 9999")["reports"] == 2
+    assert db.check("0240000000")["found"] is False
 
 
 def test_plugin_unverified_credit_claim_warns(_stub_integrations):

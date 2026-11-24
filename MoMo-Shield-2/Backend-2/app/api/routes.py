@@ -18,6 +18,7 @@ from app.engine.kb import knowledge_base
 from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.infofemme import infofemme_client
+from app.integrations import local_threat_db
 from app.integrations.nia import evaluate_ghana_card, verify_card_live
 from app.integrations.sandbox import intervene_sandbox
 from app.integrations import mtn_momo
@@ -28,6 +29,19 @@ log = get_logger(__name__)
 router = APIRouter()
 
 ASSESSMENT_HISTORY: Deque[dict] = deque(maxlen=200)
+
+# Rule-description markers that confirm scam typology — only these (plus
+# Glance HIGH) justify writing a number into the local threat ledger.
+_SCAM_MARKERS = (
+    "credential-harvesting",
+    "credential request",
+    "unverified credit claim",
+    "cross-channel precursor",
+    "sms blast",
+    "gh15",
+    "gh16",
+    "phishing link",
+)
 
 
 class ConnectionManager:
@@ -192,6 +206,16 @@ async def receive_sandbox_event(
         score += sim_data["risk_boost"]
         rules_fired.append(f"Network Edge: SIM swapped {sim_data.get('days_since_swap')}d ago ({sim_data.get('status')}){' [DEMO SEED]' if sim_data.get('simulated') else ''}")
 
+    # Proprietary threat ledger: repeat offenders known to our own DB.
+    local_threat = local_threat_db.check(event.msisdn)
+    if local_threat.get("found"):
+        repeat_boost = 45 if _safe_int(local_threat.get("reports")) >= 2 else 25
+        score += repeat_boost
+        rules_fired.append(
+            f"Local threat ledger: known offender "
+            f"({local_threat['reports']} confirmations, {local_threat.get('threat_type', 'fraud')})"
+        )
+
     tier = (
         RiskTier.HIGH
         if score >= settings.risk_threshold_high
@@ -220,6 +244,16 @@ async def receive_sandbox_event(
                 event.msisdn,
                 "WARNING: Suspicious prompt detected. Official agents will never request credentials."
             )
+        )
+
+    # Learning loop: persist scam-confirmed numbers to our own threat ledger.
+    scam_marker = next(
+        (m for m in _SCAM_MARKERS for r in rules_fired if m in r.lower()), ""
+    )
+    if getattr(glance_data, "risk_level", "") == "HIGH" or scam_marker:
+        local_threat_db.record(
+            event.msisdn,
+            f"webhook:{event.event_type.value}:{scam_marker or 'glance-high'}",
         )
 
     result = AssessmentResult(
@@ -622,6 +656,9 @@ async def receive_innofemme_plugin(payload: dict):
 
     # Check the suspicious party for SMS/calls, but the subscriber for wallet events.
     intel_msisdn = str(data.get("from") or msisdn) if point in ("sms.deliver", "call.connect") else msisdn
+    # Proprietary threat ledger: sub-ms repeat-offender lookup on the
+    # suspicious party — survives restarts and Glance outages.
+    local_threat = local_threat_db.check(intel_msisdn)
     # Both optional lookups overlap and are bounded by one shared deadline.
     glance_task = asyncio.create_task(check_glance_risk(intel_msisdn))
     sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(msisdn, institution))
@@ -666,6 +703,14 @@ async def receive_innofemme_plugin(payload: dict):
     elif glance_reports >= 2:
         score += 25
         rules_fired.append(f"Glance cross-operator intelligence: {glance_reports} prior reports")
+    if local_threat.get("found"):
+        repeat_boost = 45 if _safe_int(local_threat.get("reports")) >= 2 else 25
+        score += repeat_boost
+        rules_fired.append(
+            f"Local threat ledger: known offender "
+            f"({local_threat['reports']} confirmations, {local_threat.get('threat_type', 'fraud')}, "
+            f"first seen {local_threat.get('age_days', 0)}d ago)"
+        )
     if _safe_int(sim_data.get("risk_boost")) > 0:
         score += _safe_int(sim_data.get("risk_boost"))
         rules_fired.append("InnoFemme network-edge SIM-swap check: recent swap reported")
@@ -707,6 +752,19 @@ async def receive_innofemme_plugin(payload: dict):
     if decision == "warn" and point not in WARN_CAPABLE_POINTS:
         decision = "allow"
         message = ""
+
+    # Learning loop: commit scam-confirmed suspicious parties to our own
+    # ledger. Glance HIGH counts anywhere; content markers only on
+    # sms/call where intel_msisdn is unambiguously the external party.
+    scam_marker = next(
+        (m for m in _SCAM_MARKERS for r in rules_fired if m in r.lower()), ""
+    )
+    if intel_msisdn and (
+        glance_level == "HIGH"
+        or (point in ("sms.deliver", "call.connect") and scam_marker)
+    ):
+        local_threat_db.record(intel_msisdn, f"{point}:{scam_marker or 'glance-high'}")
+
     message = message[:150]
 
     result = AssessmentResult(
