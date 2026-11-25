@@ -1,5 +1,5 @@
 {
-  "run_id": "20261123T051710201396Z",
+  "run_id": "20261125T181311600278Z",
   "warning": "Mock-data metrics are rehearsal results, not evidence of real-world performance.",
   "rows": {
     "all_transactions": 100023,
@@ -14,30 +14,30 @@
   },
   "max_fpr_target": 0.01,
   "selected_thresholds": {
-    "rules": 0.5714285714285714,
+    "rules": 0.8214804950119512,
     "logistic": 1.0,
-    "gradient_boosted": 0.9999958435505683,
+    "gradient_boosted": 0.9999993887195879,
     "ensemble_calibrated": 1.0
   },
   "models": {
     "rules": {
-      "threshold": 0.5714285714285714,
+      "threshold": 0.8214804950119512,
       "precision": 1.0,
-      "recall": 0.03096947935368043,
+      "recall": 0.0004488330341113106,
       "false_positive_rate": 0.0,
-      "amount_weighted_recall": 0.07141760902130677,
-      "amount_stopped": 634176.05,
+      "amount_weighted_recall": 0.0006662122644472266,
+      "amount_stopped": 5915.85,
       "false_positive_count": 0,
-      "false_negative_count": 4318,
-      "pr_auc": 0.49016628294745446,
-      "roc_auc": 0.749330335792918,
+      "false_negative_count": 4454,
+      "pr_auc": 0.6600512777440231,
+      "roc_auc": 0.8459241967470289,
       "positive_count": 4456,
       "negative_count": 15523,
       "per_fraud_kind": {
         "agent_fraud": {
           "count": 333,
-          "recall": 0.03903903903903904,
-          "amount_weighted_recall": 0.05509726580941938
+          "recall": 0.006006006006006006,
+          "amount_weighted_recall": 0.012167610242557464
         },
         "fake_merchant": {
           "count": 644,
@@ -51,13 +51,13 @@
         },
         "limit_splitting": {
           "count": 1262,
-          "recall": 0.09746434231378764,
-          "amount_weighted_recall": 0.09736198448682001
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
         },
         "mule_chain": {
           "count": 904,
-          "recall": 0.0022123893805309734,
-          "amount_weighted_recall": 0.012438122702436454
+          "recall": 0.0,
+          "amount_weighted_recall": 0.0
         },
         "pin_phishing": {
           "count": 346,
@@ -85,26 +85,26 @@
           "amount_weighted_recall": 0.0
         }
       },
-      "recall_at_fpr_budget_on_test": 0.03096947935368043
+      "recall_at_fpr_budget_on_test": 0.0002244165170556553
     },
     "logistic": {
       "threshold": 1.0,
       "precision": 1.0,
-      "recall": 0.01570915619389587,
+      "recall": 0.047127468581687613,
       "false_positive_rate": 0.0,
-      "amount_weighted_recall": 0.01054140970521914,
-      "amount_stopped": 93605.90000000001,
+      "amount_weighted_recall": 0.03188691327193706,
+      "amount_stopped": 283150.2899999999,
       "false_positive_count": 0,
-      "false_negative_count": 4386,
-      "pr_auc": 0.9872177029978473,
-      "roc_auc": 0.9955076650608566,
+      "false_negative_count": 4246,
+      "pr_auc": 0.9845756137797195,
+      "roc_auc": 0.9947534994982253,
       "positive_count": 4456,
       "negative_count": 15523,
       "per_fraud_kind": {
         "agent_fraud": {
           "count": 333,
-          "recall": 0.21021021021021022,
-          "amount_weighted_recall": 0.19252687400860566
+          "recall": 0.5375375375375375,
+          "amount_weighted_recall": 0.5107608540365178
         },
         "fake_merchant": {
           "count": 644,
@@ -123,8 +123,8 @@
         },
         "mule_chain": {
           "count": 904,
-          "recall": 0.0,
-          "amount_weighted_recall": 0.0
+          "recall": 0.023230088495575223,
+          "amount_weighted_recall": 0.02030349108218843
         },
         "pin_phishing": {
           "count": 346,
@@ -133,18 +133,18 @@
         },
         "relative_impersonation": {
           "count": 163,
-          "recall": 0.0,
-          "amount_weighted_recall": 0.0
+          "recall": 0.006134969325153374,
+          "amount_weighted_recall": 0.018794556059624108
         },
         "reversal_scam": {
           "count": 175,
-          "recall": 0.0,
-          "amount_weighted_recall": 0.0
+          "recall": 0.005714285714285714,
+          "amount_weighted_recall": 0.012136387136027715
         },
         "rtp_abuse": {
           "count": 173,
-          "recall": 0.0,
-          "amount_weighted_recall": 0.0
+          "recall": 0.046242774566473986,
+          "amount_weighted_recall": 0.03449134173490262
         },
         "sim_swap": {
           "count": 288,
@@ -152,10 +152,10 @@
           "amount_weighted_recall": 0.0
         }
       },
-      "recall_at_fpr_budget_on_test": 0.01570915619389587
+      "recall_at_fpr_budget_on_test": 0.047127468581687613
     },
     "gradient_boosted": {
-      "threshold": 0.9999958435505683,
+      "threshold": 0.9999993887195879,
       "precision": 0.0,
       "recall": 0.0,
       "false_positive_rate": 0.0,
@@ -163,8 +163,8 @@
       "amount_stopped": 0.0,
       "false_positive_count": 0,
       "false_negative_count": 4456,
-      "pr_auc": 0.9925764418367565,
-      "roc_auc": 0.9976460625809087,
+      "pr_auc": 0.9977304578007257,
+      "roc_auc": 0.9993568355336744,
       "positive_count": 4456,
       "negative_count": 15523,
       "per_fraud_kind": {
@@ -224,95 +224,95 @@
     "ensemble_calibrated": {
       "threshold": 1.0,
       "precision": 1.0,
-      "recall": 0.5123429084380611,
+      "recall": 0.5282764811490126,
       "false_positive_rate": 0.0,
-      "amount_weighted_recall": 0.632917963478642,
-      "amount_stopped": 5620202.350000001,
+      "amount_weighted_recall": 0.6725755659722544,
+      "amount_stopped": 5972355.0200000005,
       "false_positive_count": 0,
-      "false_negative_count": 2173,
-      "pr_auc": 0.994518202643534,
-      "roc_auc": 0.9978409361518455,
+      "false_negative_count": 2102,
+      "pr_auc": 0.9958553669935118,
+      "roc_auc": 0.9983473298612553,
       "positive_count": 4456,
       "negative_count": 15523,
       "per_fraud_kind": {
         "agent_fraud": {
           "count": 333,
-          "recall": 0.6426426426426426,
-          "amount_weighted_recall": 0.7069600083949589
+          "recall": 0.6486486486486487,
+          "amount_weighted_recall": 0.706603979534696
         },
         "fake_merchant": {
           "count": 644,
-          "recall": 0.3385093167701863,
-          "amount_weighted_recall": 0.3421706223278145
+          "recall": 0.327639751552795,
+          "amount_weighted_recall": 0.3253632978900718
         },
         "fake_promo": {
           "count": 168,
-          "recall": 0.16666666666666666,
-          "amount_weighted_recall": 0.16731517509727625
+          "recall": 0.125,
+          "amount_weighted_recall": 0.14202334630350194
         },
         "limit_splitting": {
           "count": 1262,
-          "recall": 0.6347068145800316,
-          "amount_weighted_recall": 0.635232246223445
+          "recall": 0.6735340729001584,
+          "amount_weighted_recall": 0.6740894072512111
         },
         "mule_chain": {
           "count": 904,
-          "recall": 0.6570796460176991,
-          "amount_weighted_recall": 0.6833059919194325
+          "recall": 0.7278761061946902,
+          "amount_weighted_recall": 0.7725658057174644
         },
         "pin_phishing": {
           "count": 346,
-          "recall": 0.3554913294797688,
-          "amount_weighted_recall": 0.5224819512946671
+          "recall": 0.3352601156069364,
+          "amount_weighted_recall": 0.519339813782764
         },
         "relative_impersonation": {
           "count": 163,
-          "recall": 0.2331288343558282,
-          "amount_weighted_recall": 0.29876863253402464
+          "recall": 0.2085889570552147,
+          "amount_weighted_recall": 0.2838626053143227
         },
         "reversal_scam": {
           "count": 175,
-          "recall": 0.4,
-          "amount_weighted_recall": 0.46307321339948226
+          "recall": 0.34285714285714286,
+          "amount_weighted_recall": 0.41162434017308613
         },
         "rtp_abuse": {
           "count": 173,
-          "recall": 0.5028901734104047,
-          "amount_weighted_recall": 0.567307108612229
+          "recall": 0.49710982658959535,
+          "amount_weighted_recall": 0.5643958960263488
         },
         "sim_swap": {
           "count": 288,
-          "recall": 0.3819444444444444,
-          "amount_weighted_recall": 0.5973055380717158
+          "recall": 0.3541666666666667,
+          "amount_weighted_recall": 0.5851625192662834
         }
       },
-      "recall_at_fpr_budget_on_test": 0.5123429084380611
+      "recall_at_fpr_budget_on_test": 0.5282764811490126
     }
   },
   "expected_cost_actions": {
     "allow": {
-      "transaction_count": 15023,
-      "fraud_count": 40
+      "transaction_count": 15117,
+      "fraud_count": 44
     },
     "freeze": {
-      "transaction_count": 3492,
-      "fraud_count": 3416
+      "transaction_count": 3511,
+      "fraud_count": 3425
     },
     "hold": {
-      "transaction_count": 938,
-      "fraud_count": 820
+      "transaction_count": 923,
+      "fraud_count": 841
     },
     "warn": {
-      "transaction_count": 526,
-      "fraud_count": 180
+      "transaction_count": 428,
+      "fraud_count": 146
     }
   },
   "latency_benchmark": {
     "scope": "warmed in-process scoring; excludes feature construction and network",
     "transactions": 200,
-    "p50_ms": 31.28440002910793,
-    "p95_ms": 51.29821999871637,
-    "p99_ms": 130.20868102903475
+    "p50_ms": 48.741650010924786,
+    "p95_ms": 71.29435995593663,
+    "p99_ms": 95.13100897835095
   },
   "tree_implementation": "LGBMClassifier",
   "feature_columns": [

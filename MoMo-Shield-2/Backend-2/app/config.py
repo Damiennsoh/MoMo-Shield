@@ -9,6 +9,16 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash-lite"
     gemini_timeout_seconds: float = 15.0
+    # Data protection (Act 843): PII is masked before any text leaves the
+    # network boundary. Set GEMINI_ENRICHMENT_ENABLED=false to keep ALL
+    # message content on-network (local keyword heuristics only).
+    gemini_redact_pii: bool = True
+    gemini_enrichment_enabled: bool = True
+    # Feature-flagged ML scorer: blends a calibrated model probability into
+    # the rule score as a corroborating signal. Off until a bundle is
+    # trained on the real sandbox dataset.
+    ml_scorer_enabled: bool = False
+    ml_model_path: str = ""
     
     sandbox_api_key: str = ""
     sandbox_team_key: str = ""

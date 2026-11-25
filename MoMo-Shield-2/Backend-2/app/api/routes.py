@@ -19,6 +19,7 @@ from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.infofemme import infofemme_client
 from app.integrations import local_threat_db
+from app.integrations import ml_scorer
 from app.integrations.fund_flow import fund_flow_ledger
 from app.integrations.nia import evaluate_ghana_card, verify_card_live
 from app.integrations.sandbox import intervene_sandbox
@@ -1021,6 +1022,22 @@ async def receive_innofemme_plugin(payload: dict):
             nia_live = nia_task.result()
         except Exception as exc:
             log.warning("NIA verify failed for plug-in event %s: %s", event_id, exc)
+
+    # Feature-flagged ML scorer: strictly corroborating — it may only add
+    # points when deterministic rules/payload evidence already scored >0,
+    # so a saturated model probability can never create suspicion alone.
+    # Retrain on the real sandbox dataset + widen the hook-field mapping
+    # before trusting its ranking (documented train/serve skew).
+    if score > 0 and point in ("payment.authorize", "payment.receive",
+                               "payment.request", "switch.route",
+                               "transfer.authorize"):
+        ml_result = ml_scorer.score(point, data, msisdn)
+        if ml_result and ml_result.get("points", 0) > 0:
+            score += ml_result["points"]
+            rules_fired.append(
+                f"ML scorer (mock-trained ensemble): "
+                f"p={ml_result['probability']:.2f} → +{ml_result['points']}"
+            )
 
     glance_level = getattr(glance_data, "risk_level", "UNKNOWN")
     glance_reports = _safe_int(getattr(glance_data, "reports", 0))
