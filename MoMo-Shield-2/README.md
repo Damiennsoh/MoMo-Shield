@@ -4,7 +4,7 @@
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green.svg)](https://fastapi.tiangolo.com)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg)](https://www.typescriptlang.org)
 **Validation status:** test and end-to-end latency claims are intentionally not prefilled; see the current test run and sandbox rehearsal evidence.
 
@@ -12,14 +12,14 @@
 
 ## 1. Executive Summary
 
-Over **GH₵ 100 million** is lost to Mobile Money (MoMo) fraud across West Africa annually. In Ghana, over **60% of subscribers** (informal traders, rural farmers, and the elderly) rely on basic 2G feature phones ("Yam phones") utilizing USSD codes like `*170#` and `*110#`.
+The Bank of Ghana estimates **GH₵ 101 million** in value at risk across banks, SDIs and payment providers in 2025, with mobile money a primary fraud vector (payment-provider-attributed losses ≈ GH₵ 37M). A large share of Ghanaian subscribers — informal traders, rural farmers, and the elderly (estimated majority on basic 2G feature phones, figure to be sourced) — rely on USSD codes like `*170#` and `*110#` rather than smartphones.
 
 Traditional consumer fraud apps fail because:
-1. **They require smartphone downloads**: Abandoning the 60%+ feature-phone population who cannot download Android/iOS apps.
+1. **They require smartphone downloads**: Abandoning the feature-phone population who cannot download Android/iOS apps.
 2. **They operate post-mortem**: Alerts arrive *after* money has already left the victim's wallet.
-3. **Telcos suffer from "Cross-Network Blindness"**: MTN cannot see when a fraudster registers a burner SIM on Telecel and routes stolen funds into an AT Money mule wallet.
+3. **Telcos suffer from "Cross-Network Blindness"** *(design motivation — to be validated with operators)*: MTN cannot see when a fraudster registers a burner SIM on Telecel and routes stolen funds into an AT Money mule wallet.
 
-**MoMo Shield** is designed as an **in-network interception plug-in (Route 1)** paired with a **FraudOps dashboard (Route 2)**. The repository contains a direct plug-in handler for five named InnoFemme points. Hook registration, credentials, end-to-end p95 latency, and judge-scorecard outcomes still require live sandbox verification; no measured performance or 100% coverage is claimed here.
+**MoMo Shield** is designed as an **in-network interception plug-in (Route 1)** paired with a **FraudOps dashboard (Route 2)**. The repository contains a direct plug-in handler covering all 16 documented InnoFemme interception points. Hook registration, credentials, end-to-end p95 latency, and judge-scorecard outcomes still require live sandbox verification; no measured performance or 100% coverage is claimed here.
 
 ---
 
@@ -44,7 +44,7 @@ flowchart TD
 
     subgraph MoMoShieldCore["MoMo Shield Core Engine (Route 1: Plug-in API :8000)"]
         PluginRouter["POST /api/v1/plugin"]
-        RulesEngine["14 Deterministic Rules Engine"]
+        RulesEngine["19 Deterministic Rules Engine"]
         GlanceAPI["Rancard Glance Cross-Telco Intelligence"]
         GeminiLLM["Gemini intent (post-decision enrichment)"]
         SIMCheck["Optional bounded SIM-swap lookup"]
@@ -86,10 +86,14 @@ flowchart TD
   - `delay`: A high-risk payment receives one 10-minute cooling period; a retry marked `afterDelay` is rejected if it remains high-risk.
 
 ### Route 2: Centralized FraudOps Command Center (`Frontend-2`)
-- Multi-tenant telecom switching: **MTN MoMo (65%)**, **Telecel Cash (22%)**, **AT Money (13%)**, and **Unified Ghana**.
+- Multi-tenant telecom switching: **MTN MoMo**, **Telecel Cash**, **AT Money**, and **Unified Ghana** (market-share split is illustrative pending verified figures).
 - Real-time WebSocket streaming telemetry.
 - Dynamic **GH₵ Protected** counter computed from blocked fraudulent amounts.
-- **Syndicate Graph Intelligence**: Identifies cross-network money-mule rings and layered accounts.
+- **Fund-Flow / Syndicate Graph**: Rule-based visualization of *observed* plug-in relationships — directed SMS/call/payment edges with inferred roles (suspect/mule/collector). Not a trained graph model; scope is this deployment's telemetry.
+- **Recovery Mode — Evidence Packs**: `GET /api/v1/evidence-pack/{msisdn}` assembles incident summary, directed fund trail, linked assessments, and identity provenance (verified vs event-supplied claims labeled) for post-incident reporting.
+- **Local Threat Ledger ("Mini-Glance")**: Proprietary sqlite ledger of scam-confirmed numbers — sub-ms repeat-offender boost, 30-day expiry, 14-day dormancy decay, exoneration endpoint.
+- **OTP Read-Out Defense**: Genuine operator OTPs are never flagged; risky-call markers trigger bilingual Twi/English advisories, and OTP→transaction velocity (+30 corroborating) escalates read-out fraud toward delay.
+- **Signal Velocity**: Live 15-minute event-rate telemetry with burst detection and top talkers.
 - **Local regression fixture scorecard**: Exercises fixed rule scenarios. It does not invoke the InnoFemme Fraud Simulator and is not a judge scorecard.
 - **Handset Simulator**: Preview accessible subscriber guidance in English and localized Twi.
 
@@ -102,13 +106,22 @@ MoMo-Shield-2/
 ├── Backend-2/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── routes.py          # /plugin, /benchmark, /webhook, /ws, MTN MoMo
-│   │   │   └── mtn_momo.py        # Sandbox collection & disbursement clients
+│   │   │   └── routes.py          # /plugin, /fund-flow, /evidence-pack,
+│   │   │                         # /velocity, /threat-ledger, /benchmark,
+│   │   │                         # /webhook, /ws, MTN MoMo
 │   │   ├── engine/
-│   │   │   ├── rules.py           # 14 deterministic fraud detection rules
-│   │   │   ├── llm.py             # Gemini 2.0 intent & persuasion analysis
+│   │   │   ├── rules.py           # 19 deterministic fraud detection rules
+│   │   │   ├── state.py           # Event windows + SMS blast detector
+│   │   │   └── kb.py              # Fraud Case Corpus (lexical + semantic RAG)
+│   │   ├── integrations/
+│   │   │   ├── gemini.py          # Gemini 2.0 intent (post-decision only)
 │   │   │   ├── glance.py          # Rancard Glance shared intelligence client
-│   │   │   └── state.py           # In-memory sliding time window state
+│   │   │   ├── nia.py             # NIA Ghana Card verify (live + heuristics)
+│   │   │   ├── infofemme.py       # Network API: SIM-swap, subscriber, SMS
+│   │   │   ├── local_threat_db.py # Proprietary threat ledger (sqlite)
+│   │   │   ├── fund_flow.py       # Observed fund-flow edge ledger
+│   │   │   ├── mtn_momo.py        # Sandbox collection & disbursement clients
+│   │   │   └── sandbox.py         # Sandbox intervention bridge
 │   │   ├── models/
 │   │   │   └── schemas.py         # SandboxEvent, AssessmentResult, RiskTier
 │   │   ├── config.py              # Typed settings (Sandbox URL, Glance, Gemini)
@@ -126,6 +139,9 @@ MoMo-Shield-2/
 │   │   └── settings/page.tsx      # API Keys & InnoFemme Bridge Status
 │   ├── components/
 │   │   ├── AppShell.tsx           # Multi-tenant layout & navigation
+│   │   ├── FraudGraph.tsx         # Live fund-flow graph + evidence packs
+│   │   ├── VelocityCard.tsx       # Signal velocity telemetry + burst badge
+│   │   ├── ThreatLedgerCard.tsx   # Local threat ledger + exoneration
 │   │   ├── HandsetFrame.tsx       # Interactive mock handset with Twi/EN warnings
 │   │   └── ui/primitives.tsx      # Glassmorphism cards, badges, modal dialogs
 │   ├── lib/
@@ -271,7 +287,7 @@ Record actual test and typecheck command output; do not treat old counts as curr
 MoMo Shield is built as a venture-scale B2B SaaS startup serving the African financial ecosystem:
 
 1. **Per-Transaction Scoring Surcharge (B2B SaaS to Telcos & Banks):**
-   - **GH₵ 0.05** per scored financial transaction.
+   - **GH₵ 0.05** per scored financial transaction *(proposed pricing — assumption pending pricing research)*.
    - Saves telcos millions in customer churn, chargeback disputes, and regulatory penalties.
 2. **National Regulatory Compliance License:**
    - Annual subscription for **GhIPSS (National Switch)**, **Bank of Ghana (BoG)**, and the **Cyber Security Authority (CSA)** for cross-network syndicate tracing and real-time AML/CFT intelligence.
