@@ -59,6 +59,7 @@ def _stub_integrations(monkeypatch):
     routes.ASSESSMENT_HISTORY.clear()
     routes.global_window.clear()
     routes.sms_blast_window.clear()
+    routes._advisory_marks.clear()
     routes.local_threat_db.clear_all()
     return calls
 

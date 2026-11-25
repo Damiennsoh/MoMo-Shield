@@ -5,14 +5,14 @@ from uuid import UUID, uuid4
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Deque, List
+from typing import Deque, Dict, List
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from app.config import settings
-from app.engine.rules import RULES
+from app.engine.rules import RULES, looks_like_otp
 from app.engine.state import global_window, sms_blast_window
 from app.engine.kb import knowledge_base
 from app.integrations.gemini import analyze_intent
@@ -632,7 +632,34 @@ async def reset_demo_state():
     global_window.clear()
     fund_flow_ledger.clear()
     sms_blast_window.clear()
+    _advisory_marks.clear()
     return {"status": "reset", "history_count": 0, "active_sessions": 0}
+
+
+_OTP_ADVISORY_WINDOW_MIN = 15
+_OTP_ADVISORY_MESSAGE = (
+    "MoMo Shield: Never read a code to anyone on a call. Hang up now. "
+    "MoMo: MMA obiara nka wo kɔde, fa kyɛrɛ."
+)
+
+# OTP read-out defense markers — kept OUT of EventWindow so they never
+# pollute correlation history or event counts. msisdn -> [(epoch, kind)].
+_advisory_marks: Dict[str, List[tuple]] = {}
+
+
+def _mark_advisory(msisdn: str, kind: str) -> None:
+    now = time.time()
+    cutoff = now - _OTP_ADVISORY_WINDOW_MIN * 60
+    marks = [(t, k) for t, k in _advisory_marks.get(msisdn, []) if t >= cutoff]
+    marks.append((now, kind))
+    _advisory_marks[msisdn] = marks
+
+
+def _otp_advisory_state(msisdn: str) -> tuple[bool, bool]:
+    """(risky flagged call fresh, advisory already sent) for this victim."""
+    cutoff = time.time() - _OTP_ADVISORY_WINDOW_MIN * 60
+    kinds = {k for t, k in _advisory_marks.get(msisdn, []) if t >= cutoff}
+    return "risky_call" in kinds, "otp_advisory_sent" in kinds
 
 
 def _safe_int(value, default: int = 0) -> int:
@@ -1052,6 +1079,28 @@ async def receive_innofemme_plugin(payload: dict):
     if decision == "warn" and point not in WARN_CAPABLE_POINTS:
         decision = "allow"
         message = ""
+
+    # OTP read-out defense, layer 1: a call judged risky leaves a marker so
+    # a subsequent OTP SMS can trigger an advisory (side channel, not the
+    # correlation window).
+    if point == "call.connect" and decision in ("warn", "reject"):
+        _mark_advisory(msisdn, "risky_call")
+
+    # OTP read-out defense, layer 2: a genuine OTP SMS is NEVER scored or
+    # blocked — it is legitimate operator traffic. But if it lands while a
+    # flagged risky call is fresh, issue a bilingual advisory over the
+    # warning channel and record it for telemetry.
+    if point == "sms.deliver" and looks_like_otp(text_content, data.get("from")):
+        risky_recent, advisory_sent = _otp_advisory_state(msisdn)
+        if risky_recent and not advisory_sent:
+            _mark_advisory(msisdn, "otp_advisory_sent")
+            rules_fired.append(
+                "OTP during flagged call: genuine OTP left untouched; "
+                "bilingual read-out advisory issued to subscriber"
+            )
+            asyncio.create_task(
+                infofemme_client.send_ussd_push(msisdn, _OTP_ADVISORY_MESSAGE)
+            )
 
     # Learning loop: commit scam-confirmed suspicious parties to our own
     # ledger. Glance HIGH counts anywhere; content markers only on

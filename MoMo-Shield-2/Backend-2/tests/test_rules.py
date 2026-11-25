@@ -74,7 +74,7 @@ def test_velocity_quiet_below_threshold(make_event):
 
 
 def test_rules_registry_has_descriptions():
-    assert len(RULES) == 18
+    assert len(RULES) == 19
 
 
 def test_credential_request_sms_scores_high(make_event):

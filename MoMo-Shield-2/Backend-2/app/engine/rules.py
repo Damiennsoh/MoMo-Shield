@@ -441,6 +441,74 @@ def check_unverified_credit_claim(event: SandboxEvent, history: List) -> Tuple[i
     )
 
 
+# ---------------------------------------------------------------------------
+# OTP-primed transaction velocity — the illiterate-victim scenario.
+# A genuine MTN/Telecel/AT OTP SMS can NEVER be flagged: it is legitimate
+# operator traffic, and warning on it would punish exactly the users we
+# protect. The defense is temporal: an OTP primes the victim's window, and
+# a payment/PIN/menu action within minutes — typically while the scammer
+# keeps the victim on the phone — is the theft completing. Corroborating
+# only (+30): never warns alone, but combines with onCallWith (+50) and
+# call-risk signals to reach delay/reject.
+# ---------------------------------------------------------------------------
+_OTP_CODE_RE = re.compile(r"\b\d{4,8}\b")
+_OTP_HINT_RE = re.compile(
+    r"\b(otp|one[- ]?time|verification code|security code|token|authori[sz]ation code|"
+    r"transaction code|do not share)\b",
+    re.I,
+)
+_OTP_VELOCITY_MINUTES = 10
+
+
+def looks_like_otp(text, sender="") -> bool:
+    """Heuristic OTP/shortcode-message detector. Deliberately narrow:
+    requires a standalone 4–8 digit code AND (shortcode sender OR code-ish
+    wording) so 'GHc 850' scam lures and ordinary SMS never match."""
+    t = str(text or "")
+    if not t or len(t) > 200 or not _OTP_CODE_RE.search(t):
+        return False
+    sender_digits = "".join(ch for ch in str(sender or "") if ch.isdigit())
+    is_shortcode = 0 < len(sender_digits) <= 6 or (sender and not sender_digits)
+    return is_shortcode or bool(_OTP_HINT_RE.search(t))
+
+
+def _prior_ts(prior: dict):
+    ts = prior.get("timestamp")
+    if isinstance(ts, datetime):
+        return ts.replace(tzinfo=None) if ts.tzinfo else ts
+    if isinstance(ts, str):
+        try:
+            parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+        except ValueError:
+            return None
+    return None
+
+
+def check_otp_transaction_velocity(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """Financial/USSD action within 10 min of an OTP SMS → +30."""
+    if event.event_type not in (EventType.TRANSACTION, EventType.USSD):
+        return 0, ""
+    now = event.timestamp.replace(tzinfo=None) if event.timestamp.tzinfo else event.timestamp
+    cutoff = now.timestamp() - _OTP_VELOCITY_MINUTES * 60
+    for prior in reversed(history):
+        if prior.get("event_type") != "sms":
+            continue
+        ts = _prior_ts(prior)
+        if ts is None:
+            continue
+        # _prior_ts returns naive UTC
+        if ts.replace(tzinfo=timezone.utc).timestamp() < cutoff:
+            continue
+        payload = prior.get("payload") or {}
+        if looks_like_otp(payload.get("text"), payload.get("from")):
+            return 30, (
+                "OTP-primed transaction: financial/USSD action within "
+                f"{_OTP_VELOCITY_MINUTES} min of OTP SMS (read-out fraud pattern)"
+            )
+    return 0, ""
+
+
 RULES = [
     check_content_credential_request,
     check_content_impersonation,
@@ -461,4 +529,5 @@ RULES = [
     check_call_connect_signals,
     check_call_after_credit_sms,
     check_unverified_credit_claim,
+    check_otp_transaction_velocity,
 ]
