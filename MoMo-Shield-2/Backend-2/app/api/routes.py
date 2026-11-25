@@ -19,6 +19,7 @@ from app.integrations.gemini import analyze_intent
 from app.integrations.glance import check_glance_risk, report_fraud
 from app.integrations.infofemme import infofemme_client
 from app.integrations import local_threat_db
+from app.integrations.fund_flow import fund_flow_ledger
 from app.integrations.nia import evaluate_ghana_card, verify_card_live
 from app.integrations.sandbox import intervene_sandbox
 from app.integrations import mtn_momo
@@ -80,6 +81,203 @@ async def websocket_endpoint(websocket: WebSocket):
 async def recent_events(limit: int = 50):
     """Recent assessments for dashboard hydration on connect."""
     return {"events": list(ASSESSMENT_HISTORY)[-min(limit, 200):]}
+
+
+@router.get("/threat-ledger")
+async def threat_ledger(limit: int = 50):
+    """Ops view of the proprietary flagged-number ledger."""
+    return {"entries": local_threat_db.list_entries(limit)}
+
+
+@router.delete("/threat-ledger/{msisdn}")
+async def exonerate_number(msisdn: str):
+    """Appeal/override path: remove a number from the threat ledger."""
+    removed = local_threat_db.remove(msisdn)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Number not found in threat ledger")
+    return {"removed": True, "msisdn": local_threat_db.normalize_msisdn(msisdn)}
+
+
+def _node_role(stats: dict, flagged: bool) -> str:
+    """Infer a forensic role from observed edge statistics."""
+    if flagged:
+        return "suspect"
+    pay_in = stats["pay_in"]
+    pay_out = stats["pay_out"]
+    comms_out = stats["comms_out"]
+    if pay_in >= 3 and pay_out >= 1:
+        return "mule"
+    if pay_in >= 3:
+        return "collector"
+    if comms_out >= 3 and pay_out == 0 and pay_in == 0:
+        return "caller"
+    if pay_out >= 2:
+        return "payer"
+    return "node"
+
+
+def _build_fund_flow_graph(limit: int = 400) -> dict:
+    """Cross-subscriber observed-relationship graph for Recovery Mode.
+
+    Nodes are numbers/accounts seen in plug-in payloads; edges are directed
+    observed relationships (sms, call, payment, payment_request, switch,
+    bank_transfer) with amounts and interception decisions. Roles are
+    heuristics over observed degree — they describe traffic shape, not
+    verified identity.
+    """
+    edges = fund_flow_ledger.snapshot(limit)
+    stats: Dict[str, dict] = {}
+    for e in edges:
+        for endpoint in (e["src"], e["dst"]):
+            s = stats.setdefault(endpoint, {
+                "in": 0, "out": 0, "pay_in": 0, "pay_out": 0,
+                "comms_out": 0, "volume": 0.0, "kinds": set(),
+            })
+            s["kinds"].add(e["kind"])
+        s_src = stats[e["src"]]
+        s_dst = stats[e["dst"]]
+        s_src["out"] += 1
+        s_dst["in"] += 1
+        if e["kind"] in ("payment", "payment_request", "switch", "bank_transfer"):
+            amt = e.get("amount") or 0
+            s_src["pay_out"] += 1
+            s_dst["pay_in"] += 1
+            s_src["volume"] += amt
+        elif e["kind"] in ("sms", "call"):
+            s_src["comms_out"] += 1
+    nodes = []
+    for msisdn, s in stats.items():
+        ledger = local_threat_db.check(msisdn)
+        nodes.append({
+            "id": msisdn,
+            "role": _node_role(s, bool(ledger.get("found"))),
+            "flagged": bool(ledger.get("found")),
+            "in_count": s["in"],
+            "out_count": s["out"],
+            "pay_in": s["pay_in"],
+            "pay_out": s["pay_out"],
+            "volume": round(s["volume"], 2),
+            "kinds": sorted(s["kinds"]),
+            "ledger_reports": ledger.get("reports", 0),
+        })
+    return {
+        "nodes": nodes,
+        "edges": [
+            {
+                "from": e["src"], "to": e["dst"], "kind": e["kind"],
+                "point": e["point"], "amount": e["amount"],
+                "decision": e["decision"], "ts": e["iso"], "event_id": e["event_id"],
+            }
+            for e in edges
+        ],
+        "edge_count": len(edges),
+        "node_count": len(nodes),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "Observed plug-in events only — this deployment's telemetry, not the whole network.",
+    }
+
+
+@router.get("/fund-flow")
+async def fund_flow_graph(limit: int = Query(400, ge=1, le=1000)):
+    return _build_fund_flow_graph(limit)
+
+
+@router.get("/evidence-pack/{msisdn}")
+async def evidence_pack(msisdn: str):
+    """Post-incident forensic package for one number.
+
+    Assembles everything this deployment observed about a suspect:
+    ledger standing, directed fund-flow trail, linked assessments, and
+    live identity/intel lookups where credentials exist. Everything is
+    labeled by provenance — event-supplied claims vs verified lookups —
+    so the pack is honest about what it does and does not prove.
+    """
+    target = local_threat_db.normalize_msisdn(msisdn)
+    if not target:
+        raise HTTPException(status_code=422, detail="Invalid MSISDN")
+
+    edges = fund_flow_ledger.edges_for(target, limit=300)
+    ledger_entry = local_threat_db.check(target)
+    edge_event_ids = {e["event_id"] for e in edges}
+    related = [
+        a for a in ASSESSMENT_HISTORY
+        if a.get("event_id") in edge_event_ids or a.get("msisdn") == target
+    ][-50:]
+
+    # Live lookups are best-effort and bounded; unconfigured integrations
+    # report their status honestly instead of fabricating data.
+    glance_task = asyncio.create_task(check_glance_risk(target))
+    sim_task = asyncio.create_task(infofemme_client.get_sim_swap_history(target))
+    profile_task = asyncio.create_task(infofemme_client.get_subscriber_profile(target))
+    done, pending = await asyncio.wait(
+        {glance_task, sim_task, profile_task}, timeout=1.5,
+        return_when=asyncio.ALL_COMPLETED,
+    )
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    def _res(task, default):
+        if task not in done:
+            return {"status": "timeout"}
+        try:
+            return task.result() or default
+        except Exception:
+            return {"status": "error"}
+
+    glance_raw = _res(glance_task, {"risk_level": "UNKNOWN", "reports": 0})
+    glance_res = (
+        glance_raw.model_dump() if hasattr(glance_raw, "model_dump") else dict(glance_raw)
+    )
+    glance_res["configured"] = bool(settings.glance_enabled)
+    sim_res = _res(sim_task, {"status": "UNKNOWN"})
+    sim_res["configured"] = infofemme_client.enabled
+    profile_res = _res(profile_task, {"status": "UNKNOWN"})
+    profile_res["configured"] = infofemme_client.enabled
+
+    volume = sum(e["amount"] or 0 for e in edges if e["kind"] in ("payment", "switch", "bank_transfer", "payment_request"))
+    blocked = sum(1 for e in edges if str(e["decision"]).upper() in ("REJECT", "BLOCKED", "DELAY"))
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "subject": {
+            "msisdn": target,
+            "ledger": ledger_entry if ledger_entry.get("found") else None,
+        },
+        "incident_summary": {
+            "observed_edges": len(edges),
+            "blocked_or_delayed": blocked,
+            "observed_value_ghs": round(volume, 2),
+            "first_seen": edges[0]["iso"] if edges else None,
+            "last_seen": edges[-1]["iso"] if edges else None,
+            "edge_kinds": sorted({e["kind"] for e in edges}),
+        },
+        "fund_trail": [
+            {
+                "ts": e["iso"], "kind": e["kind"], "point": e["point"],
+                "direction": "outbound" if e["src"] == target else "inbound",
+                "counterparty": e["dst"] if e["src"] == target else e["src"],
+                "amount": e["amount"], "decision": e["decision"],
+                "event_id": e["event_id"],
+            }
+            for e in edges
+        ],
+        "related_assessments": related,
+        "identity_provenance": {
+            "glance_risk_check": glance_res,
+            "sim_swap_check": sim_res,
+            "subscriber_profile": profile_res,
+            "note": (
+                "Entries marked configured:false are dormant pending sandbox "
+                "credentials. Event-supplied fields (names, card numbers) are "
+                "claims made by the sending institution, not independent "
+                "verification. This pack is investigative evidence, not a "
+                "substitute for lawful process."
+            ),
+        },
+        "scope": "Derived solely from plug-in events observed by this deployment.",
+    }
 
 
 @router.get("/integrations/mtn-momo/status")
@@ -208,7 +406,7 @@ async def receive_sandbox_event(
     # Proprietary threat ledger: repeat offenders known to our own DB.
     local_threat = local_threat_db.check(event.msisdn)
     if local_threat.get("found"):
-        repeat_boost = 45 if _safe_int(local_threat.get("reports")) >= 2 else 25
+        repeat_boost = 45 if _safe_float(local_threat.get("effective_reports")) >= 2 else 25
         score += repeat_boost
         rules_fired.append(
             f"Local threat ledger: known offender "
@@ -339,12 +537,21 @@ async def reset_demo_state():
     """Clear in-process assessment and correlation state for a fresh demo run."""
     ASSESSMENT_HISTORY.clear()
     global_window.clear()
+    fund_flow_ledger.clear()
+    sms_blast_window.clear()
     return {"status": "reset", "history_count": 0, "active_sessions": 0}
 
 
 def _safe_int(value, default: int = 0) -> int:
     try:
         return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
     except (TypeError, ValueError, OverflowError):
         return default
 
@@ -704,7 +911,7 @@ async def receive_innofemme_plugin(payload: dict):
         score += 25
         rules_fired.append(f"Glance cross-operator intelligence: {glance_reports} prior reports")
     if local_threat.get("found"):
-        repeat_boost = 45 if _safe_int(local_threat.get("reports")) >= 2 else 25
+        repeat_boost = 45 if _safe_float(local_threat.get("effective_reports")) >= 2 else 25
         score += repeat_boost
         rules_fired.append(
             f"Local threat ledger: known offender "
@@ -764,6 +971,11 @@ async def receive_innofemme_plugin(payload: dict):
         or (point in ("sms.deliver", "call.connect") and scam_marker)
     ):
         local_threat_db.record(intel_msisdn, f"{point}:{scam_marker or 'glance-high'}")
+
+    # Forensic trail: record the observed directed relationship for
+    # Recovery Mode (fund-flow graph + evidence pack). Post-decision data
+    # only — never influences the verdict.
+    fund_flow_ledger.observe(point, data, msisdn, decision, event_id)
 
     message = message[:150]
 

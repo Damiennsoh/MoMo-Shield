@@ -21,6 +21,10 @@ log = get_logger(__name__)
 
 DB_PATH = Path(__file__).resolve().parents[2] / "data" / "threat_intel.db"
 TTL_DAYS = 30
+# Influence halves every DECAY_HALF_DAYS of dormancy: an active offender
+# stays hot, a dormant (possibly wrong) flag fades instead of becoming a
+# permanent blacklist.
+DECAY_HALF_DAYS = 14
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS flagged_numbers (
@@ -77,9 +81,14 @@ def check(msisdn: str) -> dict:
     return {
         "found": True,
         "reports": row["report_count"],
+        "effective_reports": _decayed_count(row["report_count"], age_days),
         "threat_type": row["threat_type"],
         "age_days": round(age_days, 1),
     }
+
+
+def _decayed_count(count: int, age_days: float) -> float:
+    return count * (0.5 ** (age_days / DECAY_HALF_DAYS))
 
 
 def record(msisdn: str, threat_type: str) -> None:
@@ -105,6 +114,51 @@ def record(msisdn: str, threat_type: str) -> None:
         log.info("Local threat DB: %s flagged (%s, count updated)", key, threat_type)
     except sqlite3.Error as exc:
         log.warning("Local threat DB write failed: %s", exc)
+
+
+def list_entries(limit: int = 50) -> list[dict]:
+    """All non-expired flagged numbers, newest activity first (ops view)."""
+    now = time.time()
+    try:
+        with _lock, _connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM flagged_numbers ORDER BY last_seen DESC LIMIT ?",
+                (max(1, min(limit, 200)),),
+            ).fetchall()
+    except sqlite3.Error as exc:
+        log.warning("Local threat DB list failed: %s", exc)
+        return []
+    entries = []
+    for row in rows:
+        age_days = (now - row["last_seen"]) / 86400
+        if age_days > TTL_DAYS:
+            continue
+        entries.append({
+            "msisdn": row["msisdn"],
+            "threat_type": row["threat_type"],
+            "reports": row["report_count"],
+            "effective_reports": round(_decayed_count(row["report_count"], age_days), 1),
+            "age_days": round(age_days, 1),
+        })
+    return entries
+
+
+def remove(msisdn: str) -> bool:
+    """Exonerate a number — appeal/override path for false positives."""
+    key = normalize_msisdn(msisdn)
+    if not key:
+        return False
+    try:
+        with _lock, _connect() as conn:
+            cur = conn.execute("DELETE FROM flagged_numbers WHERE msisdn = ?", (key,))
+            conn.commit()
+            removed = cur.rowcount > 0
+        if removed:
+            log.info("Local threat DB: %s exonerated/removed", key)
+        return removed
+    except sqlite3.Error as exc:
+        log.warning("Local threat DB remove failed: %s", exc)
+        return False
 
 
 def clear_all() -> None:

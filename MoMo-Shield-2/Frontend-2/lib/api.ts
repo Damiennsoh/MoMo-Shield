@@ -35,6 +35,18 @@ export interface EventsResponse {
   events: AssessmentResult[];
 }
 
+export interface ThreatLedgerEntry {
+  msisdn: string;
+  threat_type: string;
+  reports: number;
+  effective_reports: number;
+  age_days: number;
+}
+
+export interface ThreatLedgerResponse {
+  entries: ThreatLedgerEntry[];
+}
+
 export interface MtnMomoStatus {
   provider: string;
   environment: 'sandbox';
@@ -77,6 +89,21 @@ export async function fetchRecentEvents(limit = 50): Promise<AssessmentResult[]>
   if (!res.ok) throw new Error(`Events fetch failed: ${res.status}`);
   const data = (await res.json()) as EventsResponse;
   return data.events ?? [];
+}
+
+export async function fetchThreatLedger(limit = 50): Promise<ThreatLedgerEntry[]> {
+  const res = await fetch(`${API_BASE}/api/v1/threat-ledger?limit=${limit}`);
+  if (!res.ok) throw new Error(`Threat ledger fetch failed: ${res.status}`);
+  const data = (await res.json()) as ThreatLedgerResponse;
+  return data.entries ?? [];
+}
+
+export async function removeThreatLedgerEntry(msisdn: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/threat-ledger/${encodeURIComponent(msisdn)}`,
+    { method: 'DELETE' },
+  );
+  if (!res.ok) throw new Error(`Exoneration failed: ${res.status}`);
 }
 
 export async function resetDemoSession(): Promise<void> {
@@ -124,4 +151,75 @@ export async function runFraudBenchmark(): Promise<BenchmarkResponse> {
   const res = await fetch(`${API_BASE}/api/v1/demo/benchmark`, { method: 'POST' });
   if (!res.ok) throw new Error(`Benchmark run failed: ${res.status}`);
   return res.json() as Promise<BenchmarkResponse>;
+}
+
+export interface FundFlowNode {
+  id: string;
+  role: 'suspect' | 'mule' | 'collector' | 'caller' | 'payer' | 'node' | string;
+  flagged: boolean;
+  in_count: number;
+  out_count: number;
+  pay_in: number;
+  pay_out: number;
+  volume: number;
+  kinds: string[];
+  ledger_reports: number;
+}
+
+export interface FundFlowEdge {
+  from: string;
+  to: string;
+  kind: 'sms' | 'call' | 'payment' | 'payment_request' | 'switch' | 'bank_transfer' | string;
+  point: string;
+  amount: number | null;
+  decision: string;
+  ts: string;
+  event_id: string;
+}
+
+export interface FundFlowGraph {
+  nodes: FundFlowNode[];
+  edges: FundFlowEdge[];
+  edge_count: number;
+  node_count: number;
+  generated_at: string;
+  scope: string;
+}
+
+export async function fetchFundFlow(limit = 400): Promise<FundFlowGraph> {
+  const res = await fetch(`${API_BASE}/api/v1/fund-flow?limit=${limit}`);
+  if (!res.ok) throw new Error(`Fund-flow fetch failed: ${res.status}`);
+  return res.json() as Promise<FundFlowGraph>;
+}
+
+export interface EvidencePack {
+  generated_at: string;
+  subject: { msisdn: string; ledger: ThreatLedgerEntry | null };
+  incident_summary: {
+    observed_edges: number;
+    blocked_or_delayed: number;
+    observed_value_ghs: number;
+    first_seen: string | null;
+    last_seen: string | null;
+    edge_kinds: string[];
+  };
+  fund_trail: Array<{
+    ts: string;
+    kind: string;
+    point: string;
+    direction: 'inbound' | 'outbound';
+    counterparty: string;
+    amount: number | null;
+    decision: string;
+    event_id: string;
+  }>;
+  related_assessments: AssessmentResult[];
+  identity_provenance: Record<string, unknown> & { note?: string };
+  scope: string;
+}
+
+export async function fetchEvidencePack(msisdn: string): Promise<EvidencePack> {
+  const res = await fetch(`${API_BASE}/api/v1/evidence-pack/${encodeURIComponent(msisdn)}`);
+  if (!res.ok) throw new Error(`Evidence pack failed: ${res.status}`);
+  return res.json() as Promise<EvidencePack>;
 }

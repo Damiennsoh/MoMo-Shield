@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { AlertCard } from '@/components/AlertCard';
+import { ThreatLedgerCard } from '@/components/ThreatLedgerCard';
 import { EventRow } from '@/components/EventRow';
 import { FraudGraph } from '@/components/FraudGraph';
 import { TrendChart } from '@/components/TrendChart';
@@ -516,6 +517,9 @@ export default function DashboardPage() {
               </div>
             </div>
           </Card>
+
+          {/* Proprietary Threat Ledger Card */}
+          <ThreatLedgerCard />
         </div>
       </div>
 

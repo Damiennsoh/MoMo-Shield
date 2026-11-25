@@ -1,92 +1,130 @@
 'use client';
 
-import { useState } from 'react';
-import { Network, ShieldAlert, Users, Radio, ArrowUpRight } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Network, FileDown, Radar } from 'lucide-react';
 import { Card, Badge } from '@/components/ui/primitives';
+import {
+  fetchEvidencePack,
+  fetchFundFlow,
+  type FundFlowEdge,
+  type FundFlowGraph,
+  type FundFlowNode,
+} from '@/lib/api';
 
-interface Node {
-  id: string;
-  label: string;
-  type: 'syndicate' | 'mule' | 'victim' | 'caller';
-  x: number;
-  y: number;
-  risk: number;
-  forensicNote: string;
+const ROLE_COLORS: Record<string, string> = {
+  suspect: '#dc2626',
+  mule: '#ea580c',
+  collector: '#f59e0b',
+  caller: '#8b5cf6',
+  payer: '#0ea5e9',
+  node: '#64748b',
+};
+
+const KIND_LABELS: Record<string, string> = {
+  sms: 'SMS',
+  call: 'Call',
+  payment: 'Payment',
+  payment_request: 'Req',
+  switch: 'Switch',
+  bank_transfer: 'Bank',
+};
+
+const MAX_NODES = 10;
+const CX = 260;
+const CY = 155;
+
+function maskMsisdn(msisdn: string): string {
+  const digits = msisdn.replace(/\D/g, '');
+  if (digits.length < 7) return msisdn;
+  return `${digits.slice(0, 5)} ••• ${digits.slice(-4)}`;
 }
 
-interface Edge {
-  from: string;
-  to: string;
-  label: string;
+function nodePositions(nodes: FundFlowNode[]): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  if (nodes.length === 0) return pos;
+  const sorted = [...nodes].sort((a, b) => b.in_count + b.out_count - (a.in_count + a.out_count));
+  pos.set(sorted[0].id, { x: CX, y: CY });
+  const rest = sorted.slice(1);
+  rest.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(rest.length, 1) - Math.PI / 2;
+    pos.set(n.id, {
+      x: CX + 195 * Math.cos(angle),
+      y: CY + 105 * Math.sin(angle),
+    });
+  });
+  return pos;
 }
 
-const NODES: Node[] = [
-  {
-    id: 'S1',
-    label: 'Syndicate Hub (Kumasi)',
-    type: 'syndicate',
-    x: 260,
-    y: 70,
-    risk: 96,
-    forensicNote: 'Orchestrator node: aggregated GH₵ 38,000 from 6 mule accounts; flagged cross-telco on Glance.',
-  },
-  {
-    id: 'M1',
-    label: 'Mule Wallet · +23324***890',
-    type: 'mule',
-    x: 130,
-    y: 150,
-    risk: 88,
-    forensicNote: 'Temporary Level-1 KYC wallet: receives coerced funds from victims, immediate outbound transfer.',
-  },
-  {
-    id: 'M2',
-    label: 'Cash-out Agent · Circle',
-    type: 'mule',
-    x: 390,
-    y: 140,
-    risk: 82,
-    forensicNote: 'Anomalous agent POS: cash-out frequency exceeds regional baseline by 480%.',
-  },
-  {
-    id: 'C1',
-    label: 'Nuisance Caller · +23355***102',
-    type: 'caller',
-    x: 100,
-    y: 250,
-    risk: 78,
-    forensicNote: 'Burner SIM: 62 cold calls dialed today; Hook 13 pre-ring interception triggered.',
-  },
-  {
-    id: 'V1',
-    label: 'Victim Subscriber (Sandbox)',
-    type: 'victim',
-    x: 260,
-    y: 230,
-    risk: 15,
-    forensicNote: 'Target subscriber: concurrent voice call + USSD transfer intercepted at Hook 15.',
-  },
-  {
-    id: 'M3',
-    label: 'Secondary Wallet · +23320***441',
-    type: 'mule',
-    x: 410,
-    y: 240,
-    risk: 70,
-    forensicNote: 'Structuring node: splits transfers into sub-threshold tranches (GH₵ 900–990) to avoid reporting.',
-  },
-];
-
-const EDGES: Edge[] = [
-  { from: 'S1', to: 'M1', label: 'GHS 2,500' },
-  { from: 'S1', to: 'M2', label: 'GHS 1,800' },
-  { from: 'M1', to: 'V1', label: 'Fake Credit' },
-  { from: 'C1', to: 'V1', label: 'Urgent Call' },
-  { from: 'M2', to: 'M3', label: 'Layering' },
-];
+function edgeLabel(edge: FundFlowEdge): string {
+  if (edge.amount) return `GH₵ ${edge.amount.toLocaleString()}`;
+  return KIND_LABELS[edge.kind] ?? edge.kind;
+}
 
 export function FraudGraph() {
-  const [selectedNode, setSelectedNode] = useState<Node | null>(NODES[0]);
+  const [graph, setGraph] = useState<FundFlowGraph | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [packBusy, setPackBusy] = useState(false);
+  const [packNote, setPackNote] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setGraph(await fetchFundFlow());
+    } catch {
+      /* backend unreachable — keep last snapshot */
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 10000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  const { nodes, edges, positions } = useMemo(() => {
+    const allNodes = graph?.nodes ?? [];
+    const allEdges = graph?.edges ?? [];
+    const top = [...allNodes]
+      .sort((a, b) => b.in_count + b.out_count - (a.in_count + a.out_count))
+      .slice(0, MAX_NODES);
+    const ids = new Set(top.map((n) => n.id));
+    return {
+      nodes: top,
+      edges: allEdges.filter((e) => ids.has(e.from) && ids.has(e.to)),
+      positions: nodePositions(top),
+    };
+  }, [graph]);
+
+  const selected = nodes.find((n) => n.id === selectedId) ?? null;
+  const selectedEdges = useMemo(
+    () => edges.filter((e) => e.from === selectedId || e.to === selectedId).slice(-8),
+    [edges, selectedId],
+  );
+
+  const downloadEvidencePack = async () => {
+    if (!selected) return;
+    setPackBusy(true);
+    setPackNote(null);
+    try {
+      const pack = await fetchEvidencePack(selected.id);
+      const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `momo-shield-evidence-${selected.id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setPackNote(
+        `Pack exported — ${pack.incident_summary.observed_edges} observed edges, ` +
+        `GH₵ ${pack.incident_summary.observed_value_ghs.toLocaleString()} traced.`,
+      );
+    } catch {
+      setPackNote('Evidence pack unavailable — backend unreachable.');
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
+  const flaggedCount = nodes.filter((n) => n.flagged).length;
 
   return (
     <Card id="campaigns" className="overflow-hidden">
@@ -94,11 +132,12 @@ export function FraudGraph() {
         <div className="flex items-center gap-2.5">
           <Network size={16} className="text-[#ffcc00]" />
           <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">
-            Syndicate Graph Intelligence
+            Fund-Flow Intelligence
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="high">ACTIVE RING DETECTED</Badge>
+          {flaggedCount > 0 && <Badge variant="high">{flaggedCount} FLAGGED</Badge>}
+          <Badge variant={nodes.length ? 'low' : 'low'}>{graph?.edge_count ?? 0} edges</Badge>
         </div>
       </div>
 
@@ -112,129 +151,168 @@ export function FraudGraph() {
               </linearGradient>
             </defs>
 
-            {/* Connecting Edges */}
-            {EDGES.map((edge) => {
-              const fromNode = NODES.find((n) => n.id === edge.from)!;
-              const toNode = NODES.find((n) => n.id === edge.to)!;
+            {edges.map((edge, i) => {
+              const a = positions.get(edge.from);
+              const b = positions.get(edge.to);
+              if (!a || !b) return null;
+              const blocked = ['REJECT', 'BLOCKED', 'DELAY'].includes(edge.decision);
               return (
-                <g key={`${edge.from}-${edge.to}`}>
+                <g key={`${edge.from}-${edge.to}-${i}`}>
                   <line
-                    x1={fromNode.x}
-                    y1={fromNode.y}
-                    x2={toNode.x}
-                    y2={toNode.y}
-                    stroke="url(#edgeGrad)"
-                    strokeWidth="1.8"
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke={blocked ? '#ef4444' : 'url(#edgeGrad)'}
+                    strokeWidth={blocked ? 2.4 : 1.6}
                     strokeDasharray="4 3"
-                    className="animate-pulse"
+                    strokeOpacity={blocked ? 0.95 : 0.55}
                   />
                   <text
-                    x={(fromNode.x + toNode.x) / 2}
-                    y={(fromNode.y + toNode.y) / 2 - 5}
+                    x={(a.x + b.x) / 2}
+                    y={(a.y + b.y) / 2 - 5}
                     fill="#94a3b8"
                     fontSize="9"
                     fontFamily="monospace"
                     textAnchor="middle"
                   >
-                    {edge.label}
+                    {edgeLabel(edge)}
                   </text>
                 </g>
               );
             })}
 
-            {/* Nodes */}
-            {NODES.map((node) => {
-              const isSelected = selectedNode?.id === node.id;
-              const fill =
-                node.type === 'syndicate'
-                  ? '#dc2626'
-                  : node.type === 'mule'
-                  ? '#ea580c'
-                  : node.type === 'caller'
-                  ? '#8b5cf6'
-                  : '#10b981';
-
+            {nodes.map((node) => {
+              const pos = positions.get(node.id);
+              if (!pos) return null;
+              const isSelected = selectedId === node.id;
+              const fill = ROLE_COLORS[node.role] ?? ROLE_COLORS.node;
+              const degree = node.in_count + node.out_count;
+              const r = Math.min(8 + degree, 16);
               return (
                 <g
                   key={node.id}
-                  onClick={() => setSelectedNode(node)}
-                  className="cursor-pointer group"
+                  onClick={() => setSelectedId(node.id)}
+                  className="cursor-pointer"
                 >
-                  {/* Glow circle */}
                   <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={isSelected ? 18 : 14}
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={isSelected ? r + 5 : r + 2}
                     fill={fill}
-                    fillOpacity={isSelected ? 0.4 : 0.2}
+                    fillOpacity={isSelected ? 0.4 : 0.18}
                     stroke={fill}
-                    strokeWidth={isSelected ? 2.5 : 1.5}
-                    className="transition-all"
+                    strokeWidth={isSelected ? 2.5 : 1.4}
                   />
-                  <circle cx={node.x} cy={node.y} r={isSelected ? 9 : 7} fill={fill} />
+                  <circle cx={pos.x} cy={pos.y} r={Math.max(r - 3, 4)} fill={fill} />
                   <text
-                    x={node.x}
-                    y={node.y + 24}
+                    x={pos.x}
+                    y={pos.y + r + 14}
                     fill="#f1f5f9"
-                    fontSize="10"
+                    fontSize="9"
                     fontWeight="bold"
                     textAnchor="middle"
                     className="pointer-events-none drop-shadow-md"
                   >
-                    {node.label}
+                    {maskMsisdn(node.id)}
+                  </text>
+                  <text
+                    x={pos.x}
+                    y={pos.y + r + 25}
+                    fill={node.flagged ? '#f87171' : '#64748b'}
+                    fontSize="8"
+                    textAnchor="middle"
+                    className="pointer-events-none"
+                  >
+                    {node.role.toUpperCase()}
+                    {node.flagged ? ' · LEDGER' : ''}
                   </text>
                 </g>
               );
             })}
+
+            {nodes.length === 0 && (
+              <text
+                x={CX}
+                y={CY}
+                fill="#475569"
+                fontSize="12"
+                textAnchor="middle"
+              >
+                No observed relationships yet — plug-in events populate this map.
+              </text>
+            )}
           </svg>
         </div>
 
-        {/* Selected Node Details Bar */}
-        {selectedNode && (
+        {selected && (
           <div className="mt-3.5 space-y-2 rounded-xl border border-white/[.1] bg-white/[.03] p-3.5 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[.08] pb-2">
               <div className="flex items-center gap-2">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    selectedNode.type === 'victim' ? 'bg-emerald-400' : 'bg-rose-500'
-                  }`}
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ background: ROLE_COLORS[selected.role] ?? '#64748b' }}
                 />
-                <span className="font-bold text-white text-sm">{selectedNode.label}</span>
-                <span className="text-[10px] text-slate-400 font-mono uppercase bg-white/[.06] px-1.5 py-0.5 rounded">
-                  {selectedNode.type}
+                <span className="font-mono text-sm font-bold text-white">{selected.id}</span>
+                <span className="rounded bg-white/[.06] px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">
+                  {selected.role}
                 </span>
+                {selected.flagged && <Badge variant="high">THREAT LEDGER</Badge>}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">Risk Score:</span>
-                <Badge variant={selectedNode.risk >= 75 ? 'high' : 'low'}>
-                  {selectedNode.risk}/100
-                </Badge>
+                <span className="text-[10px] text-slate-400">
+                  {selected.in_count} in / {selected.out_count} out · GH₵ {selected.volume.toLocaleString()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void downloadEvidencePack()}
+                  disabled={packBusy}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#ffcc00]/40 bg-[#ffcc00]/10 px-2.5 py-1 text-[10px] font-bold text-[#ffcc00] transition hover:bg-[#ffcc00]/20 disabled:opacity-50"
+                >
+                  <FileDown size={11} />
+                  {packBusy ? 'Building…' : 'Evidence Pack'}
+                </button>
               </div>
             </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              <strong className="text-[#ffcc00] font-semibold">Forensic Provenance: </strong>
-              {selectedNode.forensicNote}
+            <p className="text-[11px] leading-relaxed text-slate-300">
+              <strong className="font-semibold text-[#ffcc00]">Observed traffic: </strong>
+              {selected.kinds.join(', ') || 'none'} · {selected.pay_in} payment hops in,{' '}
+              {selected.pay_out} out
+              {selected.ledger_reports > 0 && ` · ${selected.ledger_reports} ledger confirmations`}
             </p>
+            {selectedEdges.length > 0 && (
+              <div className="space-y-1">
+                {selectedEdges.map((e, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-md bg-white/[.02] px-2 py-1 font-mono text-[9px] text-slate-400"
+                  >
+                    <span>
+                      {maskMsisdn(e.from === selected.id ? e.to : e.from)} · {KIND_LABELS[e.kind] ?? e.kind}
+                    </span>
+                    <span>
+                      {e.amount ? `GH₵ ${e.amount}` : ''} {e.decision}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {packNote && <p className="text-[10px] text-emerald-300">{packNote}</p>}
           </div>
         )}
 
-        {/* Legend */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[.07] pt-2.5 text-[10px] text-slate-400">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-rose-500" /> Syndicate Hub
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-orange-500" /> Mule Wallet
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-purple-500" /> Caller Spoof
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" /> Victim Node
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            {Object.entries(ROLE_COLORS).map(([role, color]) => (
+              <span key={role} className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                {role}
+              </span>
+            ))}
           </div>
-          <span>Cross-account link analysis</span>
+          <span className="flex items-center gap-1">
+            <Radar size={10} /> Live plug-in telemetry · click a node for its evidence pack
+          </span>
         </div>
       </div>
     </Card>
