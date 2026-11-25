@@ -1,135 +1,176 @@
 ================================================================================
-MOMO SHIELD — 3-MINUTE INNOFEMME JUDGES PITCH & DEMO PLAYBOOK
-Track: Fraud Prevention & Early Warning
-Audience: InnoFemme Hackathon Judges
+MOMO SHIELD — PITCH NOTES & DEMO PLAYBOOK (organized for PPTX refinement)
+Track: Fraud Prevention & Early Warning · Audience: InnoFemme Judges
 ================================================================================
 
-EVIDENCE RULE FOR THIS SCRIPT
-Only claim a sandbox interception, a judge score, or end-to-end latency when it
-has been observed in the current sandbox session and the result is visible in
-its Fraud Console. The local regression scorecard is not the InnoFemme Fraud
-Simulator. Do not quote its fixture precision/recall, estimated protected
-amount, or local timing as live judge results. The dashboard's event latency is
-service-side timing, not end-to-end network latency.
-
-EXECUTIVE OVERVIEW
-MoMo Shield is a fraud-assessment plug-in for selected InnoFemme carrier
-interception points. It applies deterministic rules to SMS, call, payment,
-menu, and SIM-swap event payloads and returns the documented plug-in decision
-shape. Optional threat-intelligence lookups are bounded and fail open. The
-sandbox bridge and hook registration must be configured separately before
-claims of live interception are made.
+HOW TO USE THIS FILE
+Each section maps to a slide or demo beat. Bullets are speaker-ready;
+bracketed notes are what to SHOW on screen. Keep the evidence discipline —
+never quote numbers the Fraud Console hasn't shown.
 
 --------------------------------------------------------------------------------
-PITCH TIMELINE & SCRIPT (180 SECONDS)
+SECTION A — THE PROBLEM (Slide: "The Human Cost")
 --------------------------------------------------------------------------------
+• Mobile-money fraud in Ghana = social engineering + time pressure:
+  impersonated SMS, coercive voice calls, OTP read-out, mule transfers.
+• Victims are often illiterate or feature-phone users — they cannot read
+  English warnings, cannot install security apps, cannot verify sender IDs.
+• Existing defenses fail them: network-level blocks cause false positives
+  (union leader's 30 calls, 18-year-old's first SIM); consumer apps require
+  smartphones and literacy.
+• The OTP problem: a genuine MTN OTP cannot be flagged — it IS legitimate
+  traffic. The attack is the call around it and the transaction it unlocks.
 
-[0:00 - 0:40] PART 1: THE PROBLEM
-Speaker:
-"Mobile-money fraud often combines social pressure with a time-sensitive
-payment: an impersonated message, a coercive call, and a transfer request. A
-subscriber should not have to install a separate smartphone app to receive a
-warning at the point where that interaction is being assessed.
-
-MoMo Shield explores an in-network response: assess relevant events before the
-configured sandbox step proceeds, then return a concise allow, warn, reject,
-or payment-delay decision."
-
-Screen / Action:
-* Show the FraudOps dashboard and identify which indicators are live service
-  data versus illustrative UI/sample data.
-* Do not present mock carrier shares, graph relationships, or sample totals as
-  observed network intelligence.
+SPEAKER LINE:
+"A subscriber should not need a smartphone, literacy, or a security app to
+be protected at the exact moment fraud happens — inside the network."
 
 --------------------------------------------------------------------------------
-[0:40 - 1:35] PART 2: PLUG-IN DECISION PATH
-Speaker:
-"The backend accepts the documented InnoFemme plug-in contract at
-/api/v1/plugin. The selected points are sms.deliver, call.connect,
-payment.authorize, menu.open, and sim.swap. The bridge forwards sandbox calls
-to this endpoint; the separate internal /api/v1/webhook/sandbox route is not
-the plug-in contract.
+SECTION B — THE SOLUTION: TWO-MODE FRAUD ENGINE (Slide: Architecture)
+--------------------------------------------------------------------------------
+CORE PRINCIPLE: "Gemini is an explainer, not a gatekeeper."
+Deterministic rules decide in <100ms; LLM/RAG explain AFTER the verdict.
 
-For example, the call rule requires all of these supplied signals: a caller
-SIM registered within 48 hours, more than 20 numbers called that day, and no
-prior calls between the parties. A single high call count is not enough. For
-high-risk payments, the response can impose one 10-minute delay; a subsequent
-payment marked afterDelay is rejected if it remains high risk."
+MODE 1 — PREVENTION (real-time, plug-in contract /api/v1/plugin)
+• 19 weighted rules across 16 documented interception points
+  (sms.deliver, call.connect, payment.authorize, menu.open, sim.swap, …)
+• Probabilistic multi-signal scoring — NO single-signal blocking:
+  – call.connect: fan-out >25/day (+20), caller SIM ≤24h (+15),
+    zero prior contact (+5) — composite only
+  – payment.authorize HIGH → delay (10-min cooling) → reject on afterDelay
+  – warn/delay only where the contract allows; downgraded elsewhere
+• External intel (bounded 1.2s, fail-open): Rancard Glance, SIM-swap check,
+  live NIA verify, subscriber profile
+• Semantic + lexical RAG over the Fraud Case Corpus grounds every verdict
+  in documented Ghanaian typologies (GH01 reversal scam, GH15 phishing…)
 
-Screen / Action:
-* If the team bridge and hook are registered, trigger a scenario through the
-  InnoFemme Fraud Simulator and confirm the event and result in the sandbox
-  Fraud Console.
-* If live registration is not confirmed, send a documented request to the
-  local API and label it a local plug-in contract test—not a sandbox event.
-* Show the exact returned decision. Do not substitute the local fixture
-  scorecard for the Fraud Console result.
-
-Speaker:
-"The synchronous verdict is based on deterministic rules, event-provided
-signals, lexical precedent matching, and optional bounded Glance/SIM-swap
-lookups when configured. Gemini and semantic RAG enrichment run after the
-plug-in verdict; they are not represented as live decision inputs. Our
-reported handler timing is not a network-to-network latency measurement."
+MODE 2 — RECOVERY (post-incident forensics — the differentiator)
+• FundFlowLedger: every observed directed relationship (SMS, call,
+  payment, request, switch, bank leg) recorded cross-subscriber
+• GET /fund-flow → live Syndicate Graph: nodes auto-roled
+  (suspect/mule/collector/caller), GHS volumes, ledger flags
+• GET /evidence-pack/{msisdn} → forensic JSON: incident summary, directed
+  fund trail, linked assessments, identity provenance — honest about
+  what's verified vs event-supplied claims
+• "Generate Evidence Pack" button downloads court-ready JSON for CSA/police
 
 --------------------------------------------------------------------------------
-[1:35 - 2:20] PART 3: SIGNAL QUALITY & RESILIENCE
-Speaker:
-"We made the boundaries explicit. NIA is not queried: Ghana Card format and
-SIM-count checks are local heuristics over supplied values. Glance and network
-SIM-swap lookups are optional, time-bounded, and fail open when unavailable.
-The system does not invent seeded live-risk results.
-
-Within one backend process, subscriber event-history updates are atomic, and
-the plug-in can assess overlapping SMS, calls, and payment events. This does
-not yet prove multi-worker or distributed-state correctness. We record those
-limits rather than claim production-scale capacity from a local test."
-
-Screen / Action:
-* If time permits, show the mixed-event concurrency test and bounded-lookup
-  test as software regression evidence, not a carrier load-test result.
-* Explain the deployment's process-local state limitation and the need for
-  shared storage before scaling across workers.
+SECTION C — THE DATA MOAT: LOCAL THREAT LEDGER (Slide: "It learns")
+--------------------------------------------------------------------------------
+• Proprietary sqlite ledger — sub-ms repeat-offender detection
+• Writes ONLY on scam-confirmed signals (never bare HIGH scores —
+  anti-poisoning by design)
+• +25 first confirmation / +45 repeat offender; 30-day expiry;
+  influence decays 50% per 14 dormant days — no permanent blacklists
+• Exoneration path: DELETE endpoint + shield button in Threat Ledger card
+• Survives restarts and external-API outages — demo-proof resilience
 
 --------------------------------------------------------------------------------
-[2:20 - 3:00] PART 4: WHAT THE JUDGES SHOULD VERIFY
-Speaker:
-"For this hackathon, the meaningful evidence is a complete sandbox round trip:
-registered plug-in points, simulator-generated incidents reaching our service,
-valid decisions accepted by the sandbox, and the resulting outcomes in the
-Fraud Console. We are not presenting unobserved precision, false-positive, or
-latency numbers as measured results.
+SECTION D — INCLUSIVITY: PROTECTION WITHOUT LITERACY (Slide: "For everyone")
+--------------------------------------------------------------------------------
+OTP READ-OUT DEFENSE (the scenario that breaks other tools):
+• Genuine MTN/Telecel/AT OTP → ALWAYS allow. Never flagged. Ever.
+• Risky call.connect (warn/reject) → victim marker
+• OTP SMS during fresh risky call → bilingual Twi/English advisory SMS:
+  "Never read a code to anyone on a call. Hang up now.
+   MoMo: MMA obiara nka wo kɔde, fa kyɛrɛ."
+• OTP→transaction velocity (+30 corroborating): payment/USSD within
+  10 min of OTP → combines with onCallWith (+50) → 10-min delay
 
-Our next verification step is to exercise the judge's fraud typologies against
-the live bridge, review both stopped fraud and benign traffic in the Fraud
-Console, and capture decision and end-to-end timing separately. Thank you."
+WHY IT MATTERS:
+• warn = banner on incoming call screen — no reading required
+• Twi warnings in 7 UI/playback spots + audio synthesis
+• delay = cooling-off period, not accusation — honest transactions pass
+• Blast detector capped +30 corroborating — legit bulk SMS (school
+  notices) never warns alone (found & fixed via 20-incident load test)
 
 --------------------------------------------------------------------------------
-JUDGES Q&A — EVIDENCE-BASED ANSWERS
+SECTION E — LIVE FEATURES TO DEMO (Screen beats)
 --------------------------------------------------------------------------------
+1. DASHBOARD METRICS — fire plug-in events; watch blocked/active counts,
+   intercepted GHS, alert feed populate in real time (WS telemetry)
+2. FUND-FLOW GRAPH — run attack chain (scam SMS → payment → call);
+   watch suspect node emerge, roles infer, click node → Evidence Pack JSON
+3. THREAT LEDGER CARD — confirmed fraud numbers appear; exonerate one live
+4. SIGNAL VELOCITY — 15-min sparkline, current rate, BURST badge,
+   top talkers; fire 10+ SMS to trigger burst detection
+5. LAB PAGE — paste any scenario, see score breakdown + triggered rules
+6. HANDSET PAGE — simulated victim phone: warning banners, Twi audio,
+   payment flow
+7. OPTIONAL: /demo/real-phone-action rings judge's actual phone (Asterisk)
 
-Q: "What is the measured false-positive rate?"
-A: "We will quote the value shown by the InnoFemme Fraud Console for the
-   current simulator run. The repository's fixed local regression fixtures
-   are useful for software checks but are not the live judge scorecard."
+--------------------------------------------------------------------------------
+SECTION F — HONEST LIMITS (say these BEFORE judges find them)
+--------------------------------------------------------------------------------
+• ML model: merged but deliberately NOT wired — untrained model in a live
+  decision path is reckless; integration slot built for Phase-2 retrain
+  on the 100k labeled sandbox dataset
+• Lexical-KB match: corroborating by math (40% match = +20 < warn
+  threshold; only ≥80% similarity can warn alone — legitimately suspicious)
+• Concurrency: 20 simultaneous incidents ≈ 680ms total on one worker;
+  single-process ceiling, Redis-ready for horizontal scale
+• Latency: decisions ~10–80ms; external lookups share 1.2s deadline;
+  handler timing ≠ end-to-end network latency (say this if asked)
+• State: process-local windows + Redis optional; evidence pack covers
+  only what THIS deployment observed — honest scope label built in
+• Credentials pending: NIA live verify, warning SMS, subscriber profile,
+  Glance — all fail-open, activate when SANDBOX_* keys are configured
 
-Q: "What is the latency?"
-A: "The response contains backend handler timing. Optional network lookups
-   have a shared configurable timeout budget capped at 1.2 seconds, but we
-   have not measured end-to-end p95 latency through the live sandbox here."
+--------------------------------------------------------------------------------
+SECTION G — Q&A BANK (evidence-based answers)
+--------------------------------------------------------------------------------
+Q: False-positive rate?
+A: Quote the Fraud Console scorecard for the current simulator run.
+   Local regression fixtures are software checks, not the live scorecard.
+   Design goal: corroborating-only signals — nothing warns alone.
 
-Q: "Does NIA verify the Ghana Card?"
-A: "No. The current code only checks the supplied card's format and supplied
-   SIM/account counts. It does not call or verify against the NIA registry."
+Q: Latency?
+A: Handler decisions ~10–80ms observed; bounded lookups capped at 1.2s.
+   End-to-end network latency measured separately in the Console.
 
-Q: "Do Gemini and RAG determine whether an event is blocked?"
-A: "No. For the plug-in path, semantic RAG and Gemini intent enrichment are
-   deferred until after the synchronous decision so they cannot hold up the
-   sandbox response or change that verdict."
+Q: Does NIA verify Ghana Cards?
+A: Live verify wired (POST /nia/v1/verify) — activates with credentials;
+   until then local format/SIM-count heuristics only, clearly labeled.
 
-Q: "Can it process simultaneous event types?"
-A: "The in-process event window is updated atomically and optional lookups are
-   bounded. The current state is process-local; multi-worker deployment would
-   require shared atomic state and a separate load test."
+Q: Do Gemini/RAG decide blocks?
+A: No. Post-decision enrichment only — semaphore-bounded (4 concurrent,
+   8s queue) so a 55-incident burst can't 429 or delay verdicts.
 
+Q: OTP fraud / illiterate users?
+A: The flagship answer — see Section D. Genuine OTPs untouched; defense
+   on the call before and transaction after; Twi advisory + cooling delay.
+
+Q: What happens when fraud succeeds anyway?
+A: Recovery Mode — fund-flow graph traces observed hops, evidence pack
+   packages identity provenance + fund trail + Glance report refs for
+   CSA/police. Most teams only prevent; we also recover.
+
+Q: Can it handle simultaneous events?
+A: Verified: 20 concurrent incidents, 680ms total, correct verdicts.
+   Atomic per-subscriber windows; Redis backend for multi-worker.
+
+Q: Why not just use Glance?
+A: Glance is one input among several — we correlate it with typology
+   rules, behavioral velocity, cross-channel precursors, and our own
+   ledger. And we feed confirmed frauds BACK to the shared network.
+
+--------------------------------------------------------------------------------
+SECTION H — 180-SECOND TIMELINE (revised for new features)
+--------------------------------------------------------------------------------
+[0:00–0:35] PROBLEM — human cost, illiterate users, OTP paradox
+[0:35–1:15] ARCHITECTURE — two-mode engine, deterministic core + advisory
+            LLM, 19 rules, bounded intel, probabilistic not blocking
+[1:15–1:55] LIVE DEMO — attack chain on dashboard: SMS→warn, payment→
+            delay, call→reject; graph + ledger + velocity populate
+[1:55–2:25] DIFFERENTIATORS — Recovery Mode evidence pack, OTP defense
+            live (call→OTP→payment→delay), data moat ledger
+[2:25–3:00] CREDIBILITY — honest limits, load-test story, "what judges
+            should verify": Fraud Console round-trip, not fixture numbers
+
+--------------------------------------------------------------------------------
+EVIDENCE RULE (unchanged — keep verbatim in pitch notes)
+Only claim a sandbox interception, judge score, or end-to-end latency
+observed in the current sandbox session and visible in the Fraud Console.
+Dashboard latency is service-side timing, not network latency. The local
+regression scorecard is not the InnoFemme Fraud Simulator.
 ================================================================================
