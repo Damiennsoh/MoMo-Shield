@@ -223,3 +223,35 @@ export async function fetchEvidencePack(msisdn: string): Promise<EvidencePack> {
   if (!res.ok) throw new Error(`Evidence pack failed: ${res.status}`);
   return res.json() as Promise<EvidencePack>;
 }
+
+export interface VelocityBucket {
+  minute_ago: number;
+  label: string;
+  count: number;
+}
+
+export interface VelocityParty {
+  msisdn: string;
+  events: number;
+  payments: number;
+  kinds: string[];
+}
+
+export interface VelocityStats {
+  window_minutes: number;
+  buckets: VelocityBucket[];
+  events_last_10m: number;
+  current_per_minute: number;
+  median_per_minute: number;
+  burst_detected: boolean;
+  top_sources: VelocityParty[];
+  top_destinations: VelocityParty[];
+  generated_at: string;
+  scope: string;
+}
+
+export async function fetchVelocity(): Promise<VelocityStats> {
+  const res = await fetch(`${API_BASE}/api/v1/velocity`);
+  if (!res.ok) throw new Error(`Velocity fetch failed: ${res.status}`);
+  return res.json() as Promise<VelocityStats>;
+}

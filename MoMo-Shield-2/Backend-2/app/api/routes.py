@@ -126,7 +126,7 @@ def _build_fund_flow_graph(limit: int = 400) -> dict:
     verified identity.
     """
     edges = fund_flow_ledger.snapshot(limit)
-    stats: Dict[str, dict] = {}
+    stats: dict = {}
     for e in edges:
         for endpoint in (e["src"], e["dst"]):
             s = stats.setdefault(endpoint, {
@@ -180,6 +180,99 @@ def _build_fund_flow_graph(limit: int = 400) -> dict:
 @router.get("/fund-flow")
 async def fund_flow_graph(limit: int = Query(400, ge=1, le=1000)):
     return _build_fund_flow_graph(limit)
+
+
+@router.get("/velocity")
+async def signal_velocity():
+    """Real signal-velocity telemetry: observed event rate over time and
+    the parties generating the most traffic right now.
+
+    Two streams are merged: fund-flow edges (directed relationships) and
+    assessment history (every scored plug-in event). Buckets are 1-minute
+    over the last 15 minutes; 'burst' flags when the current minute runs
+    at >=3x the window median with at least 8 events.
+    """
+    now = time.time()
+    events: List[tuple] = []  # (epoch, kind_or_type, src, dst)
+    for e in fund_flow_ledger.snapshot(1000):
+        events.append((e["ts"], e["kind"], e["src"], e["dst"]))
+    for a in ASSESSMENT_HISTORY:
+        ts = a.get("timestamp")
+        epoch = None
+        if isinstance(ts, datetime):
+            epoch = ts.replace(tzinfo=timezone.utc).timestamp() if ts.tzinfo is None else ts.timestamp()
+        elif isinstance(ts, str):
+            try:
+                epoch = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                epoch = None
+        if epoch:
+            events.append((epoch, str(a.get("event_type") or "event"), "", str(a.get("msisdn") or "")))
+
+    window_start = now - 15 * 60
+    recent = [e for e in events if e[0] >= window_start]
+    buckets = [0] * 15
+    for epoch, *_ in recent:
+        idx = min(14, int((epoch - window_start) // 60))
+        buckets[idx] += 1
+
+    # Baseline = median across ALL 15 buckets (zeros included) so a
+    # cold-start burst isn't masked by median==current. Absolute floor of
+    # 15/min guarantees detection even with no prior baseline.
+    median = sorted(buckets)[len(buckets) // 2]
+    current = buckets[-1]
+    burst = current >= 15 or (
+        current >= 8 and median > 0 and current >= 3 * median
+    )
+
+    # Top talkers/payment originators in the last 10 minutes (edges only).
+    cutoff10 = now - 10 * 60
+    src_stats: dict = {}
+    dst_stats: dict = {}
+    for e in fund_flow_ledger.snapshot(1000):
+        if e["ts"] < cutoff10:
+            continue
+        s = src_stats.setdefault(e["src"], {"events": 0, "payments": 0, "kinds": set()})
+        s["events"] += 1
+        s["kinds"].add(e["kind"])
+        if e["kind"] in ("payment", "payment_request", "switch", "bank_transfer"):
+            s["payments"] += 1
+        d = dst_stats.setdefault(e["dst"], {"events": 0, "payments": 0, "kinds": set()})
+        d["events"] += 1
+        d["kinds"].add(e["kind"])
+        if e["kind"] in ("payment", "payment_request", "switch", "bank_transfer"):
+            d["payments"] += 1
+
+    def _top(stats: dict, n: int = 4) -> list:
+        return [
+            {
+                "msisdn": k,
+                "events": v["events"],
+                "payments": v["payments"],
+                "kinds": sorted(v["kinds"]),
+            }
+            for k, v in sorted(stats.items(), key=lambda kv: -kv[1]["events"])[:n]
+        ]
+
+    return {
+        "window_minutes": 15,
+        "buckets": [
+            {
+                "minute_ago": 14 - i,
+                "label": time.strftime("%H:%M", time.gmtime(window_start + i * 60)),
+                "count": c,
+            }
+            for i, c in enumerate(buckets)
+        ],
+        "events_last_10m": sum(1 for e in events if e[0] >= cutoff10),
+        "current_per_minute": current,
+        "median_per_minute": median,
+        "burst_detected": burst,
+        "top_sources": _top(src_stats),
+        "top_destinations": _top(dst_stats),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "Observed plug-in events only — this deployment's telemetry.",
+    }
 
 
 @router.get("/evidence-pack/{msisdn}")

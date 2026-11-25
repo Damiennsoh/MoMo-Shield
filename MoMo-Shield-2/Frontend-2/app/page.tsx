@@ -34,6 +34,7 @@ import { AlertCard } from '@/components/AlertCard';
 import { ThreatLedgerCard } from '@/components/ThreatLedgerCard';
 import { EventRow } from '@/components/EventRow';
 import { FraudGraph } from '@/components/FraudGraph';
+import { VelocityCard } from '@/components/VelocityCard';
 import { TrendChart } from '@/components/TrendChart';
 import { RiskGauge } from '@/components/RiskGauge';
 import { useStore, type FraudAlert, type SignalEvent } from '@/lib/useStore';
@@ -424,24 +425,7 @@ export default function DashboardPage() {
         <div className="min-w-0 space-y-5">
           <FraudGraph />
 
-          <Card className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Activity size={16} className="text-[#ffcc00]" />
-                  <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">Signal Velocity</h2>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-400">Transaction burst detection · sliding window</p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-xl font-extrabold text-white">{events.length}</p>
-                <p className="text-[10px] text-slate-400">Events in state cache</p>
-              </div>
-            </div>
-            <div className="mt-3.5 rounded-xl border border-white/[.08] bg-white/[.02] p-4 text-xs font-medium text-slate-300 leading-relaxed">
-              Temporal window tracking: Rapid multi-hop transfers following SMS credits are prioritized under rule <strong>GH01 (Reversal Scam)</strong>.
-            </div>
-          </Card>
+          <VelocityCard />
 
           <Card className="flex items-center justify-between gap-4 p-5">
             <div className="flex min-w-0 items-center gap-3.5">
