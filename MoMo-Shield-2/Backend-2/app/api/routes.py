@@ -993,7 +993,9 @@ async def receive_innofemme_plugin(payload: dict):
     # Live NIA registry verify only when the hook supplies a Ghana Card —
     # shares the same bounded deadline, fails open on any error.
     nia_task = (
-        asyncio.create_task(verify_card_live(ghana_card)) if ghana_card else None
+        asyncio.create_task(verify_card_live(ghana_card))
+        if ghana_card and settings.nia_live_enabled
+        else None
     )
     lookup_tasks = {glance_task, sim_task} | ({nia_task} if nia_task else set())
     timeout = min(max(settings.plugin_lookup_timeout_seconds, 0.05), 1.2)
@@ -1002,8 +1004,14 @@ async def receive_innofemme_plugin(payload: dict):
     )
     for task in pending:
         task.cancel()
-    if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
+    # Do NOT gather() the cancelled tasks: a stalled external connect can
+    # take hundreds of ms to unwind, and awaiting it here would blow the
+    # 2s plug-in budget. Let them die in the background; swallow late
+    # exceptions via the done callback.
+    for task in pending:
+        task.add_done_callback(
+            lambda t: None if t.cancelled() else t.exception()
+        )
     glance_data = None
     sim_data = {"status": "UNKNOWN", "risk_boost": 0}
     if glance_task in done:

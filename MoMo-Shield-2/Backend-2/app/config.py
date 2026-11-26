@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     sandbox_network_api_key: str = ""
     sandbox_base_url: str = "https://hackathon.innofemme.org/api/w"
     plugin_lookup_timeout_seconds: float = 1.0
+    # Live NIA registry verify inside the plug-in path. Off by default:
+    # the sandbox NIA endpoint requires institution-issued credentials we
+    # do not yet hold, so the call can only return an error — pure latency.
+    # Enable once NIA partner credentials are configured.
+    nia_live_enabled: bool = False
 
     # Shared correlation state. Empty = process-local memory (single worker).
     # Set to redis://host:6379/0 to share the event window across workers.

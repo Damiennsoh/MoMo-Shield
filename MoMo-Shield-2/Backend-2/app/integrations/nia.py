@@ -62,7 +62,7 @@ async def verify_card_live(
     card_number: str | None,
     fingerprint: str | None = None,
     purpose: str = "fraud_check",
-    timeout: float = 0.8,
+    timeout: float = 0.5,
 ) -> dict | None:
     """POST {sandbox}/nia/v1/verify — live NIA registry check.
 
