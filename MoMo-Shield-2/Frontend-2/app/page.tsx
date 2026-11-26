@@ -435,7 +435,7 @@ export default function DashboardPage() {
               <div className="min-w-0">
                 <p className="text-xs font-bold text-white">Hybrid Decision Engine</p>
                 <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                  Deterministic Rules + Gemini 2.0 + Rancard Threat Feed
+                  19 Rules + ML Ensemble + RAG + Glance/Local Ledger — Gemini explains, never decides
                 </p>
               </div>
             </div>
