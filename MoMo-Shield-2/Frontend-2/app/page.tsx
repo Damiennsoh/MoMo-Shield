@@ -105,6 +105,13 @@ export default function DashboardPage() {
   const [eventType, setEventType] = useState('ALL SIGNALS');
   const [actionDone, setActionDone] = useState('');
   const [carrierFilter, setCarrierFilter] = useState<'ALL' | 'MTN' | 'TELECEL' | 'AT'>('ALL');
+  const [carrierMenuOpen, setCarrierMenuOpen] = useState(false);
+  const CARRIER_TABS = [
+    { id: 'ALL', label: 'All Ghana MNOs (Unified)' },
+    { id: 'MTN', label: 'MTN MoMo (65% share)' },
+    { id: 'TELECEL', label: 'Telecel Cash (22% share)' },
+    { id: 'AT', label: 'AT Money (13% share)' },
+  ] as const;
   const [benchmarkOpen, setBenchmarkOpen] = useState(false);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkData, setBenchmarkData] = useState<BenchmarkResponse | null>(null);
@@ -296,27 +303,42 @@ export default function DashboardPage() {
         </div>
       </details>
 
-      {/* Carrier Multi-Tenant Tabs */}
-      <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-white/[.08] pb-3 text-xs">
-        <span className="font-bold text-slate-400 mr-2 uppercase tracking-wider text-[10px]">Carrier Tenant:</span>
-        {[
-          { id: 'ALL', label: 'All Ghana MNOs (Unified)' },
-          { id: 'MTN', label: 'MTN MoMo (65% share)' },
-          { id: 'TELECEL', label: 'Telecel Cash (22% share)' },
-          { id: 'AT', label: 'AT Money (13% share)' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setCarrierFilter(tab.id as any)}
-            className={`rounded-lg px-3 py-1.5 font-bold transition text-xs ${
-              carrierFilter === tab.id
-                ? 'border border-[#ffcc00]/40 bg-[#ffcc00]/15 text-[#ffcc00] shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/[.04]'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Carrier Multi-Tenant Selector — folded by default to keep the
+          header clean; expands horizontally on click */}
+      <div className="mb-5 border-b border-white/[.08] pb-3 text-xs">
+        <button
+          onClick={() => setCarrierMenuOpen((open) => !open)}
+          className="flex items-center gap-2 rounded-lg border border-white/[.12] bg-white/[.04] px-3 py-1.5 font-bold text-slate-300 transition hover:bg-white/[.07]"
+        >
+          <span className="uppercase tracking-wider text-[10px] text-slate-500">Carrier Tenant:</span>
+          <span className={carrierFilter === 'ALL' ? 'text-white' : 'text-[#ffcc00]'}>
+            {CARRIER_TABS.find((t) => t.id === carrierFilter)?.label}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`text-slate-400 transition-transform ${carrierMenuOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+        {carrierMenuOpen && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {CARRIER_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setCarrierFilter(tab.id);
+                  setCarrierMenuOpen(false);
+                }}
+                className={`rounded-lg px-3 py-1.5 font-bold transition text-xs ${
+                  carrierFilter === tab.id
+                    ? 'border border-[#ffcc00]/40 bg-[#ffcc00]/15 text-[#ffcc00] shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[.04]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 4 KPIs */}
