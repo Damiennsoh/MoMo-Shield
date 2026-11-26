@@ -15,6 +15,7 @@ import {
   Clock3,
   ExternalLink,
   Filter,
+  Lock,
   Gauge,
   Play,
   Radio,
@@ -206,6 +207,13 @@ export default function DashboardPage() {
               />
               {connected ? 'Telemetry Live' : backendReachable ? 'Reconnecting' : 'Backend Offline'}
             </Badge>
+            <span
+              className="flex items-center gap-1 text-[10px] font-semibold text-slate-500"
+              title="Demo processes synthetic sandbox data only. Production path: PII-redacted enrichment, OTP exclusion, local-first decision engine (Act 843-aware)."
+            >
+              <Lock size={10} />
+              Synthetic Data · Privacy-First
+            </span>
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
             FraudOps <span className="text-[#ffcc00]">Command Centre</span>
