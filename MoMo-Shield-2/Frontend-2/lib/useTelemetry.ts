@@ -69,12 +69,17 @@ export function useTelemetry(): void {
     };
 
     // Hydrate history first; failure still leaves the WS path usable.
+    // Preserve the live `connected` flag — this callback can resolve
+    // AFTER ws.onopen and must not flip a healthy stream back to
+    // "Reconnecting".
     fetchRecentEvents(50)
       .then((events) => {
         if (!stopped && events.length) hydrateRef.current(events);
-        setConnRef.current(false, true);
+        setConnRef.current(useStore.getState().connected, true);
       })
-      .catch(() => setConnRef.current(false, false));
+      .catch(() =>
+        setConnRef.current(useStore.getState().connected, useStore.getState().connected)
+      );
 
     connect();
     return () => {
