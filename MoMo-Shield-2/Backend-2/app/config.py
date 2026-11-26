@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     ml_model_path: str = ""
     
     sandbox_api_key: str = ""
-    sandbox_team_key: str = ""
+    sandbox_team_key: str = ""      # secret team key → x-team-key header
     sandbox_client_id: str = ""
     sandbox_network_client_id: str = ""
     sandbox_network_api_key: str = ""

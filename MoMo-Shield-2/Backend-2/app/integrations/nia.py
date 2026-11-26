@@ -77,7 +77,7 @@ async def verify_card_live(
     if fingerprint:
         payload["fingerprint"] = fingerprint
         payload["purpose"] = purpose
-    endpoint = f"{settings.sandbox_base_url.rstrip('/')}/{settings.sandbox_team_key}/nia/v1/verify"
+    endpoint = f"{settings.sandbox_base_url.rstrip('/')}/nia/v1/verify"
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
