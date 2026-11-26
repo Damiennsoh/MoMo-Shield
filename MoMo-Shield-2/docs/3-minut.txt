@@ -28,8 +28,51 @@ be protected at the exact moment fraud happens — inside the network."
 --------------------------------------------------------------------------------
 SECTION B — THE SOLUTION: TWO-MODE FRAUD ENGINE (Slide: Architecture)
 --------------------------------------------------------------------------------
-CORE PRINCIPLE: "Gemini is an explainer, not a gatekeeper."
-Deterministic rules decide in <100ms; LLM/RAG explain AFTER the verdict.
+CORE PRINCIPLE: "Deterministic core decides; AI explains and corroborates.
+No single engine can act alone — every layer is fail-open."
+
+THE FOUR ENGINES (one decision, assembled in <100ms typical):
+┌─────────────────┬──────────────────────────┬─────────────────────────┐
+│ Engine          │ Role                     │ Failure mode            │
+├─────────────────┼──────────────────────────┼─────────────────────────┤
+│ 1. Rules        │ 19 weighted rules, 16    │ Never fails — pure      │
+│    (deterministic│ interception points;     │ code, no deps, sub-ms   │
+│    guardrails)  │ hard triggers + reason   │                         │
+│                 │ codes                    │                         │
+│ 2. ML ensemble  │ LightGBM + logistic +    │ Flag-gated, fail-open;  │
+│    (trained)    │ IsolationForest anomaly, │ corroborating only —    │
+│                 │ calibrated probability   │ can never decide alone  │
+│ 3. RAG/KB       │ Semantic (cached Gemini  │ Lexical fallback —      │
+│                 │ embeddings) + lexical    │ works with zero API     │
+│                 │ token match over Ghana   │ calls                   │
+│                 │ fraud case corpus        │                         │
+│ 4. Gemini       │ Post-decision intent     │ Semaphore-bounded,      │
+│    (LLM)        │ label for operators;     │ PII-redacted, OTP-class │
+│                 │ OFF the decision path    │ texts never sent        │
+└─────────────────┴──────────────────────────┴─────────────────────────┘
+
+RESILIENCE STORY (say this verbatim if asked "what if X fails"):
+• Rules are the floor — they run with no network, no model, no API keys.
+• ML is behind ML_SCORER_ENABLED and only ADDS points to an already-
+  flagged event — disabling it changes nothing about safety.
+• RAG degrades to lexical matching automatically; embeddings are cached
+  on disk so even cold starts need no external call.
+• Gemini is enrichment-only: semaphore (4 concurrent, 8s queue), 15s
+  timeout, PII redaction, OTP exclusion — Google being down = dashboard
+  loses a label, verdicts unaffected.
+• Every external lookup shares one 1.2s deadline and fails open.
+
+ACT 843 / DATA PROTECTION POSTURE (the executive answer):
+• Decision path is FULLY LOCAL — rules, ML, RAG cache need no internet.
+• The ONLY external call is optional Gemini enrichment on sms.deliver
+  text, and only after PII redaction (MSISDNs, Ghana Card numbers,
+  amounts stripped) — minimized, pseudonymized content.
+• OTP-pattern messages are excluded from external enrichment entirely —
+  locally detected, zero fraud-intel value to an LLM anyway.
+• Operator kill-switch: gemini_enrichment_enabled=false → rules+ML+RAG
+  only. We can deploy with external AI disabled.
+• Production note: paid/enterprise Gemini tier (no training on inputs)
+  + subprocessor clause in the operator agreement.
 
 MODE 1 — PREVENTION (real-time, plug-in contract /api/v1/plugin)
 • 19 weighted rules across 16 documented interception points
@@ -38,11 +81,14 @@ MODE 1 — PREVENTION (real-time, plug-in contract /api/v1/plugin)
   – call.connect: fan-out >25/day (+20), caller SIM ≤24h (+15),
     zero prior contact (+5) — composite only
   – payment.authorize HIGH → delay (10-min cooling) → reject on afterDelay
+  – ML ensemble corroborates flagged transactions only (+≤30 pts,
+    calibrated probability recorded in the evidence trail)
   – warn/delay only where the contract allows; downgraded elsewhere
-• External intel (bounded 1.2s, fail-open): Rancard Glance, SIM-swap check,
-  live NIA verify, subscriber profile
-• Semantic + lexical RAG over the Fraud Case Corpus grounds every verdict
-  in documented Ghanaian typologies (GH01 reversal scam, GH15 phishing…)
+• External intel (bounded 1.2s, fail-open): Rancard Glance, SIM-swap
+  check, live NIA verify, subscriber profile
+• Semantic + lexical RAG over the Fraud Case Corpus grounds every
+  verdict in documented Ghanaian typologies (GH01 reversal scam,
+  GH15 phishing…)
 
 MODE 2 — RECOVERY (post-incident forensics — the differentiator)
 • FundFlowLedger: every observed directed relationship (SMS, call,
@@ -102,9 +148,11 @@ SECTION E — LIVE FEATURES TO DEMO (Screen beats)
 --------------------------------------------------------------------------------
 SECTION F — HONEST LIMITS (say these BEFORE judges find them)
 --------------------------------------------------------------------------------
-• ML model: merged but deliberately NOT wired — untrained model in a live
-  decision path is reckless; integration slot built for Phase-2 retrain
-  on the 100k labeled sandbox dataset
+• ML model: trained ensemble IS wired as a corroborating engine
+  (ML_SCORER_ENABLED flag, fail-open) — currently mock-data-trained so
+  kept OFF by default; retrain on the 100k labeled sandbox dataset,
+  then enable. Plug-in payloads expose fewer features than offline
+  tables → documented train/serve skew, hence corroborating-only gate
 • Lexical-KB match: corroborating by math (40% match = +20 < warn
   threshold; only ≥80% similarity can warn alone — legitimately suspicious)
 • Concurrency: 20 simultaneous incidents ≈ 680ms total on one worker;
@@ -135,6 +183,20 @@ A: Live verify wired (POST /nia/v1/verify) — activates with credentials;
 Q: Do Gemini/RAG decide blocks?
 A: No. Post-decision enrichment only — semaphore-bounded (4 concurrent,
    8s queue) so a 55-incident burst can't 429 or delay verdicts.
+   OTP-pattern texts never leave the system at all.
+
+Q: What if Gemini or the ML model fails?
+A: Nothing breaks. Rules are deterministic with zero dependencies —
+   they are the floor every decision stands on. ML is flag-gated and
+   corroborating-only; RAG falls back to lexical matching; all external
+   lookups share a 1.2s deadline and fail open. The decision path needs
+   no internet connection.
+
+Q: Is your "AI" just an LLM?
+A: No — the scoring core is a trained statistical ensemble (LightGBM +
+   logistic regression + IsolationForest anomaly + calibration), ~50ms
+   in-process. The only generative AI is Gemini, and it only labels
+   decisions for operators after the verdict is already made.
 
 Q: OTP fraud / illiterate users?
 A: The flagship answer — see Section D. Genuine OTPs untouched; defense
@@ -158,8 +220,10 @@ A: Glance is one input among several — we correlate it with typology
 SECTION H — 180-SECOND TIMELINE (revised for new features)
 --------------------------------------------------------------------------------
 [0:00–0:35] PROBLEM — human cost, illiterate users, OTP paradox
-[0:35–1:15] ARCHITECTURE — two-mode engine, deterministic core + advisory
-            LLM, 19 rules, bounded intel, probabilistic not blocking
+[0:35–1:15] ARCHITECTURE — two-mode engine; four engines table
+            (rules floor → ML corroborates → RAG grounds → Gemini
+            explains); resilience + Act 843 posture; 19 rules, bounded
+            intel, probabilistic not blocking
 [1:15–1:55] LIVE DEMO — attack chain on dashboard: SMS→warn, payment→
             delay, call→reject; graph + ledger + velocity populate
 [1:55–2:25] DIFFERENTIATORS — Recovery Mode evidence pack, OTP defense

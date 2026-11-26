@@ -1031,7 +1031,9 @@ async def receive_innofemme_plugin(payload: dict):
     if score > 0 and point in ("payment.authorize", "payment.receive",
                                "payment.request", "switch.route",
                                "transfer.authorize"):
-        ml_result = ml_scorer.score(point, data, msisdn)
+        ml_result = await asyncio.to_thread(
+            ml_scorer.score, point, data, msisdn
+        )
         if ml_result and ml_result.get("points", 0) > 0:
             score += ml_result["points"]
             rules_fired.append(
@@ -1156,7 +1158,13 @@ async def receive_innofemme_plugin(payload: dict):
     ASSESSMENT_HISTORY.append(result_payload)
     # Dashboard delivery and semantic/LLM enrichment must not hold up the MNO response.
     asyncio.create_task(manager.broadcast(result_payload))
-    if text_content.strip():
+    # OTP-class messages never leave the perimeter: zero fraud-intel value
+    # to Gemini, maximum sensitivity under Act 843. Enrichment is skipped.
+    is_otp = (
+        point == "sms.deliver"
+        and looks_like_otp(text_content, data.get("from"))
+    )
+    if text_content.strip() and not is_otp:
         asyncio.create_task(_enrich_plugin_assessment(event_id, text_content, point))
 
     if decision == "allow":

@@ -1,5 +1,7 @@
 """OTP read-out defense: genuine OTPs are never flagged; the call around
  them and the transaction they unlock are."""
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -62,9 +64,10 @@ def test_otp_sms_itself_is_never_blocked(_clean_state):
 
 def test_otp_after_risky_call_triggers_advisory(_clean_state):
     """Risky call (new SIM + fan-out) → marker; OTP SMS → allow + advisory."""
+    fresh_sim = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     call = _plugin("call.connect", {
         "to": "0245550002", "from": "+233550001111",
-        "callerSimRegisteredAt": "2026-11-25T00:00:00Z",
+        "callerSimRegisteredAt": fresh_sim,
         "numbersTheCallerHasRungToday": 40,
         "callsBetweenThemBefore": 0,
     })

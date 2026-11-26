@@ -24,6 +24,18 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+
+@app.on_event("startup")
+async def warm_engines():
+    """Pre-load heavy optional engines so the first scored event doesn't
+    pay cold-start latency. All fail-open: a missing model or embedding
+    cache degrades gracefully, never blocks startup."""
+    import asyncio
+    from app.integrations import ml_scorer
+
+    await asyncio.to_thread(ml_scorer._load)
+
+
 @app.get("/health")
 async def health():
     return {"status": "operational", "middleware": "MoMo Shield v2.0"}
