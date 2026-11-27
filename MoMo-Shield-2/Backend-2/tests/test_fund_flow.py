@@ -51,6 +51,19 @@ def test_fund_flow_records_directed_edges():
     assert ("0241111111", "0240000001", "payment") in kinds
 
 
+def test_velocity_counts_a_plugin_assessment_and_flow_edge_once():
+    _plugin("payment.authorize", {
+        "amount": 50,
+        "payer": {"msisdn": "0241111111"},
+        "payee": {"msisdn": "0240000001"},
+    })
+
+    velocity = client.get("/api/v1/velocity").json()
+    assert velocity["events_last_10m"] == 1
+    assert sum(bucket["count"] for bucket in velocity["buckets"]) == 1
+    assert "counted once" in velocity["scope"]
+
+
 def test_evidence_pack_assembles_trail_and_provenance():
     _plugin("call.connect", {
         "to": "0242222222", "from": "233240000002",
@@ -79,6 +92,39 @@ def test_demo_reset_clears_fund_flow():
     assert client.get("/api/v1/fund-flow").json()["edge_count"] >= 1
     client.post("/api/v1/demo/reset")
     assert client.get("/api/v1/fund-flow").json()["edge_count"] == 0
+
+
+def test_transfer_authorize_bank_payload_rejects_drain_to_fresh_wallet():
+    """Real bank hook shape (run_a3c439775d1649ad): from/to party objects,
+    wallet opened seconds before a large balance-draining transfer."""
+    from datetime import datetime, timedelta, timezone
+    opened = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+    res = _plugin("transfer.authorize", {
+        "type": "bank_to_wallet",
+        "amount": 7500,
+        "fee": 0,
+        "reference": None,
+        "from": {
+            "bank": "gcb", "bankName": "GCB Bank",
+            "accountNumber": "0405944424301", "name": "Nii Abubakar",
+            "accountOpenedAt": "2021-04-18T00:00:00.000Z",
+            "balance": 9912.79,
+        },
+        "to": {
+            "msisdn": "0501825165", "name": "Amina Darko",
+            "network": "telecel", "walletType": "person",
+            "kycTier": "medium",
+            "walletOpenedAt": opened,
+        },
+    })
+    assert res.status_code == 200
+    body = res.json()
+    assert body["decision"] == "reject"
+    latest = routes.ASSESSMENT_HISTORY[-1]
+    assert latest["risk_score"] >= 75
+    # The bank leg must also land in the fund-flow ledger for mule_stats.
+    graph = client.get("/api/v1/fund-flow").json()
+    assert any(e["kind"] == "bank_transfer" for e in graph["edges"])
 
 
 def test_mule_stats_fan_in():

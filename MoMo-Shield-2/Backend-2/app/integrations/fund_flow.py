@@ -45,7 +45,10 @@ def _norm_party(value: Any) -> str:
 
 def _msisdn_of(value: Any) -> str:
     if isinstance(value, dict):
-        return str(value.get("msisdn") or value.get("account") or "").strip()
+        return str(
+            value.get("msisdn") or value.get("account")
+            or value.get("accountNumber") or ""
+        ).strip()
     return str(value or "").strip()
 
 
@@ -89,8 +92,10 @@ class FundFlowLedger:
             except (TypeError, ValueError):
                 amount = None
         elif point == "transfer.authorize":
-            src = str(data.get("fromAccount") or "").strip()
-            dst = str(data.get("toWallet") or "").strip()
+            # Bank hooks carry party objects under "from"/"to"; tolerate the
+            # older "fromAccount"/"toWallet" spellings too.
+            src = _msisdn_of(data.get("from") or data.get("fromAccount"))
+            dst = _msisdn_of(data.get("to") or data.get("toWallet"))
             try:
                 amount = float(data.get("amount") or 0) or None
             except (TypeError, ValueError):

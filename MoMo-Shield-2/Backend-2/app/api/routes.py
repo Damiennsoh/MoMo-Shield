@@ -189,15 +189,19 @@ async def signal_velocity():
     the parties generating the most traffic right now.
 
     Two streams are merged: fund-flow edges (directed relationships) and
-    assessment history (every scored plug-in event). Buckets are 1-minute
-    over the last 15 minutes; 'burst' flags when the current minute runs
-    at >=3x the window median with at least 8 events.
+    assessment history (every scored event). Matching event IDs are counted
+    once. Buckets are 1-minute over the last 15 minutes; burst is >=15 events
+    in the current bucket, or >=8 and >=3x the 15-bucket median.
     """
     now = time.time()
     events: List[tuple] = []  # (epoch, kind_or_type, src, dst)
-    for e in fund_flow_ledger.snapshot(1000):
+    flow_edges = fund_flow_ledger.snapshot(1000)
+    flow_event_ids = {e.get("event_id") for e in flow_edges if e.get("event_id")}
+    for e in flow_edges:
         events.append((e["ts"], e["kind"], e["src"], e["dst"]))
     for a in ASSESSMENT_HISTORY:
+        if a.get("event_id") in flow_event_ids:
+            continue
         ts = a.get("timestamp")
         epoch = None
         if isinstance(ts, datetime):
@@ -272,7 +276,7 @@ async def signal_velocity():
         "top_sources": _top(src_stats),
         "top_destinations": _top(dst_stats),
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "scope": "Observed plug-in events only — this deployment's telemetry.",
+        "scope": "Recent in-memory observations from this deployment; matching flow edges and assessments are counted once. Not network-wide telemetry.",
     }
 
 
@@ -756,6 +760,10 @@ async def receive_innofemme_plugin(payload: dict):
         payee.get("msisdn"),
         customer.get("msisdn"),
     ):
+        # Bank hooks carry party objects ({"msisdn": ...} / {"accountNumber": ...})
+        # where telco hooks carry bare strings.
+        if isinstance(candidate, dict):
+            candidate = candidate.get("msisdn") or candidate.get("accountNumber")
         if candidate:
             msisdn = str(candidate).strip()
             break
@@ -874,7 +882,14 @@ async def receive_innofemme_plugin(payload: dict):
             "walletsOnThisGhanaCard": _safe_int(data.get("walletsOnThisGhanaCard")),
         }
     elif point == "transfer.authorize":
-        to_wallet = data.get("toWallet") if isinstance(data.get("toWallet"), dict) else {}
+        # Bank hooks name parties "from"/"to" (account/wallet objects), not
+        # "payer"/"payee"/"toWallet" — observed in run_a3c439775d1649ad.
+        to_wallet = data.get("to") if isinstance(data.get("to"), dict) else {}
+        if not to_wallet:
+            to_wallet = data.get("toWallet") if isinstance(data.get("toWallet"), dict) else {}
+        from_party = data.get("from") if isinstance(data.get("from"), dict) else {}
+        if not from_party:
+            from_party = data.get("fromAccount") if isinstance(data.get("fromAccount"), dict) else data.get("fromAccount")
         opened_at = next(
             (to_wallet.get(k) for k in ("walletOpenedAt", "openedAt", "createdAt", "accountOpenedAt") if to_wallet.get(k)),
             None,
@@ -883,9 +898,11 @@ async def receive_innofemme_plugin(payload: dict):
             "type": "transfer_out",
             "amount": data.get("amount", 0),
             "channel": "bank",
-            "fromAccount": data.get("fromAccount"),
-            "toWallet": data.get("toWallet"),
+            "fromAccount": from_party or data.get("fromAccount"),
+            "toWallet": to_wallet or data.get("toWallet"),
             "toWalletOpenedAt": opened_at,
+            "payeeWalletOpenedAt": opened_at,
+            "payeeWalletType": to_wallet.get("walletType"),
         }
     elif point == "switch.route":
         event_payload = {
@@ -931,8 +948,12 @@ async def receive_innofemme_plugin(payload: dict):
         score += 40
         rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
+    # Recency boost applies to *subsequent* activity after a swap — on
+    # sim.swap itself the event IS the swap and lastSimSwapAt carries the
+    # PREVIOUS swap time; scoring it would double-count and reject genuine
+    # repeat replacements (observed false alarm: honest second swap).
     swap_ts = event_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
-    swap_dt = _parse_timestamp(swap_ts)
+    swap_dt = _parse_timestamp(swap_ts) if point != "sim.swap" else None
     if swap_dt is not None:
         age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - swap_dt).total_seconds() / 3600
         if 0 <= age_hours <= 48:
@@ -974,6 +995,27 @@ async def receive_innofemme_plugin(payload: dict):
                 if str(event_payload.get("payeeWalletType") or "").lower() == "merchant" and age_hours <= 1:
                     score += 30
                     rules_fired.append("Unseasoned merchant wallet: merchant destination opened <1h ago")
+                # Bank drain pattern (limit_splitting/mule_chain legs): a
+                # large transfer into a minutes-old wallet, or one consuming
+                # most of the account balance, is account-takeover drain —
+                # stacks the fresh-wallet +25 toward reject (transfer.authorize
+                # is not warn-capable, so MEDIUM alone would allow).
+                if point == "transfer.authorize":
+                    xfer_amount = _safe_float(event_payload.get("amount"))
+                    if age_hours <= 1 and xfer_amount >= 1000:
+                        score += 25
+                        rules_fired.append(
+                            f"Large transfer to minutes-old wallet: GHS {xfer_amount:,.0f} "
+                            "to a destination opened under 1h ago"
+                        )
+                    from_acc = event_payload.get("fromAccount")
+                    balance = _safe_float(from_acc.get("balance")) if isinstance(from_acc, dict) else 0.0
+                    if balance > 0 and xfer_amount >= balance * 0.5 and xfer_amount >= 500:
+                        score += 25
+                        rules_fired.append(
+                            f"Balance drain: GHS {xfer_amount:,.0f} consumes "
+                            f"{xfer_amount / balance:.0%} of the source account balance"
+                        )
 
     # Hook-specific payload signals documented in Hackathon Environment §4.
     if point == "payment.request":
@@ -998,7 +1040,7 @@ async def receive_innofemme_plugin(payload: dict):
                 rules_fired.append(f"Fresh receiving wallet: opened {recv_age_h * 60:.0f}min ago — mule-hop landing pattern")
     elif point == "sim.swap":
         if _safe_int(event_payload.get("swapsOnThisNumberBefore")) >= 1:
-            score += 25
+            score += 15
             rules_fired.append("Repeat SIM swap: number has been swapped before — mule/rotation pattern")
     elif point == "sim.register":
         if _safe_int(event_payload.get("simsAlreadyOnThisGhanaCard"), 1) >= 3:
