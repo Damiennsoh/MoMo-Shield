@@ -14,6 +14,8 @@ from app.engine.rules import (
     check_structuring,
     check_approve_to_receive,
     check_relative_new_number,
+    check_prize_fee_scam,
+    check_unverified_credit_claim,
 )
 from app.models.schemas import EventType
 from datetime import datetime, timezone
@@ -74,7 +76,7 @@ def test_velocity_quiet_below_threshold(make_event):
 
 
 def test_rules_registry_has_descriptions():
-    assert len(RULES) == 19
+    assert len(RULES) == 20
 
 
 def test_credential_request_sms_scores_high(make_event):
@@ -152,5 +154,44 @@ def test_approve_to_receive_detection(make_event):
 def test_relative_new_number_detection(make_event):
     event = make_event(EventType.SMS, {"text": "Mum, this is my new number, I had an accident and need help urgently, please reply with your PIN"})
     pts, desc = check_relative_new_number(event, [])
-    assert pts == 25
+    assert pts == 30
     assert "GH19B" in desc
+
+
+def test_reversal_scam_currency_first(make_event):
+    event = make_event(EventType.SMS, {"text": "Hello, I mistakenly sent GHS 850.00 to your MoMo instead of my agent's number. Please check your balance and reverse it to 0541239876. I will send the transaction ID shortly. Please it's urgent, I need the money for hospital."})
+    pts, desc = check_unverified_credit_claim(event, [])
+    assert pts == 40
+    assert "credit claim" in desc.lower()
+
+
+def test_credit_claim_fee_demand(make_event):
+    event = make_event(EventType.SMS, {"text": "Egpapy has sent GHS 40.00 to your MoMo wallet. To receive it, send GHS 5 activation fee to 0550001111"})
+    pts, _ = check_unverified_credit_claim(event, [])
+    assert pts == 40
+
+
+def test_prize_fee_scam_detection(make_event):
+    event = make_event(EventType.SMS, {"text": "CONGRATULATIONS! Your number has been randomly selected by MTN MoMo to receive a GHS 2,500 cash prize. To claim, send a GHS 50 processing fee to 0559871234. Valid for 24hrs only."})
+    pts, desc = check_prize_fee_scam(event, [])
+    assert pts == 40
+    assert "GH23" in desc
+
+
+def test_prize_without_fee_passes(make_event):
+    event = make_event(EventType.SMS, {"text": "Congratulations! You won a hamper in our weekly draw. Visit the MTN office to collect your prize."})
+    pts, _ = check_prize_fee_scam(event, [])
+    assert pts == 0
+
+
+def test_relative_impersonation_bail(make_event):
+    event = make_event(EventType.SMS, {"text": "Daddy, it's your son Kojo. My phone was stolen so I'm using my friend's line. I'm at the police station and need GHS 200 urgently for bail. Pls send to this number. Don't call this line, just send the money quickly."})
+    pts, desc = check_relative_new_number(event, [])
+    assert pts == 30
+    assert "GH19B" in desc
+
+
+def test_benign_family_sms_no_score(make_event):
+    event = make_event(EventType.SMS, {"text": "Hi mum, I reached Kumasi safely. Call me when you can."})
+    assert check_relative_new_number(event, []) == (0, "")
+    assert check_prize_fee_scam(event, []) == (0, "")

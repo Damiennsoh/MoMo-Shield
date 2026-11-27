@@ -20,7 +20,7 @@ _NEGATION_RE = re.compile(
     re.I,
 )
 _URGENCY_RE = re.compile(
-    r"\b(urgent|immediately|right now|expires?|suspended|blocked|locked|terminate[sd]?|before it expires|be fast|act now|limited time)\b",
+    r"\b(urgent\w*|immediately|right now|expires?|suspended|blocked|locked|terminate[sd]?|before it expires|be fast|act now|limited time)\b",
     re.I,
 )
 _PRIZE_RE = re.compile(r"\b(prize|winner|congratulations|reward|lottery|lucky)\b", re.I)
@@ -244,8 +244,26 @@ _RELATIVE_RE = re.compile(
     r"cousin|friend|son|daughter|wife|husband)\b",
     re.I,
 )
-_NEW_NUMBER_RE = re.compile(r"\b(new number|new phone|lost my phone|changed my number|new sim)\b", re.I)
-_DISTRESS_RE = re.compile(r"\b(accident|hospital|emergency|urgent|help me|please help|stranded|stuck)\b", re.I)
+_NEW_NUMBER_RE = re.compile(
+    r"\b(new number|new phone|lost my phone|changed my number|new sim|"
+    r"phone was stolen|stolen phone|friend'?s line|using .{0,20}line|borrowed phone)\b",
+    re.I,
+)
+_DISTRESS_RE = re.compile(
+    r"\b(accident|hospital|emergency|urgent\w*|help me|please help|stranded|stuck|"
+    r"bail|police station|jail|sick|funeral|accident)\b",
+    re.I,
+)
+_NO_CALLBACK_RE = re.compile(
+    r"\b(don'?t call|do not call|can'?t talk|cannot talk|busy right now|"
+    r"call you later|no time to talk)\b",
+    re.I,
+)
+_MONEY_DEMAND_RE = re.compile(
+    r"\b(send|transfer|pay|remit|forward)\b[^.]{0,60}"
+    r"\b(ghs?|cedis|money|\d[\d,]*(?:\.\d+)?)\b",
+    re.I,
+)
 
 def check_relative_new_number(event: SandboxEvent, history: List) -> Tuple[int, str]:
     """GH19B: Social engineering via distressed relative on a new number."""
@@ -253,8 +271,34 @@ def check_relative_new_number(event: SandboxEvent, history: List) -> Tuple[int, 
         return 0, ""
     text = _text(event)
     if (_RELATIVE_RE.search(text) and _NEW_NUMBER_RE.search(text)) or \
-       (_RELATIVE_RE.search(text) and _DISTRESS_RE.search(text) and _SECRET_RE.search(text)):
-        return 25, "GH19B: Relative-on-new-number social engineering — distress narrative from unfamiliar number"
+       (_RELATIVE_RE.search(text) and _DISTRESS_RE.search(text) and
+        (_SECRET_RE.search(text) or _MONEY_DEMAND_RE.search(text) or _NO_CALLBACK_RE.search(text))):
+        return 30, "GH19B: Relative-on-new-number social engineering — distress narrative demanding money/secrecy"
+    return 0, ""
+
+
+# ---------------------------------------------------------------------------
+# Advance-fee / prize scam — GH23: lottery/prize bait combined with an
+# upfront fee demand ("processing fee", "claim fee", send GHS X to activate).
+# Legitimate operator promos never ask the subscriber to pay to claim.
+# ---------------------------------------------------------------------------
+_FEE_DEMAND_RE = re.compile(
+    r"\b(fee|processing|claim|activation|charge|deposit|levy|service charge)\b"
+    r"[^.]{0,60}\b(send|transfer|pay|remit|to)\b"
+    r"|\b(send|transfer|pay|remit)\b[^.]{0,60}"
+    r"\b(fee|processing fee|claim|activation|charge|deposit|ghs?\s*\d)",
+    re.I,
+)
+
+def check_prize_fee_scam(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """GH23: Prize/lottery bait + upfront-fee demand = advance-fee fraud."""
+    if event.event_type not in _CONTENT_TYPES:
+        return 0, ""
+    text = _text(event)
+    if _NEGATION_RE.search(text):
+        return 0, ""
+    if _PRIZE_RE.search(text) and _FEE_DEMAND_RE.search(text):
+        return 40, "GH23: Advance-fee scam — prize bait combined with upfront-fee demand"
     return 0, ""
 
 
@@ -350,8 +394,9 @@ def check_call_connect_signals(event: SandboxEvent, history: List) -> Tuple[int,
 # subscriber an unverified credit SMS, then calls to "reverse" it.
 # ---------------------------------------------------------------------------
 _CREDIT_CLAIM_RE = re.compile(
-    r"\b(received|credited|refund(?:ed)?|reversal|payment\s+alert|money\s+alert)\b"
-    r"|\bgh[c₵]?\s*[-–]?\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:ghc|ghs|cedis|gh₵)\b",
+    r"\b(received|credited|refund(?:ed)?|reversal|payment\s+alert|money\s+alert|"
+    r"has\s+sent|sent\s+you|deposited)\b"
+    r"|\bgh[c₵s]?\s*[-–]?\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:ghc|ghs|cedis|gh₵)\b",
     re.I,
 )
 
@@ -393,8 +438,10 @@ _CLAIM_AMOUNT_RE = re.compile(
 _RECIPROCAL_RE = re.compile(
     r"\b(send\s+(?:it|the\s+money|money)\s+back|send\s+back|return\s+(?:the\s+)?"
     r"(?:money|payment|funds)|transfer\s+(?:it|the\s+money|back)|"
-    r"reverse\s+(?:the\s+)?(?:payment|transfer|credit|transaction)|pay\s+back|"
+    r"reverse\s+(?:the\s+)?(?:payment|transfer|credit|transaction|it|them|that)|"
+    r"send\s+(?:it|them|the\s+money|money)\s+to\s*(?:this\s+number|\+?\d)|pay\s+back|"
     r"claim\s+your\s+(?:refund|reward|prize|cashback|money)|"
+    r"(?:send|transfer|pay|remit)\w*\s+[^.]{0,50}\b(?:fee|charge|activation)\b|"
     r"reactivat\w+|refund\s+(?:fee|charge)|to\s+reverse)\b",
     re.I,
 )
@@ -530,4 +577,5 @@ RULES = [
     check_call_after_credit_sms,
     check_unverified_credit_claim,
     check_otp_transaction_velocity,
+    check_prize_fee_scam,
 ]
