@@ -421,12 +421,15 @@ def check_call_connect_signals(event: SandboxEvent, history: List) -> Tuple[int,
     sim_at = _parse_iso(payload.get("callerSimRegisteredAt"))
     if sim_at is not None:
         age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - sim_at).total_seconds() / 3600
-        if 0 <= age_hours <= 24:
+        if 0 <= age_hours <= 1:
+            points += 30
+            reasons.append("caller SIM registered under 1h ago — likely burner")
+        elif 0 <= age_hours <= 24:
             points += 15
             reasons.append("caller SIM registered within 24h")
 
     if payload.get("callsBetweenThemBefore") == 0:
-        points += 5
+        points += 10
         reasons.append("no prior calls between caller and subscriber")
 
     if points:

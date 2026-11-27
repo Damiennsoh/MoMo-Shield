@@ -696,6 +696,20 @@ def _parse_timestamp(value):
         return None
 
 
+async def _kb_search_matches(text: str):
+    """Hybrid KB retrieval bounded for the plug-in path.
+
+    Semantic (Gemini embeddings) first; any failure or timeout degrades to
+    the always-available lexical matcher.
+    """
+    try:
+        return await asyncio.wait_for(
+            knowledge_base.search_smart(text, top_k=1), timeout=0.5
+        )
+    except Exception:
+        return knowledge_base.search(text, top_k=1)
+
+
 @router.post("/plugin")
 async def receive_innofemme_plugin(payload: dict):
     """Score a documented InnoFemme plug-in event against the two-second target."""
@@ -861,13 +875,17 @@ async def receive_innofemme_plugin(payload: dict):
         }
     elif point == "transfer.authorize":
         to_wallet = data.get("toWallet") if isinstance(data.get("toWallet"), dict) else {}
+        opened_at = next(
+            (to_wallet.get(k) for k in ("walletOpenedAt", "openedAt", "createdAt", "accountOpenedAt") if to_wallet.get(k)),
+            None,
+        ) or data.get("toWalletOpenedAt") or data.get("walletOpenedAt")
         event_payload = {
             "type": "transfer_out",
             "amount": data.get("amount", 0),
             "channel": "bank",
             "fromAccount": data.get("fromAccount"),
             "toWallet": data.get("toWallet"),
-            "toWalletOpenedAt": to_wallet.get("walletOpenedAt") or to_wallet.get("openedAt"),
+            "toWalletOpenedAt": opened_at,
         }
     elif point == "switch.route":
         event_payload = {
@@ -910,7 +928,7 @@ async def receive_innofemme_plugin(payload: dict):
     # reach reject; it needs a second signal to stack past 75.
     if point in ("payment.authorize", "menu.open", "wallet.open", "payment.request", "pin.reset") \
             and (event_payload.get("onCallWith") or data.get("onCallWith")):
-        score += 45
+        score += 40
         rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
     swap_ts = event_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
@@ -954,7 +972,7 @@ async def receive_innofemme_plugin(payload: dict):
                 # opened seconds before first victim payment, KYC enhanced
                 # to look legitimate, forwards proceeds instantly.
                 if str(event_payload.get("payeeWalletType") or "").lower() == "merchant" and age_hours <= 1:
-                    score += 20
+                    score += 30
                     rules_fired.append("Unseasoned merchant wallet: merchant destination opened <1h ago")
 
     # Hook-specific payload signals documented in Hackathon Environment §4.
@@ -1069,39 +1087,14 @@ async def receive_innofemme_plugin(payload: dict):
 
     text_content = str(event_payload.get("text") or "")
     kb_match_data = None
-    if text_content.strip():
-        # Hybrid KB: semantic (Gemini embeddings) first, lexical fallback.
-        # Bounded well under the 2s plug-in budget — a slow embedding API
-        # degrades to the always-available lexical matcher, never to silence.
-        kb_matches = None
-        try:
-            kb_matches = await asyncio.wait_for(
-                knowledge_base.search_smart(text_content, top_k=1), timeout=0.5
-            )
-        except Exception:
-            kb_matches = knowledge_base.search(text_content, top_k=1)
-        if kb_matches:
-            top_kb = kb_matches[0]
-            kb_engine = getattr(top_kb, "engine", "lexical")
-            kb_match_data = {
-                "case_id": top_kb.case_id,
-                "title": top_kb.title,
-                "typology": top_kb.typology,
-                "similarity": top_kb.similarity,
-                "is_benign": top_kb.is_benign,
-                "psychological_levers": top_kb.psychological_levers,
-                "source": top_kb.source,
-                "engine": kb_engine,
-            }
-            if kb_engine == "semantic":
-                fraud_floor = 0.72
-            else:
-                fraud_floor = 0.40
-            if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
-                score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
-                rules_fired.append(f"RAG precedent ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title}")
-            # A benign match is explanatory only; it never subtracts
-            # points from deterministic fraud evidence.
+    # KB retrieval runs concurrently with the intel lookups below — the
+    # semantic embed (~300ms) hides inside the shared deadline instead of
+    # serializing ahead of it. Bounded; lexical fallback on timeout.
+    kb_task = (
+        asyncio.create_task(_kb_search_matches(text_content))
+        if text_content.strip()
+        else None
+    )
 
     # Check the suspicious party for SMS/calls, but the subscriber for wallet events.
     intel_msisdn = str(data.get("from") or msisdn) if point in ("sms.deliver", "call.connect") else msisdn
@@ -1118,7 +1111,7 @@ async def receive_innofemme_plugin(payload: dict):
         if ghana_card and settings.nia_live_enabled
         else None
     )
-    lookup_tasks = {glance_task, sim_task} | ({nia_task} if nia_task else set())
+    lookup_tasks = {glance_task, sim_task} | ({nia_task} if nia_task else set()) | ({kb_task} if kb_task else set())
     timeout = min(max(settings.plugin_lookup_timeout_seconds, 0.05), 1.2)
     done, pending = await asyncio.wait(
         lookup_tasks, timeout=timeout, return_when=asyncio.ALL_COMPLETED
@@ -1151,6 +1144,32 @@ async def receive_innofemme_plugin(payload: dict):
             nia_live = nia_task.result()
         except Exception as exc:
             log.warning("NIA verify failed for plug-in event %s: %s", event_id, exc)
+
+    # KB retrieval ran concurrently with the lookups; score its result here.
+    if kb_task is not None and kb_task in done:
+        try:
+            kb_matches = kb_task.result()
+        except Exception:
+            kb_matches = knowledge_base.search(text_content, top_k=1)
+        if kb_matches:
+            top_kb = kb_matches[0]
+            kb_engine = getattr(top_kb, "engine", "lexical")
+            kb_match_data = {
+                "case_id": top_kb.case_id,
+                "title": top_kb.title,
+                "typology": top_kb.typology,
+                "similarity": top_kb.similarity,
+                "is_benign": top_kb.is_benign,
+                "psychological_levers": top_kb.psychological_levers,
+                "source": top_kb.source,
+                "engine": kb_engine,
+            }
+            fraud_floor = 0.72 if kb_engine == "semantic" else 0.40
+            if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
+                score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
+                rules_fired.append(f"RAG precedent ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title}")
+            # A benign match is explanatory only; it never subtracts
+            # points from deterministic fraud evidence.
 
     # Feature-flagged ML scorer: strictly corroborating — it may only add
     # points when deterministic rules/payload evidence already scored >0,
