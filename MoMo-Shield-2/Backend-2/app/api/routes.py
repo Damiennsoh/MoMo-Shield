@@ -963,9 +963,19 @@ async def receive_innofemme_plugin(payload: dict):
     text_content = str(event_payload.get("text") or "")
     kb_match_data = None
     if text_content.strip():
-        kb_matches = knowledge_base.search(text_content, top_k=1)
+        # Hybrid KB: semantic (Gemini embeddings) first, lexical fallback.
+        # Bounded well under the 2s plug-in budget — a slow embedding API
+        # degrades to the always-available lexical matcher, never to silence.
+        kb_matches = None
+        try:
+            kb_matches = await asyncio.wait_for(
+                knowledge_base.search_smart(text_content, top_k=1), timeout=0.8
+            )
+        except Exception:
+            kb_matches = knowledge_base.search(text_content, top_k=1)
         if kb_matches:
             top_kb = kb_matches[0]
+            kb_engine = getattr(top_kb, "engine", "lexical")
             kb_match_data = {
                 "case_id": top_kb.case_id,
                 "title": top_kb.title,
@@ -974,12 +984,16 @@ async def receive_innofemme_plugin(payload: dict):
                 "is_benign": top_kb.is_benign,
                 "psychological_levers": top_kb.psychological_levers,
                 "source": top_kb.source,
-                "engine": "lexical",
+                "engine": kb_engine,
             }
-            if not top_kb.is_benign and top_kb.similarity >= 0.40:
-                score += int(top_kb.similarity * 50)
-                rules_fired.append(f"Lexical fraud precedent ({top_kb.similarity:.0%} match): {top_kb.title}")
-            # A benign lexical similarity is explanatory only; it never subtracts
+            if kb_engine == "semantic":
+                fraud_floor = 0.72
+            else:
+                fraud_floor = 0.40
+            if not top_kb.is_benign and top_kb.similarity >= fraud_floor:
+                score += int(top_kb.similarity * (40 if kb_engine == "semantic" else 50))
+                rules_fired.append(f"RAG precedent ({top_kb.similarity:.0%} {kb_engine} match): {top_kb.title}")
+            # A benign match is explanatory only; it never subtracts
             # points from deterministic fraud evidence.
 
     # Check the suspicious party for SMS/calls, but the subscriber for wallet events.

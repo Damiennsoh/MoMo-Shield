@@ -31,9 +31,16 @@ async def warm_engines():
     pay cold-start latency. All fail-open: a missing model or embedding
     cache degrades gracefully, never blocks startup."""
     import asyncio
+    from app.engine.kb import knowledge_base
     from app.integrations import ml_scorer
 
     await asyncio.to_thread(ml_scorer._load)
+    try:
+        # Pre-load cached chunk embeddings so the first plug-in SMS pays
+        # only the ~300ms query-embed, not a cold cache build.
+        await asyncio.wait_for(knowledge_base._ensure_semantic(), timeout=30)
+    except Exception:
+        pass  # semantic KB degrades to lexical — never blocks startup
 
 
 @app.get("/health")
