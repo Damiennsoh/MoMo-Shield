@@ -104,7 +104,7 @@ class InnoFemmeNetworkClient:
         phone_number = str(msisdn).replace("+", "").strip()
         endpoint = f"{self.base_url}/network/{carrier}/v1/sms/messages"
         try:
-            async with httpx.AsyncClient(timeout=0.75) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:
                 response = await client.post(
                     endpoint,
                     json={"to": phone_number, "text": message[:160]},

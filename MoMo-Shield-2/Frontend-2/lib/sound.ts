@@ -105,30 +105,36 @@ export async function playEnglishTwiWarning(options: WarningSpeechOptions = {}):
   // 1. Play initial alert tone
   await playAlertTone();
 
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof window === 'undefined') return;
 
   const twiPrompt = options.twiText || "Kɔkɔbɔ! Yɛn hu sɛ obi rebɔ mmɔden sɛ ɔbɛsisi wo, Mepa wo kyɛw, mfa wo PIN mma obiara!";
   const englishPrompt = options.englishText || "Warning: Transaction hold. Suspicious activity detected. Never share your MoMo PIN with anyone. Call 100 for support.";
 
-  try {
-    const twiUtterance = new SpeechSynthesisUtterance(twiPrompt);
-    twiUtterance.lang = 'en-GH';
-    twiUtterance.rate = 0.95;
-    twiUtterance.pitch = 1.0;
+  const hasSpeech = 'speechSynthesis' in window;
 
-    const enUtterance = new SpeechSynthesisUtterance(englishPrompt);
-    enUtterance.lang = 'en-US';
-    enUtterance.rate = 1.0;
-    enUtterance.pitch = 1.0;
-
-    if (options.onEnded) {
-      enUtterance.onend = options.onEnded;
+  // Custom recorded warnings take precedence: drop warning-twi.mp3 /
+  // warning-en.mp3 (or .wav) into public/audio/ to replace TTS per language.
+  const playCustomOrTts = async (fileBase: string, text: string, lang: string, rate: number): Promise<void> => {
+    for (const ext of ['.mp3', '.wav']) {
+      const played = await playAudioFile(`/audio/${fileBase}${ext}`, 0.9);
+      if (played) return;
     }
+    if (hasSpeech) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = rate;
+      utterance.pitch = 1.0;
+      if (fileBase === 'warning-en' && options.onEnded) {
+        utterance.onend = options.onEnded;
+      }
+      window.speechSynthesis.speak(utterance);
+    }
+  };
 
-    // Speak Twi first, then English follow-up
-    window.speechSynthesis.speak(twiUtterance);
-    window.speechSynthesis.speak(enUtterance);
+  try {
+    await playCustomOrTts('warning-twi', twiPrompt, 'en-GH', 0.95);
+    await playCustomOrTts('warning-en', englishPrompt, 'en-US', 1.0);
   } catch (err) {
-    console.warn("Speech synthesis unavailable:", err);
+    console.warn("Warning playback unavailable:", err);
   }
 }
