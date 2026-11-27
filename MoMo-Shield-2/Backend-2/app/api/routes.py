@@ -809,6 +809,7 @@ async def receive_innofemme_plugin(payload: dict):
             "paymentsToThisPayeeBefore": _safe_int(data.get("paymentsToThisPayeeBefore")),
             "payeeWalletOpenedAt": (payee.get("walletOpenedAt") if isinstance(payee, dict) else None),
             "payeeWalletType": (payee.get("walletType") if isinstance(payee, dict) else None),
+            "payerKycTier": payer.get("kycTier") or (customer.get("kycTier") if isinstance(customer, dict) else None),
             "onCallWith": payer.get("onCallWith"),
             "lastSimSwapAt": payer.get("lastSimSwapAt"),
         }
@@ -939,14 +940,11 @@ async def receive_innofemme_plugin(payload: dict):
             score += 15
             rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
 
-    # On-call co-occurrence: warn-tier signal (+45). A scammer keeps the
-    # victim on the line while walking them through approval — but honest
-    # users also pay people they're talking to, so this alone must never
-    # reach reject; it needs a second signal to stack past 75.
-    if point in ("payment.authorize", "menu.open", "wallet.open", "payment.request", "pin.reset") \
-            and (event_payload.get("onCallWith") or data.get("onCallWith")):
-        score += 40
-        rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
+    # On-call co-occurrence bonus is applied AFTER the rules loop below:
+    # menu.open maps to EventType.USSD, so check_call_ussd_cooccurrence (+50)
+    # already fires on the same fact. Adding +40 here too double-counted it
+    # into a reject — the observed false alarm on honest payments made
+    # during calls. Dedup: only score onCallWith when no rule covered it.
 
     # Recency boost applies to *subsequent* activity after a swap — on
     # sim.swap itself the event IS the swap and lastSimSwapAt carries the
@@ -982,6 +980,22 @@ async def receive_innofemme_plugin(payload: dict):
         if "paymentsToThisPayeeBefore" in event_payload and event_payload.get("paymentsToThisPayeeBefore") == 0:
             score += 20
             rules_fired.append("First-time payee: subscriber has never paid this destination before")
+            # Agent cash-out fraud (run_627eabbd): a complicit agent pulls
+            # funds from a minimum-KYC customer who has never paid them.
+            # Legit cash-outs come from customers with KYC history or prior
+            # agent relationships — first-payee + agent walletType + lowest
+            # KYC tier is the discriminating combo. Warn-tier on purpose:
+            # honest first-time agent customers exist.
+            if (
+                str(event_payload.get("payeeWalletType") or "").lower() == "agent"
+                and str(event_payload.get("payerKycTier") or "").lower()
+                in ("basic", "minimum", "min", "tier1", "tier_1", "tier 1")
+            ):
+                score += 30
+                rules_fired.append(
+                    "First-time agent cash-out by minimum-KYC customer — "
+                    "verify the agent initiated this with the customer present"
+                )
         opened_raw = event_payload.get("payeeWalletOpenedAt") or event_payload.get("toWalletOpenedAt")
         opened_dt = _parse_timestamp(opened_raw)
         if opened_dt is not None:
@@ -1007,6 +1021,15 @@ async def receive_innofemme_plugin(payload: dict):
                         rules_fired.append(
                             f"Large transfer to minutes-old wallet: GHS {xfer_amount:,.0f} "
                             "to a destination opened under 1h ago"
+                        )
+                    # Ultra-fresh tier: wallets opened seconds before the
+                    # transfer are mule hops minted for this exact leg
+                    # (observed: 0.4s–7s). +25 stacks fresh+large to reject.
+                    if age_hours * 3600 <= 300 and xfer_amount >= 1000:
+                        score += 25
+                        rules_fired.append(
+                            f"Ultra-fresh wallet: destination opened "
+                            f"{age_hours * 3600:.0f}s before a GHS {xfer_amount:,.0f} transfer"
                         )
                     from_acc = event_payload.get("fromAccount")
                     balance = _safe_float(from_acc.get("balance")) if isinstance(from_acc, dict) else 0.0
@@ -1097,6 +1120,18 @@ async def receive_innofemme_plugin(payload: dict):
         if points > 0 and description:
             score += points
             rules_fired.append(description)
+
+    # On-call co-occurrence fallback (+40): warn-tier signal. A scammer
+    # keeps the victim on the line while walking them through approval —
+    # but honest users also pay people they're talking to, so this alone
+    # must never reach reject; it needs a second signal to stack past 75.
+    # Skipped when a rule already scored call/USSD co-occurrence (menu.open
+    # is EventType.USSD — the +50 rule covers the same fact).
+    if point in ("payment.authorize", "menu.open", "wallet.open", "payment.request", "pin.reset") \
+            and (event_payload.get("onCallWith") or data.get("onCallWith")) \
+            and not any("co-occurrence" in r.lower() or "voice call" in r.lower() for r in rules_fired):
+        score += 40
+        rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
     # NIA is not queried here: these are local checks over event-supplied claims.
     customer = data.get("customer") if isinstance(data.get("customer"), dict) else {}
