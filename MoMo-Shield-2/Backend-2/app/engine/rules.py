@@ -701,6 +701,34 @@ def check_failed_transaction_lure(event: SandboxEvent, history: List) -> Tuple[i
     return 0, ""
 
 
+# ---------------------------------------------------------------------------
+# Link inside financial context — the denylist can't enumerate every free
+# host a red team will spin up, so ANY URL combined with money/account
+# language is itself a signal. +25 only: corroborates the lure/host rules,
+# never convicts alone (legit operator SMS occasionally carry links).
+# ---------------------------------------------------------------------------
+_FINANCIAL_CTX_RE = re.compile(
+    r"\b(ghs?|cedis|gh¢|momo|mobile\s+money|wallet|transaction|transfer|"
+    r"account|refund|payment|send|receive|balance)\b"
+    r"|\b\d[\d,]*(?:\.\d+)?\s*(?:ghs?|cedis|gh¢)\b",
+    re.I,
+)
+
+
+def check_financial_link_context(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """URL appearing inside financial/account content — warn-tier signal
+    that stacks with lure and host rules toward reject."""
+    if event.event_type not in _CONTENT_TYPES:
+        return 0, ""
+    text = _text(event)
+    if _LINK_RE.search(text) and _FINANCIAL_CTX_RE.search(text):
+        return 25, (
+            "Link inside financial message: URL in money/account context — "
+            "verify the sender before clicking"
+        )
+    return 0, ""
+
+
 def check_suspicious_content_precursor(event: SandboxEvent, history: List) -> Tuple[int, str]:
     """Financial/USSD action within 15 min of scam-family SMS/voice content."""
     if event.event_type not in (EventType.TRANSACTION, EventType.USSD):
@@ -753,5 +781,6 @@ RULES = [
     check_prize_fee_scam,
     check_suspicious_link_host,
     check_failed_transaction_lure,
+    check_financial_link_context,
     check_suspicious_content_precursor,
 ]
