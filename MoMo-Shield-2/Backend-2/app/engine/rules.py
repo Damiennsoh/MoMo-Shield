@@ -556,6 +556,67 @@ def check_otp_transaction_velocity(event: SandboxEvent, history: List) -> Tuple[
     return 0, ""
 
 
+# ---------------------------------------------------------------------------
+# Suspicious-content precursor — the missing link in social-engineering chains.
+# A distress/fraud SMS scores ~30 alone (below warn) and the follow-up
+# payment.authorize / menu.open arrives with a clean payload. If a financial
+# or USSD action lands within 15 min of content carrying scam-family markers
+# (relative+distress+money, prize+fee, credential harvest, or unverified
+# credit claim), the sequence itself is the signal — +40, enough to warn on
+# its own since the content markers are already scam-family specific.
+# history excludes the current event (observe_and_add returns priors only).
+# ---------------------------------------------------------------------------
+_CONTENT_WINDOW_MINUTES = 15
+
+
+def _suspicious_content_text(text: str) -> bool:
+    """Marker-level check for scam-family content, mirroring the scoring
+    rules without needing a SandboxEvent for the historical payload."""
+    if not text:
+        return False
+    # Negation only shields the credential-request branch — "don't call"
+    # in a distress scam must not mask the relative+distress+money markers.
+    if not _NEGATION_RE.search(text) and _SECRET_RE.search(text) and _REQUEST_RE.search(text):
+        return True
+    if _RELATIVE_RE.search(text) and _DISTRESS_RE.search(text) and (
+        _MONEY_DEMAND_RE.search(text) or _NO_CALLBACK_RE.search(text) or _SECRET_RE.search(text)
+    ):
+        return True
+    if _PRIZE_RE.search(text) and _FEE_DEMAND_RE.search(text):
+        return True
+    if _CREDIT_CLAIM_RE.search(text) and _RECIPROCAL_RE.search(text):
+        return True
+    return False
+
+
+def check_suspicious_content_precursor(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """Financial/USSD action within 15 min of scam-family SMS/voice content."""
+    if event.event_type not in (EventType.TRANSACTION, EventType.USSD):
+        return 0, ""
+    now = event.timestamp.replace(tzinfo=None) if event.timestamp.tzinfo else event.timestamp
+    cutoff = now.timestamp() - _CONTENT_WINDOW_MINUTES * 60
+    for prior in reversed(history):
+        if prior.get("event_type") not in ("sms", "voice", "ussd"):
+            continue
+        ts = _prior_ts(prior)
+        if ts is None:
+            continue
+        if ts.replace(tzinfo=timezone.utc).timestamp() < cutoff:
+            continue
+        payload = prior.get("payload") or {}
+        text = " ".join(
+            str(payload.get(k) or "")
+            for k in ("text", "transcript", "ussd_input", "message")
+        )
+        if _suspicious_content_text(text):
+            return 40, (
+                "Suspicious-content precursor: financial/USSD action within "
+                f"{_CONTENT_WINDOW_MINUTES} min of scam-pattern message "
+                "(social-engineering chain)"
+            )
+    return 0, ""
+
+
 RULES = [
     check_content_credential_request,
     check_content_impersonation,
@@ -578,4 +639,5 @@ RULES = [
     check_unverified_credit_claim,
     check_otp_transaction_velocity,
     check_prize_fee_scam,
+    check_suspicious_content_precursor,
 ]

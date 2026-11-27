@@ -16,6 +16,7 @@ from app.engine.rules import (
     check_relative_new_number,
     check_prize_fee_scam,
     check_unverified_credit_claim,
+    check_suspicious_content_precursor,
 )
 from app.models.schemas import EventType
 from datetime import datetime, timezone
@@ -76,7 +77,7 @@ def test_velocity_quiet_below_threshold(make_event):
 
 
 def test_rules_registry_has_descriptions():
-    assert len(RULES) == 20
+    assert len(RULES) == 21
 
 
 def test_credential_request_sms_scores_high(make_event):
@@ -195,3 +196,45 @@ def test_benign_family_sms_no_score(make_event):
     event = make_event(EventType.SMS, {"text": "Hi mum, I reached Kumasi safely. Call me when you can."})
     assert check_relative_new_number(event, []) == (0, "")
     assert check_prize_fee_scam(event, []) == (0, "")
+
+
+def _content_hist(text, minutes_ago=2):
+    from datetime import timedelta
+    ts = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    return [{"event_type": "sms", "payload": {"text": text}, "timestamp": ts}]
+
+
+def test_precursor_payment_after_distress_sms(make_event):
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 200})
+    history = _content_hist("Daddy it's your son Kojo, phone stolen, at police station need GHS 200 for bail urgently. Don't call, send money quickly.")
+    pts, desc = check_suspicious_content_precursor(event, history)
+    assert pts == 40
+    assert "precursor" in desc.lower()
+
+
+def test_precursor_payment_after_prize_sms(make_event):
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 50})
+    history = _content_hist("CONGRATULATIONS! You won GHS 2,500 prize. Send GHS 50 processing fee to claim.")
+    pts, _ = check_suspicious_content_precursor(event, history)
+    assert pts == 40
+
+
+def test_precursor_ignores_stale_content(make_event):
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 200})
+    history = _content_hist("Daddy it's your son Kojo, need GHS 200 urgently, don't call, send money.", minutes_ago=60)
+    pts, _ = check_suspicious_content_precursor(event, history)
+    assert pts == 0
+
+
+def test_precursor_ignores_benign_content(make_event):
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 200})
+    history = _content_hist("Your salary of GHS 2,500 has been credited. Have a great day!")
+    pts, _ = check_suspicious_content_precursor(event, history)
+    assert pts == 0
+
+
+def test_precursor_ignores_sms_events(make_event):
+    event = make_event(EventType.SMS, {"text": "scammy"})
+    history = _content_hist("Daddy it's your son Kojo, need GHS 200 urgently, don't call.")
+    pts, _ = check_suspicious_content_precursor(event, history)
+    assert pts == 0
