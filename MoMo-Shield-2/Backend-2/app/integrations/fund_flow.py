@@ -144,7 +144,9 @@ class FundFlowLedger:
         with self._lock:
             edges = [e for e in self._edges if e["ts"] >= cutoff]
         for e in edges:
-            if e["kind"] != "payment":
+            # payment = telco wallet legs; bank_transfer/switch = cross-rail
+            # legs — mule chains hop across rails, so all money edges count.
+            if e["kind"] not in ("payment", "bank_transfer", "switch"):
                 continue
             amt = e.get("amount") or 0.0
             if e["dst"] == target:

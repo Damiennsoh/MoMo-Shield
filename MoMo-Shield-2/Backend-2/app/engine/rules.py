@@ -274,12 +274,14 @@ def check_approve_to_receive(event: SandboxEvent, history: List) -> Tuple[int, s
 # ---------------------------------------------------------------------------
 _RELATIVE_RE = re.compile(
     r"\b(mum|mummy|mom|dad|daddy|father|mother|sister|brother|uncle|auntie|aunt|"
-    r"cousin|friend|son|daughter|wife|husband)\b",
+    r"cousin|friend|son|daughter|wife|husband|bro|ma)\b",
     re.I,
 )
 _NEW_NUMBER_RE = re.compile(
     r"\b(new number|new phone|lost my phone|changed my number|new sim|"
-    r"phone was stolen|stolen phone|friend'?s line|using .{0,20}line|borrowed phone)\b",
+    r"phone was stolen|stolen phone|friend'?s (?:line|number|phone)|"
+    r"using .{0,20}(?:line|number|phone)|"
+    r"fell in water|phone (?:got destroyed|is destroyed))\b",
     re.I,
 )
 _DISTRESS_RE = re.compile(
@@ -294,17 +296,27 @@ _NO_CALLBACK_RE = re.compile(
 )
 _MONEY_DEMAND_RE = re.compile(
     r"\b(send|transfer|pay|remit|forward)\b[^.]{0,60}"
-    r"\b(ghs?|cedis|money|\d[\d,]*(?:\.\d+)?)\b",
+    r"\b(ghs?|cedis|money|\d[\d,]*(?:\.\d+)?)\b"
+    r"|\b(send|transfer|pay|remit)\s+(?:it|them|the\s+money|money)?\s*"
+    r"to\s+(?:this|my)\s+(?:number|phone|line|wallet)\b",
     re.I,
 )
+
+_IDENTITY_VAGUE_RE = re.compile(r"\b(it'?s me|it is me|this is me|i'?m me)\b", re.I)
+
 
 def check_relative_new_number(event: SandboxEvent, history: List) -> Tuple[int, str]:
     """GH19B: Social engineering via distressed relative on a new number."""
     if event.event_type not in _CONTENT_TYPES:
         return 0, ""
     text = _text(event)
-    if (_RELATIVE_RE.search(text) and _NEW_NUMBER_RE.search(text)) or \
-       (_RELATIVE_RE.search(text) and _DISTRESS_RE.search(text) and
+    # "Bro/Ma it's me" scripts omit family terms — the vague identity claim
+    # plus new-channel marker carries the same signal.
+    relative_or_vague = _RELATIVE_RE.search(text) or (
+        _IDENTITY_VAGUE_RE.search(text) and _NEW_NUMBER_RE.search(text)
+    )
+    if (relative_or_vague and _NEW_NUMBER_RE.search(text)) or \
+       (relative_or_vague and _DISTRESS_RE.search(text) and
         (_SECRET_RE.search(text) or _MONEY_DEMAND_RE.search(text) or _NO_CALLBACK_RE.search(text))):
         return 30, "GH19B: Relative-on-new-number social engineering — distress narrative demanding money/secrecy"
     return 0, ""

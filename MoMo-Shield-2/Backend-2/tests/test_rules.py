@@ -263,3 +263,15 @@ def test_limit_splitting_same_recipient_no_fire(make_event):
     event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 500, "payee": {"msisdn": "0550000001"}})
     pts, _ = check_structuring(event, history)
     assert pts == 0
+
+
+def test_relative_impersonation_bro_script(make_event):
+    event = make_event(EventType.SMS, {"text": "Bro it's me, my phone fell in water so I'm using my friend's number. I'm at the hospital and they want GHS 200.00. Pls send to this number now"})
+    pts, desc = check_relative_new_number(event, [])
+    assert pts == 30
+    assert "GH19B" in desc
+
+
+def test_benign_phone_fell_no_score(make_event):
+    event = make_event(EventType.SMS, {"text": "Ma, the phone fell but I am fine. Call me when you can."})
+    assert check_relative_new_number(event, []) == (0, "")

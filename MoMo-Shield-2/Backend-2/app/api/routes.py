@@ -677,6 +677,13 @@ def _safe_float(value, default: float = 0.0) -> float:
         return default
 
 
+def _norm_msisdn_local(value) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    if digits.startswith("233") and len(digits) == 12:
+        digits = "0" + digits[3:]
+    return digits
+
+
 def _parse_timestamp(value):
     if not value:
         return None
@@ -777,6 +784,8 @@ async def receive_innofemme_plugin(payload: dict):
             "amount": data.get("amount", 0),
             "fee": data.get("fee", 0),
             "payee": data.get("payee"),
+            "paymentsToThisPayeeBefore": _safe_int(data.get("paymentsToThisPayeeBefore")),
+            "payeeWalletOpenedAt": (payee.get("walletOpenedAt") if isinstance(payee, dict) else None),
             "onCallWith": payer.get("onCallWith"),
             "lastSimSwapAt": payer.get("lastSimSwapAt"),
         }
@@ -801,7 +810,8 @@ async def receive_innofemme_plugin(payload: dict):
             "type": "new_device_binding",
             "swapsOnThisNumberBefore": _safe_int(data.get("swapsOnThisNumberBefore")),
             "walletBalance": data.get("walletBalance"),
-            "lastSimSwapAt": data.get("lastSimSwapAt"),
+            "lastSimSwapAt": data.get("lastSimSwapAt") or data.get("previousSwapAt"),
+            "replacedBy": data.get("replacedBy"),
         }
     elif point == "sim.register":
         event_payload = {
@@ -846,12 +856,14 @@ async def receive_innofemme_plugin(payload: dict):
             "walletsOnThisGhanaCard": _safe_int(data.get("walletsOnThisGhanaCard")),
         }
     elif point == "transfer.authorize":
+        to_wallet = data.get("toWallet") if isinstance(data.get("toWallet"), dict) else {}
         event_payload = {
             "type": "transfer_out",
             "amount": data.get("amount", 0),
             "channel": "bank",
             "fromAccount": data.get("fromAccount"),
             "toWallet": data.get("toWallet"),
+            "toWalletOpenedAt": to_wallet.get("walletOpenedAt") or to_wallet.get("openedAt"),
         }
     elif point == "switch.route":
         event_payload = {
@@ -905,6 +917,36 @@ async def receive_innofemme_plugin(payload: dict):
             score += 45
             rules_fired.append(f"SIM Swap Recency: subscriber SIM changed {age_hours:.0f}h ago")
 
+    # Paying the exact number the subscriber is on a call with — the
+    # scammer directs the victim to send money to the caller's own line.
+    # +30 stacks on the +45 co-occurrence signal toward reject.
+    if point in ("payment.authorize", "payment.request", "transfer.authorize"):
+        on_call = _norm_msisdn_local(event_payload.get("onCallWith") or data.get("onCallWith"))
+        dest = ""
+        if point == "transfer.authorize":
+            tw = data.get("toWallet") if isinstance(data.get("toWallet"), dict) else {}
+            dest = _norm_msisdn_local(tw.get("msisdn") or tw.get("wallet"))
+        else:
+            pe = data.get("payee") if isinstance(data.get("payee"), dict) else {}
+            dest = _norm_msisdn_local(pe.get("msisdn"))
+        if on_call and dest and on_call == dest:
+            score += 30
+            rules_fired.append("Paying active call party: payment destination is the number the subscriber is currently on a call with")
+
+    # First-time / fresh-destination signals: mule wallets are opened
+    # minutes before collection (observed: walletOpenedAt ~10s pre-payment).
+    if point in ("payment.authorize", "transfer.authorize"):
+        if "paymentsToThisPayeeBefore" in event_payload and event_payload.get("paymentsToThisPayeeBefore") == 0:
+            score += 20
+            rules_fired.append("First-time payee: subscriber has never paid this destination before")
+        opened_raw = event_payload.get("payeeWalletOpenedAt") or event_payload.get("toWalletOpenedAt")
+        opened_dt = _parse_timestamp(opened_raw)
+        if opened_dt is not None:
+            age_hours = (datetime.now(timezone.utc).replace(tzinfo=None) - opened_dt).total_seconds() / 3600
+            if 0 <= age_hours <= 24:
+                score += 25
+                rules_fired.append(f"Fresh payee wallet: destination opened {age_hours:.1f}h ago")
+
     # Hook-specific payload signals documented in Hackathon Environment §4.
     if point == "payment.request":
         if event_payload.get("chargedWithoutAsking"):
@@ -918,9 +960,9 @@ async def receive_innofemme_plugin(payload: dict):
             score += 20
             rules_fired.append("Mule inbound: 8+ distinct payers credited in 24h")
     elif point == "sim.swap":
-        if _safe_int(event_payload.get("swapsOnThisNumberBefore")) >= 2:
+        if _safe_int(event_payload.get("swapsOnThisNumberBefore")) >= 1:
             score += 25
-            rules_fired.append("Repeat SIM swap: number has been swapped 2+ times — mule/rotation pattern")
+            rules_fired.append("Repeat SIM swap: number has been swapped before — mule/rotation pattern")
     elif point == "sim.register":
         if _safe_int(event_payload.get("simsAlreadyOnThisGhanaCard"), 1) >= 3:
             score += 25
