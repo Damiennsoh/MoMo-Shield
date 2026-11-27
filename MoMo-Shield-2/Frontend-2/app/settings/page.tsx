@@ -9,7 +9,7 @@ import { useStore } from '@/lib/useStore';
 export default function SettingsPage() {
   const connected = useStore((state) => state.connected);
   const backendReachable = useStore((state) => state.backendReachable);
-  const avgLatencyMs = useStore((state) => state.avgLatencyMs);
+  const latestLatencyMs = useStore((state) => state.latestLatencyMs);
   const serviceStatus = connected ? 'Live Telemetry' : backendReachable ? 'Reconnecting' : 'Offline / Standby';
 
   return (
@@ -105,8 +105,8 @@ export default function SettingsPage() {
               </dd>
             </div>
             <div className="flex items-center justify-between border-b border-white/[.07] pb-3 text-xs">
-              <dt className="text-slate-400 font-medium">Observed API Latency</dt>
-              <dd className="font-mono font-bold text-white">{avgLatencyMs == null ? '38 ms (avg)' : `${avgLatencyMs} ms`}</dd>
+              <dt className="text-slate-400 font-medium">Latest assessment latency</dt>
+              <dd className="font-mono font-bold text-white">{latestLatencyMs == null ? 'No assessment yet' : `${latestLatencyMs} ms`}</dd>
             </div>
             <div className="flex items-center justify-between border-b border-white/[.07] pb-3 text-xs">
               <dt className="text-slate-400 font-medium">Glance Threat Engine</dt>

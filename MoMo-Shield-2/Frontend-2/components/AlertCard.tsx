@@ -44,7 +44,9 @@ export function AlertCard({ alert, onClick }: AlertCardProps) {
               <Clock3 size={11} />
               {alert.time} GMT
             </span>
-            <Badge variant={alert.risk}>Risk Score {alert.score}</Badge>
+            <Badge variant={alert.risk} title="Risk tier and numeric score from the same assessment">
+              {alert.risk.toUpperCase()} · {alert.score}/100
+            </Badge>
           </div>
         </div>
       </div>

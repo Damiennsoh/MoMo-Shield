@@ -251,7 +251,7 @@ export interface VelocityStats {
 }
 
 export async function fetchVelocity(): Promise<VelocityStats> {
-  const res = await fetch(`${API_BASE}/api/v1/velocity`);
+  const res = await fetch(`${API_BASE}/api/v1/velocity`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Velocity fetch failed: ${res.status}`);
   return res.json() as Promise<VelocityStats>;
 }

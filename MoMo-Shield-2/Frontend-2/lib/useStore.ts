@@ -32,7 +32,7 @@ interface ShieldStore {
   soundEnabled: boolean;
   connected: boolean;
   backendReachable: boolean;
-  avgLatencyMs: number | null;
+  latestLatencyMs: number | null;
   addEvent: (event: SignalEvent, alert?: FraudAlert) => void;
   ingestAssessment: (result: AssessmentResult) => void;
   hydrateAssessments: (results: AssessmentResult[]) => void;
@@ -55,7 +55,7 @@ export const useStore = create<ShieldStore>((set) => ({
   soundEnabled: true,
   connected: false,
   backendReachable: false,
-  avgLatencyMs: null,
+  latestLatencyMs: null,
   toggleSound: () =>
     set((state) => {
       const next = !state.soundEnabled;
@@ -81,7 +81,7 @@ export const useStore = create<ShieldStore>((set) => ({
             : result.risk_tier === 'MEDIUM'
               ? 'Take a moment before you act. We noticed unusual activity. Never share your PIN.'
               : 'This activity looks safe. Remember: MoMo will never ask for your PIN.',
-        avgLatencyMs: result.latency_ms,
+        latestLatencyMs: result.latency_ms,
       };
     }),
   hydrateAssessments: (results) =>
@@ -99,7 +99,7 @@ export const useStore = create<ShieldStore>((set) => ({
         events: events.slice(0, 12),
         alerts: alerts.slice(0, 8),
         backendReachable: true,
-        avgLatencyMs: latest?.latency_ms ?? null,
+        latestLatencyMs: latest?.latency_ms ?? null,
         ...(latest
           ? {
               currentRisk: latest.risk_score,
@@ -126,6 +126,6 @@ export const useStore = create<ShieldStore>((set) => ({
       currentRisk: 0,
       handsetMode: 'low',
       handsetMessage: 'Your MoMo account is protected. Never share your PIN with anyone.',
-      avgLatencyMs: null,
+      latestLatencyMs: null,
     }),
 }));

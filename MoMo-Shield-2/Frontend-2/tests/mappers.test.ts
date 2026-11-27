@@ -32,6 +32,16 @@ test('masks msisdn in signal events', () => {
   assert.equal(event.score, 80);
 });
 
+test('preserves the backend tier and score from the same assessment', () => {
+  const result = makeResult({ risk_tier: 'HIGH', risk_score: 50 });
+  const event = assessmentToSignalEvent(result);
+  const alert = assessmentToAlert(result);
+  assert.equal(event.risk, 'high');
+  assert.equal(event.score, 50);
+  assert.equal(alert?.risk, 'high');
+  assert.equal(alert?.score, 50);
+});
+
 test('maps event types to kinds', () => {
   assert.equal(assessmentToSignalEvent(makeResult({ event_type: 'voice' })).kind, 'VOICE');
   assert.equal(assessmentToSignalEvent(makeResult({ event_type: 'ussd' })).kind, 'USSD');

@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const connected = useStore((state) => state.connected);
   const backendReachable = useStore((state) => state.backendReachable);
-  const avgLatencyMs = useStore((state) => state.avgLatencyMs);
+  const latestLatencyMs = useStore((state) => state.latestLatencyMs);
   const soundEnabled = useStore((state) => state.soundEnabled);
   const toggleSound = useStore((state) => state.toggleSound);
   const setSoundEnabled = useStore((state) => state.setSoundEnabled);
@@ -313,9 +313,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span>Sandbox Link</span>
             </span>
 
-            <span className="hidden items-center gap-1.5 text-xs font-medium text-slate-300 sm:flex">
+            <span
+              className="hidden items-center gap-1.5 text-xs font-medium text-slate-300 sm:flex"
+              title="Latency for the most recent scored assessment; not an average or p95"
+            >
               <Activity size={14} className="text-emerald-400" />
-              <span>{avgLatencyMs != null ? `${avgLatencyMs} ms` : 'Standby'}</span>
+              <span>{latestLatencyMs != null ? `Latest ${latestLatencyMs} ms` : 'Standby'}</span>
             </span>
 
             {/* Theme Toggle Button */}

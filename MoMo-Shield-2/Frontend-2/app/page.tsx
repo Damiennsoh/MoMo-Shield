@@ -95,7 +95,7 @@ export default function DashboardPage() {
   const resolveAlert = useStore((state) => state.resolveAlert);
   const connected = useStore((state) => state.connected);
   const backendReachable = useStore((state) => state.backendReachable);
-  const avgLatencyMs = useStore((state) => state.avgLatencyMs);
+  const latestLatencyMs = useStore((state) => state.latestLatencyMs);
   const soundEnabled = useStore((state) => state.soundEnabled);
 
   useTelemetry();
@@ -153,18 +153,7 @@ export default function DashboardPage() {
 
   const activeAlerts = alerts.filter((alert) => alert.status === 'active');
   const blockedCount = alerts.filter((alert) => alert.status === 'blocked').length;
-  const reviewedCount = alerts.filter((alert) => alert.status !== 'active').length;
-
-  // Calculate actual intercepted Cedi amount based on blocked alerts
-  const ghcProtected = useMemo(() => {
-    const blockedAlerts = alerts.filter((a) => a.status === 'blocked');
-    if (blockedAlerts.length === 0) return 0;
-    return blockedAlerts.reduce((sum, a) => {
-      const match = a.amount.match(/[0-9,.]+/);
-      const val = match ? parseFloat(match[0].replace(/,/g, '')) : 850;
-      return sum + (isNaN(val) ? 850 : val);
-    }, 0);
-  }, [alerts]);
+  const latestEvent = events[0] ?? null;
 
   const handleAction = (action: NonNullable<FraudAlert['status']>) => {
     if (selected) {
@@ -262,13 +251,13 @@ export default function DashboardPage() {
             <span className="min-w-0">
               <span className="block text-sm font-bold text-white">Protection integrations</span>
               <span className="mt-0.5 block text-xs text-slate-400">
-                Messages, calls, payments, and in-app actions are monitored.
+                Representative hook examples; not a count of live endpoints or run results.
               </span>
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-3">
-            <span className="hidden items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 sm:inline-flex">
-              <span className="live-dot" />4 protections active
+            <span className="hidden items-center gap-2 rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300 sm:inline-flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />4 hook examples shown
             </span>
             <span className="hidden text-xs font-semibold text-slate-300 sm:inline group-open:hidden">View details</span>
             <span className="hidden text-xs font-semibold text-slate-300 sm:group-open:inline">Hide details</span>
@@ -279,7 +268,7 @@ export default function DashboardPage() {
         <div className="border-t border-white/[.08] px-4 pb-4 pt-3">
           <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <Server size={13} />
-            InnoFemme integration details
+            Example InnoFemme hook points
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {[
@@ -293,7 +282,7 @@ export default function DashboardPage() {
                   <span className="block text-xs font-semibold text-slate-200">{label}</span>
                   <code className="mt-0.5 block truncate text-[10px] text-slate-400">{hook}</code>
                 </span>
-                <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Active</span>
+                <span className="shrink-0 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300">Example</span>
               </div>
             ))}
           </div>
@@ -342,33 +331,36 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* 4 KPIs */}
+      <p className="mb-2 text-[10px] text-slate-500">
+        Live window: {events.length} latest scored assessments (max 12) and {alerts.length} latest non-low assessments (max 8). These are not simulator run totals.
+      </p>
+      {/* Scoped live-window metrics; use the simulator report for full run outcomes. */}
       <div className="mb-6 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
         <MetricCard
-          title="GH₵ Protected"
-          value={ghcProtected > 0 ? `GH₵ ${ghcProtected.toLocaleString()}` : 'GH₵ 0.00'}
-          delta={ghcProtected > 0 ? 'Direct Loss Prevented' : 'Awaiting Interventions'}
-          icon={ShieldCheck}
-          tone="yellow"
+          title="Latest Risk Score"
+          value={latestEvent ? `${latestEvent.score}/100` : '—'}
+          delta={latestEvent ? `${latestEvent.risk.toUpperCase()} · latest assessment` : 'Awaiting an assessment'}
+          icon={Gauge}
+          tone={latestEvent?.risk === 'high' ? 'rose' : latestEvent?.risk === 'medium' ? 'yellow' : 'green'}
         />
         <MetricCard
-          title="Sessions Intercepted"
-          value={String(blockedCount + reviewedCount)}
-          delta={`${blockedCount} Auto-Blocked`}
+          title="Blocked Records (Recent)"
+          value={String(blockedCount)}
+          delta={`of ${alerts.length} recent non-low assessments`}
           icon={Check}
           tone="green"
         />
         <MetricCard
-          title="Decision Latency"
-          value={avgLatencyMs != null ? `${avgLatencyMs}ms` : '—'}
-          delta="Observed events only; not p95"
+          title="Latest Decision Latency"
+          value={latestLatencyMs != null ? `${latestLatencyMs}ms` : '—'}
+          delta="Most recent assessment; not average or p95"
           icon={Zap}
           tone="blue"
         />
         <MetricCard
-          title="Active Fraud Alerts"
+          title="Open Risk Reviews"
           value={String(activeAlerts.length).padStart(2, '0')}
-          delta="Requires Review"
+          delta={`of ${alerts.length} recent risk assessments (max 8)`}
           icon={Siren}
           tone="rose"
         />
@@ -385,7 +377,7 @@ export default function DashboardPage() {
                 <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">Live Telemetry</h2>
               </div>
               <p className="mt-0.5 text-[10px] text-slate-400">
-                Inbound signals <span className="text-slate-300 font-semibold">· {events.length} received</span>
+                Latest scored assessments <span className="font-semibold text-slate-300">· {events.length} shown (max 12)</span>
               </p>
             </div>
             <button
@@ -481,22 +473,29 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Col 3: Active Alerts & Threat Feed */}
+        {/* Col 3: Open Risk Reviews & Threat Feed */}
 <div className="min-w-0 space-y-5">
   <Card className="overflow-hidden" id="alerts">
             <div className="flex items-center justify-between border-b border-white/[.08] px-5 py-4">
               <div>
                 <div className="flex items-center gap-2">
                   <ShieldAlert size={16} className="text-rose-400" />
-                  <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">Active Alerts</h2>
-                  <Badge variant="high">{activeAlerts.length}</Badge>
+                  <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">Open Risk Reviews</h2>
+                  <Badge variant="outline">{activeAlerts.length}</Badge>
                 </div>
-                <p className="mt-0.5 text-[10px] text-slate-400">Priority security review queue</p>
+                <p className="mt-0.5 text-[10px] text-slate-400">
+                  Open reviews among {alerts.length} recent non-low assessments (max 8); list scrolls after 3.
+                </p>
               </div>
                         </div>
 
-            <div className="space-y-3 p-4">
-              {activeAlerts.slice(0, 4).map((alert) => (
+            <div
+              className="scrollbar-thin max-h-[360px] space-y-3 overflow-y-auto overscroll-contain p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ffcc00]"
+              role="region"
+              aria-label="Open risk review list"
+              tabIndex={0}
+            >
+              {activeAlerts.map((alert) => (
                 <AlertCard
                   key={alert.id}
                   alert={alert}
@@ -506,11 +505,18 @@ export default function DashboardPage() {
                   }}
                 />
               ))}
+              {activeAlerts.length === 0 && (
+                <p className="rounded-lg border border-white/[.08] bg-white/[.02] px-3 py-4 text-center text-xs text-slate-400">
+                  No open reviews in the current recent window.
+                </p>
+              )}
             </div>
 
             <div className="border-t border-white/[.08] px-4 py-3 bg-black/10">
               <p className="text-[10px] text-slate-400 text-center font-medium">
-                Tap any alert to inspect triggered rules, Rancard Glance status, and initiate intervention.
+                {activeAlerts.length > 3
+                  ? `Scroll this list to see all ${activeAlerts.length} open reviews. Select one to inspect rules and intervention options.`
+                  : 'Select a review to inspect triggered rules and intervention options.'}
               </p>
             </div>
           </Card>
@@ -567,8 +573,8 @@ export default function DashboardPage() {
         <DialogContent className="overflow-y-auto p-0">
           <div className="border-b border-white/[.1] px-6 py-6 bg-black/20">
             <div className="mb-3 flex items-center gap-2">
-              <Badge variant={selected && selected.score >= 75 ? 'high' : 'medium'}>
-                {selected && selected.score >= 75 ? 'HIGH RISK DETECTED' : 'ELEVATED RISK'}
+              <Badge variant={selected?.risk ?? 'medium'}>
+                {selected ? `${selected.risk.toUpperCase()} RISK · ${selected.score}/100` : 'RISK ASSESSMENT'}
               </Badge>
               <span className="flex items-center gap-1 text-xs text-slate-400 font-mono">
                 <Clock3 size={13} />
@@ -593,9 +599,9 @@ export default function DashboardPage() {
                 </p>
                 <p className="mt-1 font-mono text-2xl font-extrabold text-white">{selected?.amount}</p>
                 <p className="mt-2 text-xs text-slate-300">
-                  Engine Assessment:{' '}
-                  <b className={selected && selected.score >= 75 ? 'text-rose-300 font-bold' : 'text-amber-300 font-bold'}>
-                    {selected && selected.score >= 75 ? 'CRITICAL - HOLD REQUIRED' : 'REVIEW'}
+                  Backend assessment:{' '}
+                  <b className={selected?.risk === 'high' ? 'text-rose-300 font-bold' : 'text-amber-300 font-bold'}>
+                    {selected ? `${selected.risk.toUpperCase()} · ${selected.score}/100` : '—'}
                   </b>
                 </p>
               </div>
@@ -606,9 +612,6 @@ export default function DashboardPage() {
               <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-slate-300">
                 Triggered Fraud Rules
               </h3>
-              <p className="mb-2 text-[10px] text-slate-500">
-                Signal inputs — external ratings (e.g. Glance HIGH) are sources, not the verdict tier shown above.
-              </p>
               <div className="space-y-2">
                 {(selected?.rules ?? []).map((rule) => (
                   <div
@@ -751,7 +754,7 @@ export default function DashboardPage() {
                     <p className="text-[10px] font-bold text-emerald-300 mt-1">Small fixed fixture set only</p>
                   </div>
                   <div className="rounded-xl border border-[#ffcc00]/30 bg-[#ffcc00]/10 p-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#ffcc00]">GH₵ Protected</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#ffcc00]">Fixture-Estimated Loss Avoided</p>
                     <p className="mt-1 font-mono text-xl font-extrabold text-white">
                       GH₵ {benchmarkData.summary.ghc_protected.toLocaleString()}
                     </p>
