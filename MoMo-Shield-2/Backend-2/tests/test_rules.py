@@ -238,3 +238,28 @@ def test_precursor_ignores_sms_events(make_event):
     history = _content_hist("Daddy it's your son Kojo, need GHS 200 urgently, don't call.")
     pts, _ = check_suspicious_content_precursor(event, history)
     assert pts == 0
+
+
+def test_limit_splitting_smurfing(make_event):
+    from app.engine.rules import check_structuring
+    history = [
+        {"payload": {"type": "transfer_out", "amount": 300, "payee": {"msisdn": "0550000001"}}},
+        {"payload": {"type": "transfer_out", "amount": 400, "payee": {"msisdn": "0550000002"}}},
+        {"payload": {"type": "transfer_out", "amount": 250, "payee": {"msisdn": "0550000003"}}},
+    ]
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 500, "payee": {"msisdn": "0550000004"}})
+    pts, desc = check_structuring(event, history)
+    assert pts == 35
+    assert "splitting" in desc.lower() or "GH22" in desc
+
+
+def test_limit_splitting_same_recipient_no_fire(make_event):
+    from app.engine.rules import check_structuring
+    history = [
+        {"payload": {"type": "transfer_out", "amount": 300, "payee": {"msisdn": "0550000001"}}},
+        {"payload": {"type": "transfer_out", "amount": 400, "payee": {"msisdn": "0550000001"}}},
+        {"payload": {"type": "transfer_out", "amount": 250, "payee": {"msisdn": "0550000001"}}},
+    ]
+    event = make_event(EventType.TRANSACTION, {"type": "transfer_out", "amount": 500, "payee": {"msisdn": "0550000001"}})
+    pts, _ = check_structuring(event, history)
+    assert pts == 0

@@ -203,9 +203,24 @@ def check_money_mule(event: SandboxEvent, history: List) -> Tuple[int, str]:
 # ---------------------------------------------------------------------------
 _STRUCTURING_MIN = 850
 _STRUCTURING_MAX = 999
+# Broader smurfing band: limit-splitting scams stay well under reporting
+# thresholds, so the narrow 850–999 band misses them. Any run of 4+ small
+# outbound transfers to 3+ distinct recipients inside the window is the
+# signature — but +35 only (warn needs a corroborating signal).
+_SMURF_MIN = 50
+_SMURF_MAX = 999
+_SMURF_COUNT = 4
+
+
+def _recipient_key(payload: dict) -> str:
+    payee = payload.get("payee")
+    if isinstance(payee, dict):
+        return _norm_msisdn(payee.get("msisdn") or payee.get("account"))
+    return _norm_msisdn(payee)
+
 
 def check_structuring(event: SandboxEvent, history: List) -> Tuple[int, str]:
-    """GH22: Multiple transfers just below reporting threshold (900-999 GHS)."""
+    """GH22: Structuring / limit-splitting — many sub-limit transfers."""
     if event.payload.get("type") != "transfer_out":
         return 0, ""
     amount = event.payload.get("amount", 0)
@@ -217,6 +232,24 @@ def check_structuring(event: SandboxEvent, history: List) -> Tuple[int, str]:
         ]
         if len(prior_structured) >= 2:
             return 40, f"GH22: Structuring detected — {len(prior_structured)+1} sub-limit transfers (850–999 GHS)"
+    # Smurfing: current + priors all in the small-transfer band, spread
+    # across distinct recipients.
+    if not (_SMURF_MIN <= amount <= _SMURF_MAX):
+        return 0, ""
+    recipients = {_recipient_key(event.payload)}
+    small_priors = 0
+    for prior in history:
+        pp = prior.get("payload") or {}
+        if pp.get("type") != "transfer_out":
+            continue
+        if _SMURF_MIN <= (pp.get("amount") or 0) <= _SMURF_MAX:
+            small_priors += 1
+            recipients.add(_recipient_key(pp))
+    if small_priors + 1 >= _SMURF_COUNT and len(recipients - {""}) >= 3:
+        return 35, (
+            f"GH22b: Limit-splitting — {small_priors + 1} small transfers "
+            f"to {len(recipients - {''})} distinct recipients in window"
+        )
     return 0, ""
 
 

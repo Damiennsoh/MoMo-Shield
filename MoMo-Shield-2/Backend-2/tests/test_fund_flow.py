@@ -79,3 +79,22 @@ def test_demo_reset_clears_fund_flow():
     assert client.get("/api/v1/fund-flow").json()["edge_count"] >= 1
     client.post("/api/v1/demo/reset")
     assert client.get("/api/v1/fund-flow").json()["edge_count"] == 0
+
+
+def test_mule_stats_fan_in():
+    import time
+    from app.integrations.fund_flow import FundFlowLedger
+    led = FundFlowLedger()
+    for i in range(6):
+        led.observe("payment.receive", {"payer": {"msisdn": f"02400000{i:02d}"}, "amount": 100}, "0249999000", "allow", f"e{i}")
+    led.observe("payment.authorize", {"payer": {"msisdn": "0249999000"}, "payee": {"msisdn": "0550000001"}, "amount": 500}, "0249999000", "allow", "out1")
+    stats = led.mule_stats("0249999000")
+    assert stats["in_payers"] == 6
+    assert stats["out_payees"] == 1
+    assert stats["in_amount"] == 600.0
+
+
+def test_mule_stats_empty():
+    from app.integrations.fund_flow import FundFlowLedger
+    led = FundFlowLedger()
+    assert led.mule_stats("0240000000")["in_payers"] == 0

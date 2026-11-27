@@ -888,9 +888,13 @@ async def receive_innofemme_plugin(payload: dict):
             score += 15
             rules_fired.append(f"SMS blast: identical text delivered to {victims} distinct subscribers in 10 min")
 
+    # On-call co-occurrence: warn-tier signal (+45). A scammer keeps the
+    # victim on the line while walking them through approval — but honest
+    # users also pay people they're talking to, so this alone must never
+    # reach reject; it needs a second signal to stack past 75.
     if point in ("payment.authorize", "menu.open", "wallet.open", "payment.request", "pin.reset") \
             and (event_payload.get("onCallWith") or data.get("onCallWith")):
-        score += 50
+        score += 45
         rules_fired.append("Active Call Co-occurrence: subscriber is on an active call during a financial/USSD action")
 
     swap_ts = event_payload.get("lastSimSwapAt") or data.get("lastSimSwapAt")
@@ -913,6 +917,14 @@ async def receive_innofemme_plugin(payload: dict):
         if _safe_int(event_payload.get("differentPayersInLast24Hours")) >= 8:
             score += 20
             rules_fired.append("Mule inbound: 8+ distinct payers credited in 24h")
+    elif point == "sim.swap":
+        if _safe_int(event_payload.get("swapsOnThisNumberBefore")) >= 2:
+            score += 25
+            rules_fired.append("Repeat SIM swap: number has been swapped 2+ times — mule/rotation pattern")
+    elif point == "sim.register":
+        if _safe_int(event_payload.get("simsAlreadyOnThisGhanaCard"), 1) >= 3:
+            score += 25
+            rules_fired.append("SIM sprawl: 3+ SIMs already registered on this Ghana Card — proxy/mule registration risk")
     elif point == "pin.reset":
         if _safe_int(event_payload.get("pinResetsBefore")) >= 2:
             score += 30
@@ -924,6 +936,27 @@ async def receive_innofemme_plugin(payload: dict):
         if _safe_int(event_payload.get("paymentsRoutedBetweenThemToday")) >= 10:
             score += 20
             rules_fired.append("Switch velocity: 10+ routed payments between same institutions today")
+
+    # Mule-ring graph scoring: cross-subscriber fan-in/out observed in the
+    # fund-flow ledger. A wallet receiving from many distinct payers and/or
+    # fanning out to many payees inside an hour is a consolidation node —
+    # invisible to per-subscriber windows. +25 warn-tier; stacks with
+    # amount/velocity signals toward reject on payment points.
+    if point in ("payment.authorize", "payment.receive", "payment.request",
+                 "switch.route", "transfer.authorize"):
+        mule = fund_flow_ledger.mule_stats(msisdn, window_seconds=3600)
+        if mule["in_payers"] >= 5:
+            score += 25
+            rules_fired.append(
+                f"Mule graph: {mule['in_payers']} distinct inbound payers in 1h "
+                f"(GHS {mule['in_amount']:,.0f} collected) — fan-in consolidation"
+            )
+        if mule["out_payees"] >= 5:
+            score += 20
+            rules_fired.append(
+                f"Mule graph: {mule['out_payees']} distinct outbound payees in 1h "
+                f"(GHS {mule['out_amount']:,.0f} distributed) — fan-out layering"
+            )
 
     for rule in RULES:
         points, description = rule(sandbox_event, history)
@@ -969,7 +1002,7 @@ async def receive_innofemme_plugin(payload: dict):
         kb_matches = None
         try:
             kb_matches = await asyncio.wait_for(
-                knowledge_base.search_smart(text_content, top_k=1), timeout=0.8
+                knowledge_base.search_smart(text_content, top_k=1), timeout=0.5
             )
         except Exception:
             kb_matches = knowledge_base.search(text_content, top_k=1)

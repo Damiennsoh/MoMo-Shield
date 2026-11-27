@@ -128,6 +128,40 @@ class FundFlowLedger:
                 if e["src"] == target or e["dst"] == target
             ][-limit:]
 
+    def mule_stats(self, msisdn: str, window_seconds: int = 3600) -> Dict[str, Any]:
+        """Cross-subscriber fan-in/fan-out profile for mule-ring detection.
+
+        A mule wallet shows many DISTINCT inbound payers (victims) and/or
+        fan-out to consolidation points within the window — patterns no
+        per-subscriber EventWindow can see. Returns counts only; scoring
+        policy lives in the caller."""
+        target = _norm_party(msisdn)
+        if not target:
+            return {"in_payers": 0, "out_payees": 0, "in_amount": 0.0, "out_amount": 0.0}
+        cutoff = time.time() - window_seconds
+        in_payers, out_payees = set(), set()
+        in_amount = out_amount = 0.0
+        with self._lock:
+            edges = [e for e in self._edges if e["ts"] >= cutoff]
+        for e in edges:
+            if e["kind"] != "payment":
+                continue
+            amt = e.get("amount") or 0.0
+            if e["dst"] == target:
+                if e["src"]:
+                    in_payers.add(e["src"])
+                in_amount += amt
+            if e["src"] == target:
+                if e["dst"]:
+                    out_payees.add(e["dst"])
+                out_amount += amt
+        return {
+            "in_payers": len(in_payers),
+            "out_payees": len(out_payees),
+            "in_amount": round(in_amount, 2),
+            "out_amount": round(out_amount, 2),
+        }
+
     def clear(self) -> None:
         with self._lock:
             self._edges.clear()
