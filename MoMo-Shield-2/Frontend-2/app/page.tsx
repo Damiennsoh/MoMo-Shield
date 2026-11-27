@@ -116,6 +116,7 @@ export default function DashboardPage() {
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkData, setBenchmarkData] = useState<BenchmarkResponse | null>(null);
   const [isPlayingWarning, setIsPlayingWarning] = useState(false);
+  const [glanceDetailsOpen, setGlanceDetailsOpen] = useState(false);
 
   const handleRunBenchmark = async () => {
     setBenchmarkOpen(true);
@@ -465,13 +466,17 @@ export default function DashboardPage() {
               <div className="min-w-0">
                 <p className="text-xs font-bold text-white">Hybrid Decision Engine</p>
                 <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                  19 Rules + ML Ensemble + RAG + Glance/Local Ledger — Gemini explains, never decides
+                  Rules + optional ML/RAG/Glance/ledger signals (where configured)
                 </p>
               </div>
             </div>
-            <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-emerald-300">
+            <span
+              className={`flex shrink-0 items-center gap-1.5 text-[10px] font-bold ${
+                backendReachable ? 'text-emerald-300' : 'text-slate-400'
+              }`}
+            >
               <CircleDot size={12} />
-              Operational
+              {backendReachable ? 'Core reachable' : 'Offline / unverified'}
             </span>
           </Card>
         </div>
@@ -512,22 +517,42 @@ export default function DashboardPage() {
 
           {/* External Intelligence Card */}
           <Card className="overflow-hidden" id="threat-feed">
-            <div className="flex items-center justify-between border-b border-white/[.08] px-5 py-3.5">
-              <div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-[#ffcc00] shadow-[0_0_8px_#ffcc00]" />
-                  <h2 className="text-xs font-bold text-white">External Intelligence</h2>
+                  <div className="h-2 w-2 shrink-0 rounded-full bg-slate-500" />
+                  <h2 id="glance-title" className="truncate text-xs font-bold text-white">External Intelligence</h2>
                 </div>
-                <p className="mt-0.5 text-[10px] text-slate-400">Rancard Glance Cross-Telco Feed</p>
+                <p className="mt-0.5 truncate pl-4 text-[10px] text-slate-400">Rancard Glance · optional provider feed</p>
               </div>
-              <Badge variant="medium">READY / SANDBOX</Badge>
+              <button
+                type="button"
+                aria-expanded={glanceDetailsOpen}
+                aria-controls="glance-details"
+                onClick={() => setGlanceDetailsOpen((open) => !open)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[.1] px-2.5 py-1.5 text-[10px] font-bold text-slate-300 transition hover:border-white/20 hover:bg-white/[.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffcc00]"
+              >
+                {glanceDetailsOpen ? 'Hide details' : 'Show details'}
+                <ChevronDown
+                  size={13}
+                  aria-hidden="true"
+                  className={`transition-transform ${glanceDetailsOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
             </div>
-            <div className="p-4 space-y-2">
-              <p className="text-xs font-medium text-slate-300 leading-relaxed">
-                Connects directly to the Rancard Glance API for known syndicate numbers and automated fraud reporting.
+            <div
+              id="glance-details"
+              role="region"
+              aria-labelledby="glance-title"
+              hidden={!glanceDetailsOpen}
+              className="space-y-2 border-t border-white/[.08] p-4"
+            >
+              <Badge variant="medium">CONFIGURATION-DEPENDENT</Badge>
+              <p className="text-xs font-medium leading-relaxed text-slate-300">
+                The backend adapter can query Rancard Glance when provider credentials are configured. Live connectivity is not confirmed by this dashboard; no dedicated Glance status endpoint is implemented.
               </p>
-              <div className="rounded-lg border border-white/[.08] bg-white/[.03] p-2.5 text-[10px] text-slate-400 font-mono">
-                API Endpoint: /api/v1/integrations/glance
+              <div className="rounded-lg border border-white/[.08] bg-white/[.03] p-2.5 text-[10px] font-mono text-slate-400">
+                Optional server-side integration · credentials required
               </div>
             </div>
           </Card>
