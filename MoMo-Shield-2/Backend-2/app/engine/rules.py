@@ -637,6 +637,70 @@ def _suspicious_content_text(text: str) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# Suspicious link host — telcos never send customers to free-hosting domains.
+# Observed real-world MoMo phishing (MomoPhish/DarkSms kit) hosted its fake
+# login page on vercel.app. +45 alone reaches warn; stacks with lure rules.
+# ---------------------------------------------------------------------------
+_SUSPICIOUS_HOST_RE = re.compile(
+    r"https?://[^\s]*?\b(?:"
+    r"vercel\.app|netlify\.app|github\.io|herokuapp\.com|web\.app|"
+    r"firebaseapp\.com|blogspot\.|wordpress\.com|weebly\.com|wixsite\.com|"
+    r"tripod\.com|webnode\.(?:com|net|org)|000webhostapp\.com|glitch\.me|"
+    r"repl\.co|surge\.sh|pages\.dev|onrender\.com|fly\.dev|railway\.app"
+    r")",
+    re.I,
+)
+
+
+def check_suspicious_link_host(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """URL in financial/comms content points at a free-hosting domain —
+    legitimate MTN/Telecel/AT messages never do."""
+    if event.event_type not in _CONTENT_TYPES:
+        return 0, ""
+    text = _text(event)
+    if _LINK_RE.search(text) and _SUSPICIOUS_HOST_RE.search(text):
+        return 45, (
+            "Suspicious link host: free-hosting domain in message — "
+            "telcos never send customers to these"
+        )
+    return 0, ""
+
+
+# ---------------------------------------------------------------------------
+# Fake failed-transaction lure — panic hook + recovery call-to-action.
+# "Someone tried sending you money, it failed due to malicious activity —
+# click here to recover your funds." Legitimate operators never ask a
+# customer to click a link to recover a failed INBOUND transfer: the funds
+# simply bounce back. +35.
+# ---------------------------------------------------------------------------
+_FAILED_TXN_RE = re.compile(
+    r"\b(tried\s+sending|failed|unsuccessful|did\s+not\s+go\s+through|"
+    r"been\s+blocked|malicious\s+activity|unauthori[sz]ed\s+transaction|"
+    r"could\s+not\s+complete)\b",
+    re.I,
+)
+_RECOVERY_CTA_RE = re.compile(
+    r"\b(recover|refund|claim\s+your|verify\s+your|update\s+your|"
+    r"confirm\s+your|click|tap|visit)\b",
+    re.I,
+)
+
+
+def check_failed_transaction_lure(event: SandboxEvent, history: List) -> Tuple[int, str]:
+    """Failed-transaction panic hook combined with a recovery/verification
+    call-to-action — the MomoPhish lure pattern."""
+    if event.event_type not in _CONTENT_TYPES:
+        return 0, ""
+    text = _text(event)
+    if _FAILED_TXN_RE.search(text) and _RECOVERY_CTA_RE.search(text):
+        return 35, (
+            "Fake failed-transaction lure: failure/malicious-activity hook "
+            "plus recovery or verification call-to-action"
+        )
+    return 0, ""
+
+
 def check_suspicious_content_precursor(event: SandboxEvent, history: List) -> Tuple[int, str]:
     """Financial/USSD action within 15 min of scam-family SMS/voice content."""
     if event.event_type not in (EventType.TRANSACTION, EventType.USSD):
@@ -687,5 +751,7 @@ RULES = [
     check_unverified_credit_claim,
     check_otp_transaction_velocity,
     check_prize_fee_scam,
+    check_suspicious_link_host,
+    check_failed_transaction_lure,
     check_suspicious_content_precursor,
 ]
