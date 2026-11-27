@@ -35,7 +35,7 @@ THE FOUR ENGINES (one decision, assembled in <100ms typical):
 ┌─────────────────┬──────────────────────────┬─────────────────────────┐
 │ Engine          │ Role                     │ Failure mode            │
 ├─────────────────┼──────────────────────────┼─────────────────────────┤
-│ 1. Rules        │ 19 weighted rules, 16    │ Never fails — pure      │
+│ 1. Rules        │ 21 weighted rules, 16    │ Never fails — pure      │
 │    (deterministic│ interception points;     │ code, no deps, sub-ms   │
 │    guardrails)  │ hard triggers + reason   │                         │
 │                 │ codes                    │                         │
@@ -222,7 +222,7 @@ SECTION H — 180-SECOND TIMELINE (revised for new features)
 [0:00–0:35] PROBLEM — human cost, illiterate users, OTP paradox
 [0:35–1:15] ARCHITECTURE — two-mode engine; four engines table
             (rules floor → ML corroborates → RAG grounds → Gemini
-            explains); resilience + Act 843 posture; 19 rules, bounded
+            explains); resilience + Act 843 posture; 21 rules, bounded
             intel, probabilistic not blocking
 [1:15–1:55] LIVE DEMO — attack chain on dashboard: SMS→warn, payment→
             delay, call→reject; graph + ledger + velocity populate

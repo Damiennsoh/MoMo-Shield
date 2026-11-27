@@ -35,7 +35,7 @@ export function EventRow({ event, onClick }: EventRowProps) {
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <span className="truncate font-mono text-xs font-bold text-white">{event.msisdn}</span>
-          <Badge variant={event.risk}>{event.risk.toUpperCase()}</Badge>
+          <Badge variant={event.risk}>{event.risk.toUpperCase()} · {event.score}</Badge>
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] font-medium text-slate-400">
           <span className="font-bold text-slate-300">{event.kind}</span>

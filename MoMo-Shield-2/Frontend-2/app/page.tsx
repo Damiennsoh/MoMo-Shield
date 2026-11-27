@@ -606,6 +606,9 @@ export default function DashboardPage() {
               <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-slate-300">
                 Triggered Fraud Rules
               </h3>
+              <p className="mb-2 text-[10px] text-slate-500">
+                Signal inputs — external ratings (e.g. Glance HIGH) are sources, not the verdict tier shown above.
+              </p>
               <div className="space-y-2">
                 {(selected?.rules ?? []).map((rule) => (
                   <div
