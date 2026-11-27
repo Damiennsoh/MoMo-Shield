@@ -786,6 +786,7 @@ async def receive_innofemme_plugin(payload: dict):
             "payee": data.get("payee"),
             "paymentsToThisPayeeBefore": _safe_int(data.get("paymentsToThisPayeeBefore")),
             "payeeWalletOpenedAt": (payee.get("walletOpenedAt") if isinstance(payee, dict) else None),
+            "payeeWalletType": (payee.get("walletType") if isinstance(payee, dict) else None),
             "onCallWith": payer.get("onCallWith"),
             "lastSimSwapAt": payer.get("lastSimSwapAt"),
         }
@@ -796,6 +797,8 @@ async def receive_innofemme_plugin(payload: dict):
             "payer": data.get("payer"),
             "paymentsReceivedInLast24Hours": _safe_int(data.get("paymentsReceivedInLast24Hours")),
             "differentPayersInLast24Hours": _safe_int(data.get("differentPayersInLast24Hours")),
+            "payeeWalletOpenedAt": (payee.get("walletOpenedAt") if isinstance(payee, dict) else None),
+            "payeeWalletType": (payee.get("walletType") if isinstance(payee, dict) else None),
         }
     elif point == "payment.request":
         event_payload = {
@@ -803,6 +806,7 @@ async def receive_innofemme_plugin(payload: dict):
             "amount": data.get("amount", 0),
             "requester": data.get("requester"),
             "requestsFromThisRequesterToday": _safe_int(data.get("requestsFromThisRequesterToday")),
+            "customerHasPaidThisRequesterBefore": data.get("customerHasPaidThisRequesterBefore"),
             "chargedWithoutAsking": bool(data.get("chargedWithoutAsking")),
         }
     elif point == "sim.swap":
@@ -946,12 +950,21 @@ async def receive_innofemme_plugin(payload: dict):
             if 0 <= age_hours <= 24:
                 score += 25
                 rules_fired.append(f"Fresh payee wallet: destination opened {age_hours:.1f}h ago")
+                # Unseasoned merchant wallets are the fake-shop pattern:
+                # opened seconds before first victim payment, KYC enhanced
+                # to look legitimate, forwards proceeds instantly.
+                if str(event_payload.get("payeeWalletType") or "").lower() == "merchant" and age_hours <= 1:
+                    score += 20
+                    rules_fired.append("Unseasoned merchant wallet: merchant destination opened <1h ago")
 
     # Hook-specific payload signals documented in Hackathon Environment §4.
     if point == "payment.request":
         if event_payload.get("chargedWithoutAsking"):
             score += 40
             rules_fired.append("RTP abuse: merchant flagged as charging without subscriber consent")
+        if event_payload.get("customerHasPaidThisRequesterBefore") is False:
+            score += 20
+            rules_fired.append("First-time requester: subscriber has never paid this requester before")
         if _safe_int(event_payload.get("requestsFromThisRequesterToday")) >= 5:
             score += 25
             rules_fired.append("RTP flood: requester has sent 5+ payment requests today")
@@ -959,6 +972,12 @@ async def receive_innofemme_plugin(payload: dict):
         if _safe_int(event_payload.get("differentPayersInLast24Hours")) >= 8:
             score += 20
             rules_fired.append("Mule inbound: 8+ distinct payers credited in 24h")
+        recv_opened = _parse_timestamp(event_payload.get("payeeWalletOpenedAt"))
+        if recv_opened is not None:
+            recv_age_h = (datetime.now(timezone.utc).replace(tzinfo=None) - recv_opened).total_seconds() / 3600
+            if 0 <= recv_age_h <= 1:
+                score += 15
+                rules_fired.append(f"Fresh receiving wallet: opened {recv_age_h * 60:.0f}min ago — mule-hop landing pattern")
     elif point == "sim.swap":
         if _safe_int(event_payload.get("swapsOnThisNumberBefore")) >= 1:
             score += 25
@@ -998,6 +1017,19 @@ async def receive_innofemme_plugin(payload: dict):
             rules_fired.append(
                 f"Mule graph: {mule['out_payees']} distinct outbound payees in 1h "
                 f"(GHS {mule['out_amount']:,.0f} distributed) — fan-out layering"
+            )
+        # Pass-through hop: mule_chain wallets receive from 1–2 sources and
+        # forward almost immediately — fan-in thresholds never reach 5.
+        # In+out activity with near-equal volumes is the layering signature.
+        if (
+            mule["in_payers"] >= 2 and mule["out_payees"] >= 1
+            and mule["in_amount"] > 0 and mule["out_amount"] >= mule["in_amount"] * 0.5
+        ):
+            score += 25
+            rules_fired.append(
+                f"Mule pass-through: collected GHS {mule['in_amount']:,.0f} from "
+                f"{mule['in_payers']} payers and forwarded GHS {mule['out_amount']:,.0f} "
+                "within 1h — layering hop"
             )
 
     for rule in RULES:
