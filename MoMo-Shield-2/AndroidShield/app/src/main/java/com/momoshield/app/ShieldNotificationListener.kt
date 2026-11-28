@@ -92,7 +92,38 @@ class ShieldNotificationListener : NotificationListenerService() {
         main.post { tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "momo-shield") }
     }
 
+    /** Plays warning_1.mp3 then warning_2.mp3 (Twi + English voice notes).
+     *  Falls back to the bundled alarm only if no recording plays. */
     private fun playWarningSound() {
+        val clips = intArrayOf(R.raw.warning_1, R.raw.warning_2)
+        var started = 0
+        fun playAt(index: Int) {
+            if (index >= clips.size) {
+                if (started == 0) playFallbackAlarm()
+                return
+            }
+            try {
+                val mp = MediaPlayer.create(this, clips[index])
+                if (mp == null) { playAt(index + 1); return }
+                mp.setOnCompletionListener {
+                    it.release()
+                    playAt(index + 1)
+                }
+                mp.setOnErrorListener { m, _, _ ->
+                    m.release()
+                    playAt(index + 1)
+                    true
+                }
+                mp.start()
+                started++
+            } catch (_: Exception) {
+                playAt(index + 1)
+            }
+        }
+        playAt(0)
+    }
+
+    private fun playFallbackAlarm() {
         try {
             val mp = MediaPlayer.create(this, R.raw.momo_warning) ?: return
             mp.setOnCompletionListener { it.release() }

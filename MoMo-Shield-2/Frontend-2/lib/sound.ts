@@ -29,7 +29,7 @@ export function stopAllSounds(): void {
   }
 }
 
-export async function playAudioFile(src: string, volume: number = 0.7): Promise<boolean> {
+export async function playAudioFile(src: string, volume: number = 0.7, onEnded?: () => void): Promise<boolean> {
   if (!isInternalSoundEnabled()) {
     return false;
   }
@@ -41,12 +41,30 @@ export async function playAudioFile(src: string, volume: number = 0.7): Promise<
     const audio = new Audio(src);
     audio.volume = Math.max(0, Math.min(1, volume));
     currentAudio = audio;
+    if (onEnded) audio.onended = onEnded;
     await audio.play();
     return true;
   } catch (err) {
     // Autoplay policy or missing codec
     return false;
   }
+}
+
+/** Play audio files strictly in sequence; resolves true only if ≥1 played. */
+function playSequence(srcs: string[], volume: number = 0.9): Promise<boolean> {
+  return new Promise((resolve) => {
+    let i = 0;
+    let playedAny = false;
+    const next = () => {
+      if (i >= srcs.length) return resolve(playedAny);
+      const src = srcs[i++];
+      playAudioFile(src, volume, next).then((ok) => {
+        if (ok) playedAny = true;
+        else next(); // missing file — skip to next
+      });
+    };
+    next();
+  });
 }
 
 export async function playSmsSound(): Promise<boolean> {
@@ -112,28 +130,35 @@ export async function playEnglishTwiWarning(options: WarningSpeechOptions = {}):
 
   const hasSpeech = 'speechSynthesis' in window;
 
-  // Custom recorded warnings take precedence: drop warning-twi.mp3 /
-  // warning-en.mp3 (or .wav) into public/audio/ to replace TTS per language.
-  const playCustomOrTts = async (fileBase: string, text: string, lang: string, rate: number): Promise<void> => {
-    for (const ext of ['.mp3', '.wav']) {
-      const played = await playAudioFile(`/audio/${fileBase}${ext}`, 0.9);
-      if (played) return;
-    }
-    if (hasSpeech) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      utterance.rate = rate;
-      utterance.pitch = 1.0;
-      if (fileBase === 'warning-en' && options.onEnded) {
-        utterance.onend = options.onEnded;
-      }
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  // Recorded warnings take precedence: warning-1.mp3 and warning-2.mp3 in
+  // public/audio/ are the Twi and English voice notes (one language each,
+  // played in sequence). TTS is the fallback when recordings are absent.
+  const playedRecording = await playSequence(
+    ['/audio/warning-1.mp3', '/audio/warning-2.mp3'], 0.9
+  );
+  if (playedRecording) {
+    options.onEnded?.();
+    return;
+  }
 
   try {
-    await playCustomOrTts('warning-twi', twiPrompt, 'en-GH', 0.95);
-    await playCustomOrTts('warning-en', englishPrompt, 'en-US', 1.0);
+    if (!hasSpeech) return;
+    const twiUtterance = new SpeechSynthesisUtterance(twiPrompt);
+    twiUtterance.lang = 'en-GH';
+    twiUtterance.rate = 0.95;
+    twiUtterance.pitch = 1.0;
+
+    const enUtterance = new SpeechSynthesisUtterance(englishPrompt);
+    enUtterance.lang = 'en-US';
+    enUtterance.rate = 1.0;
+    enUtterance.pitch = 1.0;
+    if (options.onEnded) {
+      enUtterance.onend = options.onEnded;
+    }
+
+    // Speak Twi first, then English follow-up
+    window.speechSynthesis.speak(twiUtterance);
+    window.speechSynthesis.speak(enUtterance);
   } catch (err) {
     console.warn("Warning playback unavailable:", err);
   }
