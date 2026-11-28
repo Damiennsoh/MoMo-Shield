@@ -11,8 +11,8 @@ android {
         applicationId = "com.momoshield.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     buildTypes {
@@ -30,4 +30,8 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
 }

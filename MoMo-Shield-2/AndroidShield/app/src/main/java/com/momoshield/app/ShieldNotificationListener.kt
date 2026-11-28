@@ -1,139 +1,82 @@
 package com.momoshield.app
 
 import android.app.Notification
-import android.content.Context
-import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.speech.tts.TextToSpeech
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Reads incoming-message notifications (the NotificationListener path —
- * no READ_SMS permission needed) and scores them with the on-device
- * RulesEngine. SMS text never leaves the device.
- */
+/** Scores likely messaging-app notification text locally; message contents never leave this device. */
 class ShieldNotificationListener : NotificationListenerService() {
-
-    private var tts: TextToSpeech? = null
     private val main = Handler(Looper.getMainLooper())
-
-    // sender+textHash -> lastShownAt, 90s dedupe so one SMS doesn't re-warn
     private val recent = ConcurrentHashMap<Long, Long>()
-
-    override fun onListenerConnected() {
-        super.onListenerConnected()
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) tts?.language = Locale.US
-        }
-    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
         if (!looksLikeMessageApp(pkg)) return
-
-        val n = sbn.notification ?: return
-        val extras = n.extras ?: return
+        val extras = sbn.notification?.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
         val body = if (bigText.isNotBlank()) bigText else text
         if (body.isBlank()) return
 
-        // Sender = notification title for SMS apps (number or alphanumeric ID).
         val sender = title.ifBlank { "unknown" }
-        val knownScam = ScamBlacklist.contains(this, sender)
-        val verdict = RulesEngine.scoreSms(body, knownScam)
+        val verdict = RulesEngine.scoreSms(body, ScamBlacklist.contains(this, sender))
         if (verdict.score < 40) return
 
-        // Dedupe
-        val key = (sender + "|" + body.hashCode().toString()).hashCode().toLong()
+        val key = (sender + "|" + body.hashCode()).hashCode().toLong()
         val now = System.currentTimeMillis()
-        val last = recent[key]
-        if (last != null && now - last < 90_000) return
+        val lastShown = recent[key]
+        if (lastShown != null && now - lastShown < 90_000L) return
         recent[key] = now
-        if (recent.size > 200) recent.keys.removeAll { now - (recent[it] ?: 0) > 300_000 }
+        if (recent.size > 200) recent.keys.removeAll { now - (recent[it] ?: 0L) > 300_000L }
 
-        val headline = when (verdict.tier) {
-            "HIGH" -> "Fraud detected — do NOT click links, share PIN/OTP, or send money."
-            else -> "Suspicious message — verify the sender before acting."
+        val headline = if (verdict.tier == "HIGH") {
+            "High-risk message signal. Do not click, share a PIN/OTP, or send money until verified."
+        } else {
+            "Suspicious message signal. Verify the sender through an official number before acting."
         }
         val detail = verdict.reasons.take(3).joinToString("\n• ", "• ")
+        main.post {
+            WarningOverlay.show(
+                ctx = this,
+                tier = verdict.tier,
+                headline = headline,
+                detail = detail,
+                sender = sender,
+                onFlag = { ScamBlacklist.add(this, sender, "Reported from suspicious message", "message") },
+            )
+        }
+        WarningAudio.play(this)
 
-        WarningOverlay.show(
-            ctx = this,
-            tier = verdict.tier,
-            headline = headline,
-            detail = detail,
-            sender = sender,
-            onBlock = { ScamBlacklist.add(this, sender) },
-        )
-        speakWarning(verdict.tier)
-        playWarningSound()
+        // Optional backend corroboration (consent-gated, PII-redacted).
+        // Local verdict already shown; a backend "reject" escalates to HIGH.
+        if (BackendSync.enabled(this)) {
+            Thread {
+                val decision = BackendSync.score(
+                    this, sender, body,
+                    verdict.score, verdict.tier, verdict.reasons,
+                )
+                if (decision == "reject" && verdict.tier != "HIGH") {
+                    main.post {
+                        WarningOverlay.show(
+                            ctx = this,
+                            tier = "HIGH",
+                            headline = "Backend confirmed high risk — do NOT click, share PIN/OTP, or send money.",
+                            detail = "Local warning + MoMo Shield backend corroboration.\n$detail",
+                            sender = sender,
+                            onFlag = { ScamBlacklist.add(this, sender, "Backend-confirmed fraud", "message") },
+                        )
+                    }
+                }
+            }.start()
+        }
     }
 
     private fun looksLikeMessageApp(pkg: String): Boolean {
-        val p = pkg.lowercase()
-        return p.contains("messag") || p.contains("sms") ||
-            p.contains("telecel") || p.contains("vodafone") ||
-            p.contains("airtel") || p.contains("tigo") ||
-            p.contains("mtn")
-    }
-
-    private fun speakWarning(tier: String) {
-        // English guidance via TTS. Twi is a bundled recording (no Twi TTS voice exists).
-        val msg = if (tier == "HIGH")
-            "MoMo Shield warning. This message is likely a scam. Never share your PIN or OTP. Do not send money."
-        else
-            "MoMo Shield warning. This message looks suspicious. Verify before you act."
-        main.post { tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "momo-shield") }
-    }
-
-    /** Plays warning_1.mp3 then warning_2.mp3 (Twi + English voice notes).
-     *  Falls back to the bundled alarm only if no recording plays. */
-    private fun playWarningSound() {
-        val clips = intArrayOf(R.raw.warning_1, R.raw.warning_2)
-        var started = 0
-        fun playAt(index: Int) {
-            if (index >= clips.size) {
-                if (started == 0) playFallbackAlarm()
-                return
-            }
-            try {
-                val mp = MediaPlayer.create(this, clips[index])
-                if (mp == null) { playAt(index + 1); return }
-                mp.setOnCompletionListener {
-                    it.release()
-                    playAt(index + 1)
-                }
-                mp.setOnErrorListener { m, _, _ ->
-                    m.release()
-                    playAt(index + 1)
-                    true
-                }
-                mp.start()
-                started++
-            } catch (_: Exception) {
-                playAt(index + 1)
-            }
-        }
-        playAt(0)
-    }
-
-    private fun playFallbackAlarm() {
-        try {
-            val mp = MediaPlayer.create(this, R.raw.momo_warning) ?: return
-            mp.setOnCompletionListener { it.release() }
-            mp.start()
-        } catch (_: Exception) { }
-    }
-
-    override fun onListenerDisconnected() {
-        tts?.shutdown()
-        tts = null
-        super.onListenerDisconnected()
+        val name = pkg.lowercase()
+        return name.contains("messag") || name.contains("sms") || name.endsWith(".mms")
     }
 }

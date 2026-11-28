@@ -3,12 +3,12 @@ package com.momoshield.app
 import java.util.regex.Pattern
 
 /**
- * On-device port of Backend-2/app/engine/rules.py — SMS-applicable subset.
+ * On-device, explainable subset inspired by Backend-2/app/engine/rules.py.
  *
- * Weights mirror the backend RULES registry so the phone and the middleware
- * score the same message the same way. Rules needing cross-event history
- * (fund-flow ledger, velocity) are approximated locally or skipped — see
- * per-rule comments. Keep in sync with rules.py.
+ * This is not exact backend parity: the phone sees notification text only.
+ * Rules needing cross-event history (fund-flow ledger, velocity), verified
+ * network context, RAG, or calibrated ML are not reproduced here. Scores
+ * are uncalibrated warning signals, not probabilities or proof of fraud.
  */
 object RulesEngine {
 
@@ -169,7 +169,7 @@ object RulesEngine {
         }
         // check_suspicious_link_host (+45)
         if (!negated && link && has(SUSPICIOUS_HOST, t)) {
-            add(45, "Suspicious link host: free-hosting domain — telcos never send these")
+            add(45, "Suspicious link host: uses a free-hosting domain commonly abused in scams")
         }
         // check_failed_transaction_lure (+35)
         if (!negated && has(FAILED_TXN, t) && has(RECOVERY_CTA, t)) {
@@ -187,7 +187,7 @@ object RulesEngine {
         }
         // Local blacklist — user-confirmed scammer
         if (senderKnownScam) {
-            add(60, "Known scammer: sender is on your blocked list")
+            add(60, "User-flagged sender: this sender is on your MoMo Shield list")
         }
 
         return Verdict(score, reasons)

@@ -1,6 +1,5 @@
 package com.momoshield.app
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -10,121 +9,112 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
-/**
- * Red warning banner drawn over whatever app is foreground — including the
- * MoMo USSD menu. Shown for MEDIUM+ verdicts; HIGH adds the block action.
- */
+/** Short, dismissible warning shown only after the user enabled overlay access. */
 object WarningOverlay {
+    private const val AUTO_DISMISS_MS = 15_000L
+    @Volatile private var activeView: android.view.View? = null
+    private val main = Handler(Looper.getMainLooper())
+    private var dismissRunnable: Runnable? = null
 
-    private const val AUTO_DISMISS_MS = 12_000L
+    fun canDraw(ctx: Context): Boolean = Settings.canDrawOverlays(ctx)
 
-    @Volatile
-    private var activeView: View? = null
-
-    fun canDraw(ctx: Context): Boolean =
-        Settings.canDrawOverlays(ctx)
-
-    /** Must be called on the main thread. */
     fun show(
         ctx: Context,
         tier: String,
         headline: String,
         detail: String,
         sender: String,
-        onBlock: (() -> Unit)? = null,
+        onFlag: (() -> Unit)? = null,
     ) {
-        val main = Handler(Looper.getMainLooper())
         main.post {
             if (!canDraw(ctx)) return@post
             dismiss()
-
-            val pad = dp(ctx, 14)
-            val col = LinearLayout(ctx).apply {
+            val pad = dp(ctx, 16)
+            val high = tier == "HIGH"
+            val panel = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(pad, pad, pad, pad)
-                setBackgroundColor(if (tier == "HIGH") Color.parseColor("#B71C1C") else Color.parseColor("#E65100"))
+                setBackgroundColor(if (high) Color.rgb(137, 27, 36) else Color.rgb(169, 83, 0))
+                elevation = dp(ctx, 8).toFloat()
             }
-
             val title = TextView(ctx).apply {
-                text = if (tier == "HIGH") "🚨 FRAUD ALERT — DO NOT PROCEED" else "⚠️ SUSPICIOUS MESSAGE"
+                text = if (high) "HIGH-RISK SIGNAL · PAUSE" else "SUSPICIOUS SIGNAL · VERIFY"
                 setTextColor(Color.WHITE)
                 setTypeface(null, Typeface.BOLD)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-            }
-            val twi = TextView(ctx).apply {
-                text = "MoMo Shield: Hoo:NSɔ! MFA wo nsa, mfiri wo PIN, OTP, ana sika.",
-                setTextColor(Color.parseColor("#FFE0B2"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setPadding(0, dp(ctx, 4), 0, dp(ctx, 4))
+                contentDescription = if (high) "High risk warning" else "Suspicious activity warning"
             }
             val body = TextView(ctx).apply {
-                text = "$headline\n$detail"
+                text = "$headline\n\n$detail"
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                maxLines = 7
+                setPadding(0, dp(ctx, 8), 0, dp(ctx, 4))
+            }
+            val twi = TextView(ctx).apply {
+                text = "Twi draft: Mfa wo PIN anaa OTP mma obiara. Frɛ MTN 100 na bisa."
                 setTextColor(Color.WHITE)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                maxLines = 4
+                setPadding(0, dp(ctx, 5), 0, dp(ctx, 8))
             }
-            col.addView(title); col.addView(twi); col.addView(body)
+            panel.addView(title)
+            panel.addView(body)
+            panel.addView(twi)
 
-            val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-            val btnDismiss = Button(ctx).apply {
-                text = "Dismiss"
-                setOnClickListener { dismiss() }
-            }
-            row.addView(btnDismiss)
-            if (onBlock != null && sender.isNotBlank()) {
-                val btnBlock = Button(ctx).apply {
-                    text = "Block number"
+            val actions = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            if (onFlag != null && sender.count(Char::isDigit) >= 7) {
+                actions.addView(Button(ctx).apply {
+                    text = "Report locally"
+                    contentDescription = "Save this number as a local suspect report"
                     setOnClickListener {
-                        onBlock()
-                        Toast.makeText(ctx, "Number blocked", Toast.LENGTH_SHORT).show()
+                        onFlag()
+                        Toast.makeText(ctx, "Saved only on this phone. Undo it in MoMo Shield.", Toast.LENGTH_LONG).show()
                         dismiss()
                     }
-                }
-                row.addView(btnBlock)
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }
-            col.addView(row)
+            actions.addView(Button(ctx).apply {
+                text = "Dismiss"
+                setOnClickListener { dismiss() }
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            panel.addView(actions)
 
-            val lp = WindowManager.LayoutParams(
+            val layout = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP
-                y = 0
-            }
-
-            val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                PixelFormat.TRANSLUCENT,
+            ).apply { gravity = Gravity.TOP; y = dp(ctx, 12) }
+            val manager = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             try {
-                wm.addView(col, lp)
-                activeView = col
-            } catch (e: Exception) {
-                // Overlay permission revoked between check and add — fail quiet.
+                manager.addView(panel, layout)
+                activeView = panel
+            } catch (_: Exception) {
                 return@post
             }
-
-            main.postDelayed({ dismiss() }, AUTO_DISMISS_MS)
+            val timeout = Runnable { if (activeView === panel) dismiss() }
+            dismissRunnable = timeout
+            main.postDelayed(timeout, AUTO_DISMISS_MS)
         }
     }
 
     fun dismiss() {
-        val v = activeView ?: return
+        dismissRunnable?.let(main::removeCallbacks)
+        dismissRunnable = null
+        val view = activeView ?: return
         activeView = null
         try {
-            val wm = v.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-            wm?.removeView(v)
+            (view.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager)?.removeView(view)
         } catch (_: Exception) { }
     }
 
-    private fun dp(ctx: Context, v: Int): Int =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), ctx.resources.displayMetrics).toInt()
+    private fun dp(ctx: Context, value: Int): Int =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), ctx.resources.displayMetrics).toInt()
 }

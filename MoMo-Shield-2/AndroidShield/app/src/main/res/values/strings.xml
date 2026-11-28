@@ -1,11 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MoMo Shield</string>
-    <string name="consent_title">Protect your MoMo wallet</string>
-    <string name="consent_body">MoMo Shield watches for scam SMS and calls on THIS phone only.\n\n• SMS text is analyzed on-device by local rules — it is never sent to any server.\n• Warnings play in Twi and English, even if you cannot read.\n• You can block suspected numbers permanently.\n\nBy continuing you consent to on-device fraud detection as described.</string>
-    <string name="enable_overlay">1. Allow display over other apps</string>
-    <string name="enable_notifications">2. Allow notifications (Android 13+)</string>
-    <string name="enable_listener">3. Enable Notification Access</string>
-    <string name="shield_active">MoMo Shield is active</string>
-    <string name="shield_inactive">Finish the steps above to activate</string>
 </resources>

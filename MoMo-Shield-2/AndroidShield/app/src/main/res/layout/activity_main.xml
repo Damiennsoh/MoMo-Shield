@@ -1,49 +1,239 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:background="#F4F7FB"
+    android:fillViewport="true">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/consent_title"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="12dp" />
+        android:orientation="vertical"
+        android:padding="20dp">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/consent_body"
-        android:textSize="15sp"
-        android:layout_marginBottom="20dp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#12334A"
+            android:orientation="vertical"
+            android:padding="22dp">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="MoMo Shield"
+                android:textColor="#FFFFFF"
+                android:textSize="27sp"
+                android:textStyle="bold" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:text="A privacy-first safety companion for your phone"
+                android:textColor="#D8E8F2"
+                android:textSize="15sp" />
+            <TextView
+                android:id="@+id/txtStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                android:background="#1F4962"
+                android:padding="10dp"
+                android:text="Shield status"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
-    <Button
-        android:id="@+id/btnOverlay"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/enable_overlay" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Protect messages"
+            android:textColor="#15364B"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="10dp"
+            android:text="MoMo Shield scores text shown in notifications from messaging apps it recognizes. Message text stays on this phone."
+            android:textColor="#4E6270"
+            android:textSize="14sp" />
+        <Button
+            android:id="@+id/btnOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Allow warning overlays" />
+        <Button
+            android:id="@+id/btnListener"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Enable message notification access" />
 
-    <Button
-        android:id="@+id/btnNotifications"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/enable_notifications" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Optional caller screening"
+            android:textColor="#15364B"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="Android 10 or later. Checks the phone-local report list and caller-ID verification only. Calls are never blocked, and call audio is never recorded."
+            android:textColor="#4E6270"
+            android:textSize="14sp" />
+        <Button
+            android:id="@+id/btnCallScreening"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Set up optional call screening" />
+        <TextView
+            android:id="@+id/txtCallStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Call screening is off"
+            android:textColor="#526571"
+            android:textSize="13sp" />
 
-    <Button
-        android:id="@+id/btnListener"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/enable_listener" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#FFFFFF"
+            android:orientation="vertical"
+            android:padding="14dp">
+            <Switch
+                android:id="@+id/switchVoice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Play supplied English voice warning"
+                android:textColor="#15364B"
+                android:textSize="15sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Uses your attached recording: “MTN will never ask for your PIN or OTP. Call 100 to verify.” Turn it off to use a short alert tone instead."
+                android:textColor="#526571"
+                android:textSize="13sp" />
+        </LinearLayout>
 
-    <TextView
-        android:id="@+id/txtStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="@string/shield_inactive"
-        android:textSize="16sp"
-        android:textStyle="bold" />
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#FFFFFF"
+            android:orientation="vertical"
+            android:padding="14dp">
+            <Switch
+                android:id="@+id/switchBackend"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Optional backend corroboration"
+                android:textColor="#15364B"
+                android:textSize="15sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="OFF by default. When on, only messages already flagged locally are sent to your MoMo Shield backend — with phone numbers, amounts and ID numbers masked on-device first, and the sender as a hash. The backend can escalate a warning; it never sees raw SMS or your number."
+                android:textColor="#526571"
+                android:textSize="13sp" />
+            <EditText
+                android:id="@+id/inputBackendUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="Backend URL (e.g. http://192.168.1.10:8001)"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:padding="12dp"
+                android:text="http://10.0.2.2:8001" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Twi and English guidance"
+            android:textColor="#15364B"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="#FFF7E7"
+            android:padding="13dp"
+            android:text="EN: Never share your PIN or OTP. Verify through an official number.\n\nTwi draft: Mfa wo PIN anaa OTP mma obiara. Frɛ MTN 100 na bisa.\n\nThe Twi wording is a draft and should be checked by a fluent Twi speaker before public use."
+            android:textColor="#453B2A"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Your phone-local reports"
+            android:textColor="#15364B"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="Reports are private allegations stored on this phone. Add a suspected number below; you can undo a report at any time. Reports expire from screening after 180 days."
+            android:textColor="#4E6270"
+            android:textSize="14sp" />
+        <EditText
+            android:id="@+id/inputNumber"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Phone number to report"
+            android:inputType="phone"
+            android:maxLines="1"
+            android:padding="12dp" />
+        <Button
+            android:id="@+id/btnReport"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Report on this phone only" />
+        <LinearLayout
+            android:id="@+id/reportList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+        <TextView
+            android:id="@+id/txtNoReports"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="No local reports yet."
+            android:textColor="#637582"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="#E9EEF2"
+            android:padding="14dp"
+            android:text="With backend corroboration OFF (default), nothing leaves this phone. When ON, only locally-flagged messages go to your backend — PII-redacted, sender hashed — where the full engine (rules, RAG, ML, Glance) can escalate the verdict. Glance credentials stay server-side, never in the APK."
+            android:textColor="#405563"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp"
+            android:text="Safety note: this pilot provides warnings, not proof of fraud. It does not read the SMS inbox, delay delivery, send SMS, record calls, or block callers. Android notification access can expose notifications system-wide; MoMo Shield filters to likely messaging apps."
+            android:textColor="#637582"
+            android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>
