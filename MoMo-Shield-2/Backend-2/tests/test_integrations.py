@@ -24,15 +24,42 @@ async def test_glance_risk_when_enabled_and_live(monkeypatch):
     monkeypatch.setattr(settings, "glance_base_url", "https://api.glance.test/v1")
 
     async def mock_handler(request: httpx.Request):
-        assert request.headers["Authorization"] == "Bearer live-key-xyz"
+        assert request.headers["X-API-Key"] == "live-key-xyz"
+        assert "msisdn/aggregates" in str(request.url)
         assert "233240000999" in str(request.url)
-        return httpx.Response(200, json={"risk_level": "HIGH", "reports": 12, "threat_type": "credential_harvest"})
+        return httpx.Response(200, json={
+            "success": True,
+            "data": {"items": [{
+                "msisdn": "233240000999",
+                "timesReported": 12,
+                "explanation": {"riskLevel": "HIGH"},
+            }]},
+        })
 
     transport = httpx.MockTransport(mock_handler)
     with patch("httpx.AsyncClient", return_value=httpx.AsyncClient(transport=transport)):
         res = await check_glance_risk("+233240000999")
         assert res.risk_level == "HIGH"
         assert res.reports == 12
+
+
+@pytest.mark.asyncio
+async def test_glance_sandbox_rejects_real_msisdn_without_http(monkeypatch):
+    """Dev sandbox only models SYN-#### subjects — real numbers skip the call."""
+    monkeypatch.setattr(settings, "glance_api_key", "dev-key")
+    monkeypatch.setattr(
+        settings, "glance_base_url",
+        "https://glance-api.rancardmobility.com/api/v1/developer/sandbox",
+    )
+
+    def fail_handler(request):
+        raise AssertionError("HTTP call should not be made for real MSISDN")
+
+    transport = httpx.MockTransport(fail_handler)
+    with patch("httpx.AsyncClient", return_value=httpx.AsyncClient(transport=transport)):
+        res = await check_glance_risk("0241234567")
+        assert res.risk_level == "UNKNOWN"
+        assert res.reports == 0
 
 
 @pytest.mark.asyncio

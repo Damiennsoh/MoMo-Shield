@@ -17,7 +17,9 @@ def _clean_state(monkeypatch):
     async def fake_lookup(*args, **kwargs):
         return {"status": "UNCONFIGURED"}
 
+    from app.config import settings
     monkeypatch.setattr(routes, "check_glance_risk", fake_glance)
+    monkeypatch.setattr(settings, "glance_api_key", "")
     monkeypatch.setattr(routes.infofemme_client, "get_sim_swap_history", fake_lookup)
     monkeypatch.setattr(routes.infofemme_client, "get_subscriber_profile", fake_lookup)
     routes.ASSESSMENT_HISTORY.clear()
